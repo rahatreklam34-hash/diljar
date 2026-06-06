@@ -319,8 +319,8 @@ router.post('/orders/:id/item-remove', asyncHandler(async (req: Request, res: Re
     const removed = items[idx];
     if (removed) await returnStock(tx, req.tenantId!, [removed]);
     const rest = items.filter((_, i) => i !== idx);
-    const ara = rest.reduce((s, it) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 1), 0);
-    const upd = await tx.storeOrder.update({ where: { id: o.id }, data: { items: rest, araToplam: ara, toplam: Math.max(0, ara - (o.indirim || 0) + (o.kargoUcreti || 0)) } });
+    const adj = await campaignAdjust(tx, req.tenantId!, rest);
+    const upd = await tx.storeOrder.update({ where: { id: o.id }, data: { items: rest, araToplam: adj.araToplam, indirim: adj.indirim, kampanyalar: adj.kampanyalar, toplam: Math.max(0, adj.toplam + (o.kargoUcreti || 0)) } });
     return { upd, removed };
   });
   await logEvent(req.tenantId!, updated.upd.id, who, 'Ürün sepetten çıkarıldı', updated.removed?.ad || '');

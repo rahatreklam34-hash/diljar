@@ -430,7 +430,6 @@ router.post('/uye/:slug', asyncHandler(async (req: Request, res: Response) => {
 
 // ───── Sepet (public link) ─────
 const cartModifiable = (durum: string) => durum === 'sepet' || durum === 'yeni';
-const cartRecompute = (items: any[], indirim = 0, kargo = 0) => { const ara = items.reduce((s, it) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 1), 0); return { araToplam: ara, toplam: Math.max(0, ara - indirim + kargo) }; };
 
 router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => {
   const cart = await prisma.storeOrder.findFirst({ where: { token: req.params.token }, include: { customer: true } });
@@ -661,8 +660,8 @@ router.post('/sepet/:token/add', asyncHandler(async (req: Request, res: Response
   if (ex) ex.adet = (ex.adet || 1) + 1;
   else items.push({ productId: p.id, ad: p.ad + (beden ? ` (${beden})` : ''), varyasyon: beden || null, adet: 1, fiyat, stokDusuldu: true });
   await prisma.product.update({ where: { id: p.id }, data: { stokAdeti: { decrement: 1 } } });
-  const tot = cartRecompute(items, cart.indirim || 0, cart.kargoUcreti || 0);
-  await prisma.storeOrder.update({ where: { id: cart.id }, data: { items, ...tot } });
+  const adj = await campaignAdjust(prisma, cart.tenantId, items);
+  await prisma.storeOrder.update({ where: { id: cart.id }, data: { items, araToplam: adj.araToplam, indirim: adj.indirim, kampanyalar: adj.kampanyalar, toplam: Math.max(0, adj.toplam + (cart.kargoUcreti || 0)) } });
   try { await prisma.orderEvent.create({ data: { tenantId: cart.tenantId, orderId: cart.id, kullanici: 'Müşteri', islem: 'Ürün eklendi (sepet linki)', detay: p.ad } }); } catch { /* */ }
   res.json({ ok: true });
 }));
@@ -685,8 +684,8 @@ router.post('/sepet/:token/item', asyncHandler(async (req: Request, res: Respons
     if (delta > 0) { if (it.productId && (await prisma.product.findFirst({ where: { id: it.productId, tenantId: cart.tenantId } }))!.stokAdeti < 1) throw new ApiError(400, 'Stok yetersiz'); if (it.productId && it.stokDusuldu) await prisma.product.updateMany({ where: { id: it.productId, tenantId: cart.tenantId }, data: { stokAdeti: { decrement: 1 } } }); it.adet = (it.adet || 1) + 1; }
     else { if ((it.adet || 1) <= 1) { await restoreStock(1); newItems = items.filter((_, i) => i !== idx); } else { await restoreStock(1); it.adet = (it.adet || 1) - 1; } }
   }
-  const tot = cartRecompute(newItems, cart.indirim || 0, cart.kargoUcreti || 0);
-  await prisma.storeOrder.update({ where: { id: cart.id }, data: { items: newItems, ...tot } });
+  const adj = await campaignAdjust(prisma, cart.tenantId, newItems);
+  await prisma.storeOrder.update({ where: { id: cart.id }, data: { items: newItems, araToplam: adj.araToplam, indirim: adj.indirim, kampanyalar: adj.kampanyalar, toplam: Math.max(0, adj.toplam + (cart.kargoUcreti || 0)) } });
   try { await prisma.orderEvent.create({ data: { tenantId: cart.tenantId, orderId: cart.id, kullanici: 'Müşteri', islem: remove ? 'Ürün çıkarıldı (sepet linki)' : 'Adet güncellendi (sepet linki)', detay: it.ad || '' } }); } catch { /* */ }
   res.json({ ok: true });
 }));
