@@ -143,6 +143,31 @@ export default function CanliYayinSatis() {
     }
     return null;
   };
+  // Bir müşterinin onaylı siparişleri için toplam kampanya indirimi (backend campaignAdjust ile aynı mantık)
+  const kampIndirimiHesapla = (list: any[]) => {
+    if (!list.length) return 0;
+    const ara = list.reduce((s, o) => s + (o.tutar || 0), 0);
+    let indirim = 0;
+    for (const k of aktifKampanyalar as any[]) {
+      let kInd = 0;
+      if (k.tip === 'sepet_tutar') {
+        if ((k.minTutar || 0) > 0 && ara >= (k.minTutar || 0)) kInd = k.indirimTip === 'yuzde' ? ara * k.indirimDeger / 100 : k.indirimDeger;
+      } else if (k.tip === 'urun_adet') {
+        const scoped = list.filter((o) => kampInScope(k, o.productId));
+        const tutar = scoped.reduce((s, o) => s + (o.tutar || 0), 0);
+        if (scoped.length >= (k.minAdet || 1) && scoped.length > 0) kInd = k.indirimTip === 'yuzde' ? tutar * k.indirimDeger / 100 : k.indirimDeger;
+      }
+      if (kInd > 0) indirim += Math.round(kInd * 100) / 100;
+    }
+    return Math.min(Math.round(indirim * 100) / 100, ara);
+  };
+  // Yayındaki tüm müşterilerin (onaylı) toplam kampanya indirimi
+  const toplamKampanyaIndirimi = (list: any[]) => {
+    const byUser: Record<string, any[]> = {};
+    list.forEach((o) => { (byUser[o.user] = byUser[o.user] || []).push(o); });
+    let t = 0; for (const u in byUser) t += kampIndirimiHesapla(byUser[u]);
+    return Math.round(t * 100) / 100;
+  };
 
   const startStream = async () => { try { const r = await api.post('/store/live/start', {}); setStream(r.data); setOrders([]); toast.success('Yeni yayın başladı'); } catch (e) { toast.error(apiErrorMessage(e)); } };
   const endStream = async () => {
@@ -233,19 +258,23 @@ export default function CanliYayinSatis() {
     try { const r = await api.post(`/store/live/order/${o.id}/iptal`); setOrders(r.data.orders || []); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
   };
 
-  // İstatistikler (onaylanan = ciro; iptal haric)
+  // İstatistikler (onaylanan = ciro; iptal haric). Ciro/kâr kampanya indirimi düşülmüş NET değerdir.
   const stats = useMemo(() => {
     const ona = orders.filter((o) => o.durum === 'onaylandi');
-    const ciro = ona.reduce((s, o) => s + o.tutar, 0);
+    const brutCiro = ona.reduce((s, o) => s + o.tutar, 0);
     const maliyet = ona.reduce((s, o) => s + o.alis, 0);
+    const kampanyaIndirimi = toplamKampanyaIndirimi(ona);
+    const ciro = Math.max(0, brutCiro - kampanyaIndirimi);
     return {
+      brutCiro, kampanyaIndirimi,
       ciro, kar: ciro - maliyet, toplam: orders.length,
       onaylandi: ona.length,
       stokYok: orders.filter((o) => o.durum === 'stok_yok').length,
       riskli: orders.filter((o) => o.durum === 'riskli').length,
       iptal: orders.filter((o) => o.durum === 'iptal').length,
     };
-  }, [orders]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, aktifKampanyalar, products]);
 
   const series = useMemo(() => {
     const ona = [...orders].filter((o) => o.durum === 'onaylandi').sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -300,6 +329,7 @@ export default function CanliYayinSatis() {
         <div className="flex flex-wrap items-center gap-1 flex-1 border-l border-slate-100">
           <Stat icon={Clock} label="Süre" value={stream ? sure : '--:--:--'} />
           <Stat icon={TrendingUp} label="Ciro" value={fmt(stats.ciro)} color="text-green-600" />
+          {stats.kampanyaIndirimi > 0 && <Stat icon={Tag} label="Kampanya İnd." value={'-' + fmt(stats.kampanyaIndirimi)} color="text-amber-600" />}
           <Stat icon={Wallet} label="Tahmini Kâr" value={fmt(stats.kar)} color="text-indigo-600" />
           <Stat icon={ShoppingBag} label="Sipariş" value={stats.onaylandi} />
           <Stat icon={Users} label="İzleyici" value={stream ? viewers.toLocaleString('tr-TR') : '0'} />
