@@ -17,26 +17,32 @@ async function findCustomerByHandle(tenantId: string, handle: string) {
 }
 
 // Aktif yayın kampanyalarını sepete uygula -> { araToplam, indirim, toplam, kampanyalar }
+// ÖNEMLİ: Kampanya şartı (adet/tutar) ve indirim YALNIZCA onaylanmış kalemlerden hesaplanır.
+// Rezerve / iptal / stok_yok / riskli kalemler kampanya şartına sayılmaz.
+// (Sepete zaten yalnız onaylandi/rezerve eklenir; burada rezerve de elenir. 'durum' alanı
+//  olmayan eski/online kalemler geriye dönük uyum için onaylandı varsayılır.)
 export async function campaignAdjust(tx: any, tenantId: string, items: any[]) {
   const ara = items.reduce((s: number, it: any) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 1), 0);
+  const valid = items.filter((it: any) => !it.durum || it.durum === 'onaylandi');
   let camps: any[] = [];
   try { camps = await tx.campaign.findMany({ where: { tenantId, aktif: true } }); } catch { camps = []; }
-  if (!camps.length) return { araToplam: ara, indirim: 0, toplam: ara, kampanyalar: [] };
-  const pids = [...new Set(items.map((i: any) => i.productId).filter(Boolean))] as string[];
+  if (!camps.length || !valid.length) return { araToplam: ara, indirim: 0, toplam: ara, kampanyalar: [] };
+  const pids = [...new Set(valid.map((i: any) => i.productId).filter(Boolean))] as string[];
   const prods = pids.length ? await tx.product.findMany({ where: { tenantId, id: { in: pids } }, select: { id: true, kategoriId: true } }) : [];
   const catOf = new Map(prods.map((p: any) => [p.id, p.kategoriId]));
   const inScope = (c: any, it: any) => c.kapsam === 'hepsi' || (c.kapsam === 'urun' && it.productId === c.productId) || (c.kapsam === 'kategori' && catOf.get(it.productId) === c.kategoriId);
+  const validAra = valid.reduce((s: number, it: any) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 1), 0);
   let indirim = 0;
   const kampanyalar: any[] = [];
   for (const c of camps) {
     let kIndirim = 0;
     if (c.tip === 'sepet_tutar') {
-      if ((c.minTutar || 0) > 0 && ara >= (c.minTutar || 0)) kIndirim = c.indirimTip === 'yuzde' ? ara * c.indirimDeger / 100 : c.indirimDeger;
+      if ((c.minTutar || 0) > 0 && validAra >= (c.minTutar || 0)) kIndirim = c.indirimTip === 'yuzde' ? validAra * c.indirimDeger / 100 : c.indirimDeger;
     } else if (c.tip === 'urun_adet') {
-      // kapsamdaki TÜM kalemlerin toplam adedi ve tutarı
-      const scoped = items.filter((it) => it.productId && inScope(c, it));
-      const toplamAdet = scoped.reduce((s, it) => s + (Number(it.adet) || 1), 0);
-      const toplamTutar = scoped.reduce((s, it) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 1), 0);
+      // kapsamdaki onaylanmış kalemlerin toplam adedi ve tutarı
+      const scoped = valid.filter((it: any) => it.productId && inScope(c, it));
+      const toplamAdet = scoped.reduce((s: number, it: any) => s + (Number(it.adet) || 1), 0);
+      const toplamTutar = scoped.reduce((s: number, it: any) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 1), 0);
       if (toplamAdet >= (c.minAdet || 1) && scoped.length > 0) {
         kIndirim = c.indirimTip === 'yuzde' ? toplamTutar * c.indirimDeger / 100 : c.indirimDeger;
       }
@@ -146,7 +152,7 @@ router.post('/order', asyncHandler(async (req: Request, res: Response) => {
     if (durum === 'onaylandi' || durum === 'rezerve') {
       const cart = await getOrCreateCart(tx, t, customer?.id || null, norm(user || ''));
       const items: any[] = Array.isArray(cart.items) ? (cart.items as any) : [];
-      items.push({ liveOrderId: lord.id, productId, ad: urunAd + (beden ? ` (${beden})` : ''), varyasyon: variation || beden || null, adet: 1, fiyat: tutar, stokDusuldu: true });
+      items.push({ liveOrderId: lord.id, productId, ad: urunAd + (beden ? ` (${beden})` : ''), varyasyon: variation || beden || null, adet: 1, fiyat: tutar, stokDusuldu: true, durum });
       const tot = await campaignAdjust(tx, t, items);
       await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...tot } });
       storeOrderId = cart.id;
@@ -233,8 +239,15 @@ export async function promoteReserved(tenantId: string, customer: { id: string; 
     const h = norm(lo.user);
     if (handles.includes(h) || (tel.length >= 7 && lo.user.replace(/\D/g, '') === tel)) {
       await prisma.liveOrder.update({ where: { id: lo.id }, data: { durum: 'onaylandi' } });
-      // sepeti musteriye bagla
-      if (lo.storeOrderId) await prisma.storeOrder.updateMany({ where: { id: lo.storeOrderId, tenantId }, data: { customerId: customer.id } });
+      // sepeti musteriye bagla + kalem durumunu onaylandi yap + kampanya indirimini yeniden hesapla
+      if (lo.storeOrderId) {
+        const cart = await prisma.storeOrder.findFirst({ where: { id: lo.storeOrderId, tenantId } });
+        if (cart) {
+          const items = (Array.isArray(cart.items) ? (cart.items as any) : []).map((it: any) => it.liveOrderId === lo.id ? { ...it, durum: 'onaylandi' } : it);
+          const adj = await campaignAdjust(prisma, tenantId, items);
+          await prisma.storeOrder.update({ where: { id: cart.id }, data: { items, araToplam: adj.araToplam, indirim: adj.indirim, kampanyalar: adj.kampanyalar, toplam: Math.max(0, adj.toplam + (cart.kargoUcreti || 0)), customerId: customer.id } });
+        }
+      }
     }
   }
 }
@@ -248,9 +261,16 @@ export async function autoCancelStaleReservations() {
   for (const lo of stale) {
     const cust = await findCustomerByHandle(lo.tenantId, lo.user);
     if (cust) {
-      // Bu arada kayit olmus -> onayla
+      // Bu arada kayit olmus -> onayla + sepet kalemini onaylandi yap + indirimi yeniden hesapla
       await prisma.liveOrder.update({ where: { id: lo.id }, data: { durum: 'onaylandi' } });
-      if (lo.storeOrderId) await prisma.storeOrder.updateMany({ where: { id: lo.storeOrderId, tenantId: lo.tenantId }, data: { customerId: cust.id } });
+      if (lo.storeOrderId) {
+        const cart = await prisma.storeOrder.findFirst({ where: { id: lo.storeOrderId, tenantId: lo.tenantId } });
+        if (cart) {
+          const items = (Array.isArray(cart.items) ? (cart.items as any) : []).map((it: any) => it.liveOrderId === lo.id ? { ...it, durum: 'onaylandi' } : it);
+          const adj = await campaignAdjust(prisma, lo.tenantId, items);
+          await prisma.storeOrder.update({ where: { id: cart.id }, data: { items, araToplam: adj.araToplam, indirim: adj.indirim, kampanyalar: adj.kampanyalar, toplam: Math.max(0, adj.toplam + (cart.kargoUcreti || 0)), customerId: cust.id } });
+        }
+      }
       continue;
     }
     try {
