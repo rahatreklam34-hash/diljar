@@ -122,6 +122,27 @@ export default function CanliYayinSatis() {
     return aktifKampanyalar.find((k: any) => k.kapsam === 'hepsi' || (k.kapsam === 'urun' && k.productId === productId) || (k.kapsam === 'kategori' && k.kategoriId === p.kategoriId)) || null;
   };
   const kampKisa = (k: any) => `${k.ad}: ${k.tip === 'urun_adet' ? `${k.minAdet}+ adet` : `${fmt(k.minTutar)} üzeri`} → ${k.indirimTip === 'yuzde' ? '%' + k.indirimDeger : fmt(k.indirimDeger)}`;
+  const kampInScope = (k: any, productId?: string) => {
+    if (!productId) return false;
+    const p = products.find((x) => x.id === productId); if (!p) return false;
+    return k.kapsam === 'hepsi' || (k.kapsam === 'urun' && k.productId === productId) || (k.kapsam === 'kategori' && k.kategoriId === p.kategoriId);
+  };
+  // Etiket SADECE kampanya şartı gerçekten sağlandığında gösterilir (müşterinin onaylı siparişleri baz alınır).
+  const kampanyaUygulanan = (o: any) => {
+    if (o.durum !== 'onaylandi') return null;
+    const k = kampanyaOf(o.productId);
+    if (!k) return null;
+    const userOnayli = orders.filter((x) => x.durum === 'onaylandi' && x.user === o.user);
+    if (k.tip === 'urun_adet') {
+      const adet = userOnayli.filter((x) => kampInScope(k, x.productId)).length;
+      return adet >= (k.minAdet || 1) ? k : null;
+    }
+    if (k.tip === 'sepet_tutar') {
+      const toplam = userOnayli.reduce((s, x) => s + (x.tutar || 0), 0);
+      return toplam >= (k.minTutar || 0) ? k : null;
+    }
+    return null;
+  };
 
   const startStream = async () => { try { const r = await api.post('/store/live/start', {}); setStream(r.data); setOrders([]); toast.success('Yeni yayın başladı'); } catch (e) { toast.error(apiErrorMessage(e)); } };
   const endStream = async () => {
@@ -386,7 +407,7 @@ export default function CanliYayinSatis() {
                   return (
                     <tr key={o.id} className={`border-t border-slate-100 ${rowBg}`}>
                       <td className="px-3 py-2 font-medium text-slate-700"><div className="flex items-center gap-1.5">{o.user}{!isRegistered(o.user) && <><span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full" title="Müşterilerimde kayıtlı değil">Kayıt Yok</span><button onClick={() => { setKayitForm({ ad: '', instagram: o.user, telefon: '' }); setKayitModal(true); }} title="Hızlı müşteri kaydı oluştur" className="text-emerald-600 hover:bg-emerald-50 rounded p-0.5"><UserPlus size={14} /></button></>}</div></td>
-                      <td className="px-3 py-2"><div className="flex items-center gap-2"><div className="w-9 h-9 rounded-lg bg-slate-100 overflow-hidden shrink-0 cursor-zoom-in" onClick={() => img && setLightbox(img)}>{img ? <img src={img} className="w-full h-full object-cover" /> : null}</div><div><span className="text-slate-600">{o.urun}</span>{o.durum === 'onaylandi' && kampanyaOf(o.productId) && <span className="block text-[9px] text-amber-600 font-medium" title={kampKisa(kampanyaOf(o.productId))}>🏷 {kampanyaOf(o.productId).ad}</span>}</div></div></td>
+                      <td className="px-3 py-2"><div className="flex items-center gap-2"><div className="w-9 h-9 rounded-lg bg-slate-100 overflow-hidden shrink-0 cursor-zoom-in" onClick={() => img && setLightbox(img)}>{img ? <img src={img} className="w-full h-full object-cover" /> : null}</div><div><span className="text-slate-600">{o.urun}</span>{(() => { const ku = kampanyaUygulanan(o); return ku ? <span className="block text-[9px] text-amber-600 font-medium" title={kampKisa(ku)}>🏷 {ku.ad}</span> : null; })()}</div></div></td>
                       <td className="px-3 py-2 text-slate-500 font-mono text-xs">{o.kod || '-'}</td>
                       <td className="px-3 py-2 text-slate-500">{o.beden || '-'}</td>
                       <td className="px-3 py-2 text-slate-500">{o.saticiAd || '-'}</td>
