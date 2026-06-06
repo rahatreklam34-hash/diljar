@@ -161,13 +161,6 @@ export default function CanliYayinSatis() {
     }
     return Math.min(Math.round(indirim * 100) / 100, ara);
   };
-  // Yayındaki tüm müşterilerin (onaylı) toplam kampanya indirimi
-  const toplamKampanyaIndirimi = (list: any[]) => {
-    const byUser: Record<string, any[]> = {};
-    list.forEach((o) => { (byUser[o.user] = byUser[o.user] || []).push(o); });
-    let t = 0; for (const u in byUser) t += kampIndirimiHesapla(byUser[u]);
-    return Math.round(t * 100) / 100;
-  };
 
   const startStream = async () => { try { const r = await api.post('/store/live/start', {}); setStream(r.data); setOrders([]); toast.success('Yeni yayın başladı'); } catch (e) { toast.error(apiErrorMessage(e)); } };
   const endStream = async () => {
@@ -263,10 +256,15 @@ export default function CanliYayinSatis() {
     const ona = orders.filter((o) => o.durum === 'onaylandi');
     const brutCiro = ona.reduce((s, o) => s + o.tutar, 0);
     const maliyet = ona.reduce((s, o) => s + o.alis, 0);
-    const kampanyaIndirimi = toplamKampanyaIndirimi(ona);
+    // Müşteri bazında kampanya indirimi + kampanyadan yararlanan kişi sayısı
+    const byUser: Record<string, any[]> = {};
+    ona.forEach((o) => { (byUser[o.user] = byUser[o.user] || []).push(o); });
+    let kampanyaIndirimi = 0; let kampanyaYararlanan = 0;
+    for (const u in byUser) { const d = kampIndirimiHesapla(byUser[u]); if (d > 0) { kampanyaIndirimi += d; kampanyaYararlanan++; } }
+    kampanyaIndirimi = Math.round(kampanyaIndirimi * 100) / 100;
     const ciro = Math.max(0, brutCiro - kampanyaIndirimi);
     return {
-      brutCiro, kampanyaIndirimi,
+      brutCiro, kampanyaIndirimi, kampanyaYararlanan,
       ciro, kar: ciro - maliyet, toplam: orders.length,
       onaylandi: ona.length,
       stokYok: orders.filter((o) => o.durum === 'stok_yok').length,
@@ -624,6 +622,16 @@ export default function CanliYayinSatis() {
                 <div className="bg-white rounded-xl border border-slate-200 p-3"><p className="text-[10px] text-slate-400 uppercase">Brüt Kâr</p><p className="text-lg font-bold text-green-600">{fmt(stats.kar)}</p></div>
                 <div className="bg-white rounded-xl border border-slate-200 p-3"><p className="text-[10px] text-slate-400 uppercase">Kâr Marjı</p><p className={`text-lg font-bold ${lowMargin ? 'text-red-600' : 'text-indigo-600'}`}>%{margin.toFixed(1)}</p></div>
                 <div className="bg-white rounded-xl border border-slate-200 p-3"><p className="text-[10px] text-slate-400 uppercase">Net Kâr</p><p className={`text-lg font-bold ${netKar < 0 ? 'text-red-600' : 'text-slate-800'}`}>{fmt(netKar)}</p></div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-amber-200 p-4">
+                <h3 className="font-semibold text-slate-700 mb-3 flex items-center gap-1.5"><Tag size={15} className="text-amber-500" /> Kampanya Özeti</h3>
+                {stats.kampanyaYararlanan > 0 ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div><p className="text-[10px] text-slate-400 uppercase">Yararlanan Müşteri</p><p className="text-lg font-bold text-amber-600">{stats.kampanyaYararlanan} kişi</p></div>
+                    <div><p className="text-[10px] text-slate-400 uppercase">Toplam Kampanya İndirimi</p><p className="text-lg font-bold text-amber-600">-{fmt(stats.kampanyaIndirimi)}</p></div>
+                  </div>
+                ) : <p className="text-slate-400 text-sm">Henüz kampanyadan yararlanan müşteri yok.</p>}
               </div>
 
               <div className={`rounded-xl border p-4 flex items-start gap-3 ${stats.ciro === 0 ? 'bg-slate-100 border-slate-200 text-slate-500' : netKar < 0 || lowMargin ? 'bg-red-50 border-red-200 text-red-700' : 'bg-green-50 border-green-200 text-green-700'}`}>

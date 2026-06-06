@@ -37,7 +37,7 @@ const initials = (ad: string) => (ad || '?').split(' ').map((w) => w[0]).slice(0
 const waLink = (tel: string) => { let d = (tel || '').replace(/\D/g, ''); if (d.startsWith('0')) d = '90' + d.slice(1); else if (d.length === 10) d = '90' + d; return 'https://wa.me/' + d; };
 
 export default function Siparislerim({ kanalFilter }: { kanalFilter?: 'online' | 'canli' }) {
-  const { orders, customers, products, categories, discountCodes, reload } = useStore();
+  const { orders, customers, products, categories, discountCodes, campaigns, reload } = useStore();
   const [tab, setTab] = useState<string>('tumu');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -223,7 +223,7 @@ export default function Siparislerim({ kanalFilter }: { kanalFilter?: 'online' |
         );
       })()}
 
-      {detail && <DetailModal order={detail} customer={cust(detail.customerId)} custName={custName(detail)} custPhone={custPhone(detail)} products={products} categories={categories} discountCodes={discountCodes} onClose={() => setDetail(null)} reload={reload} />}
+      {detail && <DetailModal order={detail} customer={cust(detail.customerId)} custName={custName(detail)} custPhone={custPhone(detail)} products={products} categories={categories} discountCodes={discountCodes} campaigns={campaigns} onClose={() => setDetail(null)} reload={reload} />}
 
       {/* Yeni siparis modali */}
       {modal && (
@@ -278,7 +278,7 @@ function ActBtn({ onClick, icon: Ic, label, cls }: any) {
   return <button onClick={onClick} title={label} className={`inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-lg hover:bg-slate-50 ${cls}`}><Ic size={13} /><span className="hidden xl:inline">{label}</span></button>;
 }
 
-function DetailModal({ order, customer, custName, custPhone, products, categories, discountCodes, onClose, reload }: any) {
+function DetailModal({ order, customer, custName, custPhone, products, categories, discountCodes, campaigns, onClose, reload }: any) {
   const [durum, setDurumState] = useState<string>(order.durum);
   const [tahsilat, setTahsilat] = useState<number>(order.tahsilat || 0);
   const [kargoUcreti, setKargoUcreti] = useState<number>(order.kargoUcreti || 0);
@@ -307,6 +307,28 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
   const cleanAd = (it: any) => { const p = prodOf(it.productId); return p?.ad || String(it.ad || '').replace(/\s*\([^)]*\)\s*$/, ''); };
   const bedenOf = (it: any) => { if (it.varyasyon) return it.varyasyon; if (it.beden) return it.beden; const m = String(it.ad || '').match(/\(([^)]+)\)\s*$/); return m ? m[1] : ''; };
   const sepetTutari = useMemo(() => items.reduce((s, it) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 0), 0), [items]);
+  // Kampanya indirimini, kapsamdaki ürünlere orantılı dağıt -> her satırda indirim gösterimi
+  const itemDiscMap = useMemo(() => {
+    const map = new Map<number, number>();
+    const toplamInd = Number(indirim) || 0;
+    if (toplamInd <= 0) return map;
+    const kampList = (Array.isArray(kampanyalar) ? kampanyalar : [])
+      .map((k: any) => (campaigns || []).find((c: any) => c.id === k.id)).filter(Boolean);
+    const inScope = (it: any) => {
+      if (!kampList.length) return true; // kampanya detayı yoksa tüm sepete orantılı dağıt
+      return kampList.some((c: any) => {
+        if (c.kapsam === 'hepsi') return true;
+        if (c.kapsam === 'urun') return it.productId === c.productId;
+        if (c.kapsam === 'kategori') { const p = prodOf(it.productId); return p && p.kategoriId === c.kategoriId; }
+        return false;
+      });
+    };
+    const scoped = items.map((it, i) => ({ it, i })).filter(({ it }) => inScope(it));
+    const scopedToplam = scoped.reduce((s, { it }) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 0), 0);
+    if (scopedToplam > 0) scoped.forEach(({ it, i }) => map.set(i, ((Number(it.fiyat) || 0) * (Number(it.adet) || 0) / scopedToplam) * toplamInd));
+    return map;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, kampanyalar, campaigns, indirim]);
   const toplamTutar = Math.max(0, sepetTutari + (Number(kargoUcreti) || 0) - (Number(indirim) || 0));
   const kalan = toplamTutar - (Number(tahsilat) || 0);
   const odemeDurumu = kalan <= 0 ? 'Ödendi' : (tahsilat > 0 ? 'Kısmi' : 'Bekliyor');
@@ -526,7 +548,18 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
                           <td className="py-2.5">{bedenOf(it) ? <span className="inline-block text-xs px-2 py-0.5 bg-slate-100 rounded-md text-slate-600">{bedenOf(it)}</span> : <span className="text-slate-400">-</span>}</td>
                           <td className="py-2.5">{editItem === i ? <input type="number" min={1} value={it.adet} onChange={(e) => setItemField(i, { adet: Number(e.target.value) })} className="w-14 border border-slate-200 rounded px-1.5 py-0.5" /> : <span className="text-slate-600">{it.adet}</span>}</td>
                           <td className="py-2.5">{editItem === i ? <input type="number" value={it.fiyat} onChange={(e) => setItemField(i, { fiyat: Number(e.target.value) })} className="w-20 border border-slate-200 rounded px-1.5 py-0.5" /> : <span className="text-slate-600">{fmt(it.fiyat)}</span>}</td>
-                          <td className="py-2.5 font-medium text-slate-700">{fmt((Number(it.fiyat) || 0) * (Number(it.adet) || 0))}</td>
+                          <td className="py-2.5">{(() => {
+                            const brut = (Number(it.fiyat) || 0) * (Number(it.adet) || 0);
+                            const disc = itemDiscMap.get(i) || 0;
+                            if (disc > 0) return (
+                              <div className="leading-tight">
+                                <span className="line-through text-slate-400 text-xs mr-1">{fmt(brut)}</span>
+                                <span className="font-semibold text-green-600">{fmt(brut - disc)}</span>
+                                <span className="block text-[9px] text-amber-600 font-medium inline-flex items-center gap-0.5"><Tag size={9} /> -{fmt(disc)}</span>
+                              </div>
+                            );
+                            return <span className="font-medium text-slate-700">{fmt(brut)}</span>;
+                          })()}</td>
                           <td className="py-2.5"><div className="flex items-center justify-end gap-1">
                             {editItem === i
                               ? <button onClick={() => { setEditItem(null); persist({ _log: `Ürün düzenlendi: ${cleanAd(it)} (Adet: ${it.adet}, Fiyat: ${fmt(it.fiyat)})` }); }} title="Onayla" className="p-1.5 rounded-lg bg-green-50 text-green-600 hover:bg-green-100"><Check size={14} /></button>
