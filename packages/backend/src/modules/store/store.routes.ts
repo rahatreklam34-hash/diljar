@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma';
 import { asyncHandler, ApiError } from '../../lib/http';
-import { promoteReserved, campaignAdjust } from './live.routes';
+import { promoteReserved, campaignAdjust, recalcOpenCarts } from './live.routes';
 
 const router = Router();
 
@@ -113,7 +113,6 @@ const SIMPLE: Record<string, string> = {
   'discounts': 'discountCode',
   'variations': 'productVariation',
   'variation-templates': 'variationTemplate',
-  'campaigns': 'campaign',
 };
 for (const [seg, model] of Object.entries(SIMPLE)) {
   const m = () => (prisma as any)[model];
@@ -133,6 +132,41 @@ for (const [seg, model] of Object.entries(SIMPLE)) {
     res.json({ ok: true });
   }));
 }
+
+// ───────── Kampanyalar ─────────
+// Generic CRUD'dan ayri tutuluyor: kampanya eklendiginde/guncellendiginde/silindiginde
+// acik (durum='sepet') siparis sepetlerinin indirimi recalcOpenCarts ile yeniden hesaplanir.
+// Aksi halde kampanya pasif yapilsa bile eski hesaplanmis indirim sepette kalir.
+router.post('/campaigns', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const created = await prisma.$transaction(async (tx) => {
+    const c = await tx.campaign.create({ data: { ...clean(req.body), tenantId: t } });
+    await recalcOpenCarts(tx, t);
+    return c;
+  });
+  res.status(201).json(created);
+}));
+router.patch('/campaigns/:id', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const found = await prisma.campaign.findFirst({ where: { id: req.params.id, tenantId: t } });
+  if (!found) throw new ApiError(404, 'Kayit bulunamadi');
+  const updated = await prisma.$transaction(async (tx) => {
+    const c = await tx.campaign.update({ where: { id: req.params.id }, data: clean(req.body) });
+    await recalcOpenCarts(tx, t);
+    return c;
+  });
+  res.json(updated);
+}));
+router.delete('/campaigns/:id', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const found = await prisma.campaign.findFirst({ where: { id: req.params.id, tenantId: t } });
+  if (!found) throw new ApiError(404, 'Kayit bulunamadi');
+  await prisma.$transaction(async (tx) => {
+    await tx.campaign.delete({ where: { id: req.params.id } });
+    await recalcOpenCarts(tx, t);
+  });
+  res.json({ ok: true });
+}));
 
 // ───────── Products (barkod + satis kodu havuzu) ─────────
 router.post('/products', asyncHandler(async (req: Request, res: Response) => {

@@ -51,6 +51,19 @@ export async function campaignAdjust(tx: any, tenantId: string, items: any[]) {
   return { araToplam: ara, indirim, toplam: Math.max(0, ara - indirim), kampanyalar };
 }
 
+// Tenant'in acik (durum='sepet') siparis sepetlerini, kampanya tablosundaki son durumla yeniden hesapla.
+// Kampanya pasiflestirildiginde/silindiginde/duzenlendiginde mevcut sepetlerdeki indirim guncel kalsin diye kullanilir.
+export async function recalcOpenCarts(tx: any, tenantId: string) {
+  const carts = await tx.storeOrder.findMany({ where: { tenantId, durum: 'sepet' } });
+  for (const cart of carts) {
+    const items: any[] = Array.isArray(cart.items) ? (cart.items as any) : [];
+    const tot = await campaignAdjust(tx, tenantId, items);
+    if (tot.araToplam !== cart.araToplam || tot.indirim !== cart.indirim || tot.toplam !== cart.toplam) {
+      await tx.storeOrder.update({ where: { id: cart.id }, data: tot });
+    }
+  }
+}
+
 // Musterinin acik sepetini bul/olustur
 async function getOrCreateCart(tx: any, tenantId: string, customerId: string | null, handle: string) {
   let cart = customerId
