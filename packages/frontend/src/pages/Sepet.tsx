@@ -204,9 +204,9 @@ export default function Sepet() {
   const curStep = data.durum === 'sepet' ? 0 : bildirildi || data.durum !== 'yeni' ? 2 : 1;
 
   return (
-    <div className="min-h-screen bg-slate-100">
+    <div className="min-h-screen bg-slate-100 sm:bg-gradient-to-br sm:from-indigo-100 sm:via-slate-100 sm:to-violet-100">
       <Toaster position="top-center" />
-      <div className="mx-auto w-full max-w-md bg-slate-50 min-h-screen shadow-sm relative">
+      <div className="mx-auto w-full max-w-md bg-slate-50 min-h-screen shadow-sm sm:shadow-2xl sm:ring-1 sm:ring-slate-200/70 relative">
         {/* Header (sticky) */}
         <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-100 px-4 py-3 flex items-center justify-between">
           <button onClick={() => setMenu(true)} className="p-1.5 rounded-lg hover:bg-slate-100"><Menu size={20} className="text-slate-700" /></button>
