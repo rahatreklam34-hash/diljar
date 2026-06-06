@@ -161,6 +161,16 @@ export default function CanliYayinSatis() {
     }
     return Math.min(Math.round(indirim * 100) / 100, ara);
   };
+  // Tek bir onaylı satıra düşen kampanya indirim payı (Tutar sütununda indirimli fiyat için)
+  const satirIndirimi = (o: any) => {
+    const k = kampanyaUygulanan(o);
+    if (!k) return 0;
+    if (k.indirimTip === 'yuzde') return Math.round((o.tutar || 0) * k.indirimDeger) / 100;
+    const userScoped = orders.filter((x) => x.durum === 'onaylandi' && x.user === o.user && kampInScope(k, x.productId));
+    const toplam = userScoped.reduce((s, x) => s + (x.tutar || 0), 0);
+    if (toplam <= 0) return 0;
+    return Math.round(((o.tutar || 0) / toplam) * k.indirimDeger * 100) / 100;
+  };
 
   const startStream = async () => { try { const r = await api.post('/store/live/start', {}); setStream(r.data); setOrders([]); toast.success('Yeni yayın başladı'); } catch (e) { toast.error(apiErrorMessage(e)); } };
   const endStream = async () => {
@@ -439,7 +449,11 @@ export default function CanliYayinSatis() {
                       <td className="px-3 py-2 text-slate-500 font-mono text-xs">{o.kod || '-'}</td>
                       <td className="px-3 py-2 text-slate-500">{o.beden || '-'}</td>
                       <td className="px-3 py-2 text-slate-500">{o.saticiAd || '-'}</td>
-                      <td className="px-3 py-2 font-medium">{fmt(o.tutar)}</td>
+                      <td className="px-3 py-2 font-medium">{(() => {
+                        const disc = satirIndirimi(o);
+                        if (disc > 0) return <div className="leading-tight"><span className="line-through text-slate-400 text-xs">{fmt(o.tutar)}</span><span className="block text-green-600 font-semibold">{fmt(o.tutar - disc)}</span></div>;
+                        return fmt(o.tutar);
+                      })()}</td>
                       <td className="px-3 py-2"><span className={`text-xs px-2 py-0.5 rounded-full ${DURUM_BADGE[o.durum].c}`}>{DURUM_BADGE[o.durum].t}</span></td>
                       <td className="px-3 py-2 text-slate-400">{hhmm(o.createdAt)}</td>
                       <td className="px-3 py-2">

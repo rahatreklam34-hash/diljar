@@ -423,9 +423,14 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
   // PDF: Turkce + urun gorseli destekli yazdirilabilir HTML
   const exportPDF = () => {
     const esc = (s: any) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as any)[c]);
-    const rows = items.map((it) => {
+    const rows = items.map((it, i) => {
       const img = imgOf(it.productId);
       const detay = [katOf(it.productId), renkOf(it.productId), prodOf(it.productId)?.barkod].filter(Boolean).join(' · ');
+      const brut = (Number(it.fiyat) || 0) * (Number(it.adet) || 0);
+      const disc = itemDiscMap.get(i) || 0;
+      const toplamCell = disc > 0
+        ? `<span style="text-decoration:line-through;color:#94a3b8">${fmt(brut)}</span> <strong style="color:#16a34a">${fmt(brut - disc)}</strong><div style="font-size:10px;color:#d97706">Kampanya -${fmt(disc)}</div>`
+        : fmt(brut);
       return `<tr>
         <td><div style="display:flex;align-items:center;gap:8px">
           ${img ? `<img src="${esc(img)}" style="width:44px;height:44px;object-fit:cover;border-radius:6px"/>` : ''}
@@ -434,7 +439,7 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
         <td>${esc(it.varyasyon || it.beden || '-')}</td>
         <td>${esc(it.adet)}</td>
         <td>${fmt(it.fiyat)}</td>
-        <td>${fmt((Number(it.fiyat) || 0) * (Number(it.adet) || 0))}</td>
+        <td>${toplamCell}</td>
       </tr>`;
     }).join('');
     const html = `<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>${esc(orderLabel(order))}</title>
