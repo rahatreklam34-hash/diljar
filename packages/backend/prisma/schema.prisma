@@ -1,0 +1,947 @@
+// FinansTakip SaaS - Prisma Şeması
+// PostgreSQL, çok kiracılı (multi-tenant) shared-DB + row-level (tenantId)
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+//  PLATFORM / SAAS TABLOLARI
+// ─────────────────────────────────────────────
+
+enum UserRole {
+  SUPER_ADMIN
+  TENANT_OWNER
+  TENANT_USER
+}
+
+enum TenantStatus {
+  TRIAL
+  ACTIVE
+  TRIAL_EXPIRED
+  PAST_DUE
+  FROZEN
+  CANCELLED
+}
+
+enum BillingCycle {
+  MONTHLY
+  YEARLY
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  MANUAL
+  CREDIT_CARD
+}
+
+enum PaymentStatus {
+  PENDING
+  CONFIRMED
+  REJECTED
+}
+
+enum CreditType {
+  PURCHASE
+  USAGE
+  ADJUSTMENT
+}
+
+enum TicketStatus {
+  OPEN
+  ANSWERED
+  CLOSED
+}
+
+enum TicketPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Tenant {
+  id            String       @id @default(cuid())
+  name          String
+  phone         String?
+  status        TenantStatus @default(TRIAL)
+  trialEndsAt   DateTime?
+  creditBalance Float        @default(0)
+  seqNo         Int          @default(0)
+  seqYil        Int?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  users         User[]
+  subscriptions Subscription[]
+  payments      Payment[]
+  creditLedger  CreditLedger[]
+  tickets       SupportTicket[]
+  auditLogs     AuditLog[]
+  uploads       Upload[]
+  integrations  IntegrationSetting[]
+  productCategories ProductCategory[]
+  products      Product[]
+  productVariations ProductVariation[]
+  salesCodes    SalesCode[]
+  customers     Customer[]
+  discountCodes DiscountCode[]
+  storeOrders   StoreOrder[]
+  storeSetting  StoreSetting?
+  variationTemplates VariationTemplate[]
+  liveStreams   LiveStream[]
+  liveOrders    LiveOrder[]
+  botConfig     BotConfig?
+  botKnowledge  BotKnowledge[]
+  botGaps       BotGap[]
+  chatSessions  ChatSession[]
+  chatMessages  ChatMessage[]
+  destekTalepleri DestekTalebi[]
+
+  // Uygulama verileri
+  cariHesaplar       CariHesap[]
+  cariHareketler     CariHareket[]
+  hareketler         Hareket[]
+  kasaBanka          KasaBanka[]
+  krediKartlari      KrediKarti[]
+  birikimHesaplari   BirikimHesabi[]
+  cekler             Cek[]
+  personeller        Personel[]
+  personelHareketler PersonelHareket[]
+  duzenliOdemeler    DuzenliOdeme[]
+  emanetParalar      EmanetPara[]
+  hedefler           Hedef[]
+  sistemLoglari      SistemLog[]
+}
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  passwordHash  String
+  fullName      String
+  role          UserRole @default(TENANT_OWNER)
+  unvan         String?
+  permissions   Json?
+  aktif         Boolean  @default(true)
+  emailVerified Boolean  @default(false)
+  tenantId      String?
+  tenant        Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  ticketMessages TicketMessage[]
+
+  @@index([tenantId])
+}
+
+model Plan {
+  id           String   @id @default(cuid())
+  name         String
+  priceMonthly Int // kuruş
+  priceYearly  Int // kuruş
+  features     Json?
+  creditPerMonth Float  @default(0)
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                 String       @id @default(cuid())
+  tenantId           String
+  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId             String?
+  plan               Plan?        @relation(fields: [planId], references: [id])
+  status             TenantStatus @default(TRIAL)
+  billingCycle       BillingCycle @default(MONTHLY)
+  trialEndsAt        DateTime?
+  currentPeriodStart DateTime?
+  currentPeriodEnd   DateTime?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+
+  payments Payment[]
+
+  @@index([tenantId])
+}
+
+model Payment {
+  id               String        @id @default(cuid())
+  tenantId         String
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  subscriptionId   String?
+  subscription     Subscription? @relation(fields: [subscriptionId], references: [id])
+  amount           Int // kuruş
+  method           PaymentMethod @default(BANK_TRANSFER)
+  status           PaymentStatus @default(PENDING)
+  confirmedByUserId String?
+  confirmedAt      DateTime?
+  adminNote        String?
+  createdAt        DateTime      @default(now())
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+model CreditLedger {
+  id           String     @id @default(cuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  amount       Float // +/-
+  balanceAfter Float
+  type         CreditType
+  description  String?
+  createdByUserId String?
+  createdAt    DateTime   @default(now())
+
+  @@index([tenantId])
+}
+
+model SupportTicket {
+  id        String         @id @default(cuid())
+  tenantId  String
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String
+  subject   String
+  category  String         @default("genel") // teknik | fatura | genel
+  priority  TicketPriority @default(MEDIUM)
+  status    TicketStatus   @default(OPEN)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  messages TicketMessage[]
+
+  @@index([tenantId])
+  @@index([status])
+}
+
+model TicketMessage {
+  id           String        @id @default(cuid())
+  ticketId     String
+  ticket       SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  senderUserId String
+  sender       User          @relation(fields: [senderUserId], references: [id])
+  content      String
+  isAdmin      Boolean       @default(false)
+  attachments  Json?
+  createdAt    DateTime      @default(now())
+
+  @@index([ticketId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([entity])
+}
+
+model Upload {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fileName     String
+  originalName String
+  mimeType     String
+  size         Int
+  path         String
+  category     String   @default("genel")
+  createdByUserId String?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model IntegrationSetting {
+  id        String   @id @default(cuid())
+  scope     String   @default("TENANT") // PLATFORM | TENANT
+  tenantId  String?
+  tenant    Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  category  String   // PAYMENT | CARGO
+  provider  String   // paytr, iyzico, yurtici, aras, surat, dhl
+  enabled   Boolean  @default(false)
+  mode      String   @default("TEST") // TEST | LIVE
+  config    Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([scope, tenantId, provider])
+  @@index([tenantId])
+}
+
+// ─────────────────────────────────────────────
+//  UYGULAMA TABLOLARI (her biri tenantId ile izole)
+// ─────────────────────────────────────────────
+
+model CariHesap {
+  id               String   @id @default(cuid())
+  tenantId         String
+  tenant           Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad               String
+  bakiye           Float    @default(0)
+  paraCinsi        String   @default("TRY")
+  telefon          String?
+  email            String?
+  adres            String?
+  sonHareketTarihi String?
+  createdBy        String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  hareketler CariHareket[]
+
+  @@index([tenantId])
+}
+
+model CariHareket {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  cariHesapId String
+  cariHesap   CariHesap @relation(fields: [cariHesapId], references: [id], onDelete: Cascade)
+  tarih       String
+  saat        String
+  aciklama    String
+  tutar       Float
+  tip         String // alis_fatura | satis_fatura | odeme | tahsilat | iade_al | iade_ver
+  cekId       String?
+  createdBy   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([tenantId])
+  @@index([cariHesapId])
+  @@index([cekId])
+}
+
+model Hareket {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tarih       String
+  saat        String
+  aciklama    String
+  tutar       Float
+  tip         String // gelir | gider
+  kategori    String
+  cariHesapId String?
+  kasaBankaId String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model KasaBanka {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad        String
+  tip       String // kasa | banka
+  bakiye    Float    @default(0)
+  paraCinsi String   @default("TRY")
+  iban      String?
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model KrediKarti {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad             String
+  limit          Float    @default(0)
+  borc           Float    @default(0)
+  kartNo         String?
+  sonOdemeTarihi String?
+  createdBy      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model BirikimHesabi {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad        String
+  bakiye    Float    @default(0)
+  paraCinsi String   @default("TRY")
+  iban      String?
+  createdBy String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model Cek {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  kisiAd      String
+  kesideci    String?
+  tutar       Float
+  vadeTarihi  String
+  durum       String // bekleyen | tahsil_edilen | geciken
+  tip         String // alacak | borc
+  aciklama    String?
+  cariHesapId String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model Personel {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad              String
+  email           String?
+  pozisyon        String
+  departman       String
+  cinsiyet        String // erkek | kadin
+  maas            Float    @default(0)
+  telefon         String?
+  baslangicTarihi String
+  odemeTarihi     Int      @default(1)
+  sskPrim         Float    @default(0)
+  yemekUcreti     Float    @default(0)
+  yolUcreti       Float    @default(0)
+  durum           String   @default("aktif") // aktif | izinli | pasif
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  hareketler PersonelHareket[]
+
+  @@index([tenantId])
+}
+
+model PersonelHareket {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  personelId String
+  personel   Personel @relation(fields: [personelId], references: [id], onDelete: Cascade)
+  tarih      String
+  saat       String
+  tip        String // maas | avans | urun | ssk | yemek | yol | prim | ikramiye | izin | mesai | ek_odeme
+  aciklama   String
+  tutar      Float
+  createdBy  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([personelId])
+}
+
+model DuzenliOdeme {
+  id             String   @id @default(cuid())
+  tenantId       String
+  tenant         Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad             String
+  kategori       String
+  tutar          Float    @default(0)
+  sabitTutar     Boolean  @default(true)
+  periyot        String // aylik | haftalik | yillik
+  odemeGunu      Int      @default(1)
+  sonOdemeTarihi String?
+  durum          String   @default("aktif") // aktif | pasif
+  hatirlatmaGun  Int      @default(3)
+  aciklama       String?
+  createdBy      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model EmanetPara {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  kisiAd      String
+  tutar       Float
+  alisTarihi  String
+  odemeTarihi String?
+  durum       String   @default("aktif") // aktif | odendi
+  aciklama    String?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model Hedef {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad          String
+  hedefTutar  Float    @default(0)
+  mevcutTutar Float    @default(0)
+  bitisTarihi String
+  kategori    String
+  durum       String   @default("aktif") // aktif | tamamlandi
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model SistemLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tarih     String
+  saat      String
+  modul     String
+  islem     String
+  detay     String
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+// ─────────────────────────────────────────────
+//  DEPO / ÜRÜN / MAĞAZA / SİPARİŞ
+// ─────────────────────────────────────────────
+
+model ProductCategory {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad        String
+  image     String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model VariationTemplate {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad        String // ör. Beden, Renk
+  values    Json // ["S","M","L"]
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model LiveStream {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  status    String   @default("active") // active | ended
+  baslik    String?
+  startedAt DateTime @default(now())
+  endedAt   DateTime?
+
+  orders LiveOrder[]
+
+  @@index([tenantId])
+}
+
+model LiveOrder {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  streamId     String
+  stream       LiveStream @relation(fields: [streamId], references: [id], onDelete: Cascade)
+  user         String
+  kod          String
+  urun         String
+  beden        String?
+  productId    String?
+  variation    String?
+  saticiAd     String?
+  durum        String // onaylandi | stok_yok | riskli | iptal
+  tutar        Float    @default(0)
+  alis         Float    @default(0)
+  storeOrderId String?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([streamId])
+}
+
+model BotConfig {
+  id        String   @id @default(cuid())
+  tenantId  String   @unique
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  name      String   @default("Asistan")
+  greeting  String   @default("Merhaba! Size nasıl yardımcı olabilirim?")
+  persona   String   @default("")
+  profil    String   @default("")
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model BotGap {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  anahtar   String
+  ornek     String
+  adet      Int      @default(1)
+  cozuldu   Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, anahtar])
+  @@index([tenantId])
+}
+
+model BotKnowledge {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  soru      String
+  cevap     String
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model DestekTalebi {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  no        String   @default("")
+  musteriAd String?
+  customerId String?
+  telefon   String?
+  kategori  String?
+  baslik    String
+  konu      String?
+  detay     String?
+  gorseller Json?
+  yanit     String?
+  durum     String   @default("acik") // acik | islemde | yanitlandi | cozuldu | kapatildi
+  kaynak    String   @default("manuel") // manuel | chatbot | musteri
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+model NotificationSub {
+  id         String   @id @default(cuid())
+  tenantId   String
+  customerId String?
+  musteriAd  String?
+  telefon    String?
+  beden      String?
+  kategori   String?
+  ilgi       String?
+  kaynak     String   @default("yeni_eklenenler")
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model ProductReview {
+  id        String   @id @default(cuid())
+  tenantId  String
+  productId String
+  ad        String
+  puan      Int      @default(5)
+  yorum     String?
+  gorsel    String?
+  onayli    Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([productId])
+}
+
+model TeamMessage {
+  id        String   @id @default(cuid())
+  tenantId  String
+  userId    String?
+  ad        String
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model ProductView {
+  id         String   @id @default(cuid())
+  tenantId   String
+  productId  String
+  customerId String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([productId])
+}
+
+model SicilKaydi {
+  id        String   @id @default(cuid())
+  tenantId  String
+  satici    String
+  tip       String   // iade | yanlis_beden | sikayet | gecikme | olumlu | not
+  aciklama  String?
+  orderRef  String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model ChatSession {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  musteriAd    String?
+  musteriTipi  String? // yeni | mevcut
+  instagram    String?
+  telefon      String?
+  pendingTicket Boolean @default(false)
+  status       String   @default("open") // open | closed
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  messages ChatMessage[]
+
+  @@index([tenantId])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  role      String // user | bot | agent
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([sessionId])
+}
+
+model Product {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad              String
+  sku             String?
+  salesCode       String?
+  marka           String?
+  cinsiyet        String   @default("unisex")
+  kategoriId      String?
+  alisFiyat       Float    @default(0)
+  satisFiyat      Float    @default(0)
+  eskiFiyat       Float?
+  oneCikan        Boolean  @default(false)
+  barkod          String?
+  stokAdeti       Float    @default(0)
+  aciklama        String?
+  tedarikciAd     String?
+  tedarikciBarkod String?
+  lokasyon        String   @default("")
+  images          Json? // ["url", ...] (max 5, ilki kapak)
+  aktif           Boolean  @default(true)
+  onlineMagaza    Boolean  @default(false)
+  canliSatis      Boolean  @default(false)
+  createdBy       String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  variations ProductVariation[]
+
+  @@index([tenantId])
+}
+
+model ProductVariation {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  ad        String // ör. Beden / Renk
+  deger     String // ör. L / Kirmizi
+  stok      Float    @default(0)
+  ekFiyat   Float    @default(0)
+  barkod    String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([productId])
+}
+
+model SalesCode {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code      String
+  used      Boolean  @default(false)
+  productId String?
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, code])
+  @@index([tenantId])
+}
+
+model Customer {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad        String
+  telefon   String?
+  email     String?
+  instagram String?
+  adres     String?
+  not       String?
+  bakiye    Float    @default(0)
+  indirimYuzde Float @default(0)
+  musteriNo Int?
+  passwordHash String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders StoreOrder[]
+
+  @@index([tenantId])
+}
+
+model CustomerLedger {
+  id         String   @id @default(cuid())
+  tenantId   String
+  customerId String
+  tip        String   // yukleme | harcama | iade
+  tutar      Float    @default(0)
+  aciklama   String?
+  refId      String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([customerId])
+}
+
+model Campaign {
+  id           String   @id @default(cuid())
+  tenantId     String
+  ad           String
+  aktif        Boolean  @default(true)
+  tip          String   // urun_adet | sepet_tutar
+  minAdet      Int?
+  minTutar     Float?
+  indirimTip   String   @default("yuzde") // yuzde | tutar
+  indirimDeger Float    @default(0)
+  kapsam       String   @default("hepsi") // hepsi | kategori | urun
+  kategoriId   String?
+  productId    String?
+  createdAt    DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model DiscountCode {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code      String
+  tip       String   @default("yuzde") // yuzde | tutar
+  deger     Float    @default(0)
+  aktif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model StoreOrder {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+  orderNo    Int?
+  orderYil   Int?
+  musteriHandle String?
+  token      String?   @unique
+  adres      String?
+  kanal      String    @default("manuel") // online | canli | manuel | asistan
+  botSatis   Boolean   @default(false)
+  durum      String    @default("yeni") // sepet | yeni | hazirlaniyor | kargoda | tamamlandi | iptal
+  items      Json? // [{productId, ad, adet, fiyat}]
+  araToplam  Float     @default(0)
+  indirim    Float     @default(0)
+  indirimKodu String?
+  kampanyalar Json?
+  kargoUcreti Float    @default(0)
+  toplam     Float     @default(0)
+  tahsilat   Float     @default(0)
+  gelirKaydedilen Float @default(0)
+  odemeYontemi String?
+  odemeLinki String?
+  odemeLinkiSon DateTime?
+  kargoFirmasi String?
+  kargoTakip String?
+  kargoDurum String?
+  not        String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([tenantId])
+}
+
+model OrderEvent {
+  id        String   @id @default(cuid())
+  tenantId  String
+  orderId   String
+  kullanici String?
+  islem     String
+  detay     String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([orderId])
+}
+
+model StoreSetting {
+  id           String   @id @default(cuid())
+  tenantId     String   @unique
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  slug         String?  @unique
+  active       Boolean  @default(false)
+  logoText     String?
+  heroTitle    String?
+  heroSubtitle String?
+  heroImage    String?
+  heroVideo    String?
+  bankaAd      String?
+  iban         String?
+  hesapSahibi  String?
+  slides       Json? // [{image,title,subtitle,cta}]
+  productOrder Json? // [productId, ...]
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}

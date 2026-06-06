@@ -1,0 +1,19 @@
+{
+  "name": "finanstakip-saas",
+  "private": true,
+  "version": "1.0.0",
+  "workspaces": [
+    "packages/frontend",
+    "packages/backend"
+  ],
+  "scripts": {
+    "dev:frontend": "npm run dev --workspace packages/frontend",
+    "dev:backend": "npm run dev --workspace packages/backend",
+    "build:frontend": "npm run build --workspace packages/frontend",
+    "build:backend": "npm run build --workspace packages/backend",
+    "build": "npm run build:backend && npm run build:frontend",
+    "prisma:generate": "npm run prisma:generate --workspace packages/backend",
+    "prisma:migrate": "npm run prisma:migrate --workspace packages/backend",
+    "prisma:seed": "npm run prisma:seed --workspace packages/backend"
+  }
+}

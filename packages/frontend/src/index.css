@@ -1,0 +1,13 @@
+@import "tailwindcss";
+
+@layer base {
+  :root {
+    --sidebar-bg: #1a1a2e;
+    --sidebar-active: #6c63ff;
+    --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  }
+  
+  body {
+    @apply bg-gray-50 text-gray-800 font-sans;
+  }
+}

@@ -1,0 +1,257 @@
+﻿import { Router, Request, Response } from 'express';
+import { prisma } from '../../lib/prisma';
+import { asyncHandler, ApiError } from '../../lib/http';
+import { nextOrderNo, logEvent } from './store.routes';
+
+const router = Router();
+
+const norm = (s: string) => (s || '').toLowerCase().replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/^@/, '').trim();
+const genToken = () => Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+
+async function findCustomerByHandle(tenantId: string, handle: string) {
+  const h = norm(handle);
+  const tel = handle.replace(/\D/g, '');
+  if (!h && !tel) return null;
+  const list = await prisma.customer.findMany({ where: { tenantId } });
+  return list.find((c) => (h && (norm(c.instagram || '') === h || norm(c.ad || '') === h)) || (tel.length >= 7 && (c.telefon || '').replace(/\D/g, '') === tel)) || null;
+}
+
+// Aktif yayın kampanyalarını sepete uygula -> { araToplam, indirim, toplam, kampanyalar }
+export async function campaignAdjust(tx: any, tenantId: string, items: any[]) {
+  const ara = items.reduce((s: number, it: any) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 1), 0);
+  let camps: any[] = [];
+  try { camps = await tx.campaign.findMany({ where: { tenantId, aktif: true } }); } catch { camps = []; }
+  if (!camps.length) return { araToplam: ara, indirim: 0, toplam: ara, kampanyalar: [] };
+  const pids = [...new Set(items.map((i: any) => i.productId).filter(Boolean))] as string[];
+  const prods = pids.length ? await tx.product.findMany({ where: { tenantId, id: { in: pids } }, select: { id: true, kategoriId: true } }) : [];
+  const catOf = new Map(prods.map((p: any) => [p.id, p.kategoriId]));
+  const inScope = (c: any, it: any) => c.kapsam === 'hepsi' || (c.kapsam === 'urun' && it.productId === c.productId) || (c.kapsam === 'kategori' && catOf.get(it.productId) === c.kategoriId);
+  let indirim = 0;
+  const kampanyalar: any[] = [];
+  for (const c of camps) {
+    let kIndirim = 0;
+    if (c.tip === 'sepet_tutar') {
+      if ((c.minTutar || 0) > 0 && ara >= (c.minTutar || 0)) kIndirim = c.indirimTip === 'yuzde' ? ara * c.indirimDeger / 100 : c.indirimDeger;
+    } else if (c.tip === 'urun_adet') {
+      // kapsamdaki TÜM kalemlerin toplam adedi ve tutarı
+      const scoped = items.filter((it) => it.productId && inScope(c, it));
+      const toplamAdet = scoped.reduce((s, it) => s + (Number(it.adet) || 1), 0);
+      const toplamTutar = scoped.reduce((s, it) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 1), 0);
+      if (toplamAdet >= (c.minAdet || 1) && scoped.length > 0) {
+        kIndirim = c.indirimTip === 'yuzde' ? toplamTutar * c.indirimDeger / 100 : c.indirimDeger;
+      }
+    }
+    if (kIndirim > 0) {
+      kIndirim = Math.round(kIndirim * 100) / 100;
+      indirim += kIndirim;
+      kampanyalar.push({ id: c.id, ad: c.ad, indirim: kIndirim, ozet: c.indirimTip === 'yuzde' ? `%${c.indirimDeger}` : `${c.indirimDeger}₺` });
+    }
+  }
+  indirim = Math.min(Math.round(indirim * 100) / 100, ara);
+  return { araToplam: ara, indirim, toplam: Math.max(0, ara - indirim), kampanyalar };
+}
+
+// Musterinin acik sepetini bul/olustur
+async function getOrCreateCart(tx: any, tenantId: string, customerId: string | null, handle: string) {
+  let cart = customerId
+    ? await tx.storeOrder.findFirst({ where: { tenantId, durum: 'sepet', kanal: 'canli', customerId } })
+    : await tx.storeOrder.findFirst({ where: { tenantId, durum: 'sepet', kanal: 'canli', musteriHandle: handle } });
+  if (!cart) {
+    const seq = await nextOrderNo(tx, tenantId);
+    cart = await tx.storeOrder.create({ data: { tenantId, ...seq, durum: 'sepet', kanal: 'canli', customerId: customerId || null, musteriHandle: handle || null, token: genToken(), items: [], araToplam: 0, indirim: 0, toplam: 0 } });
+  }
+  return cart;
+}
+
+// Aktif yayin + siparisleri
+router.get('/active', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const stream = await prisma.liveStream.findFirst({ where: { tenantId: t, status: 'active' }, orderBy: { startedAt: 'desc' } });
+  if (!stream) return res.json({ stream: null, orders: [] });
+  const orders = await prisma.liveOrder.findMany({ where: { tenantId: t, streamId: stream.id }, orderBy: { createdAt: 'desc' } });
+  res.json({ stream, orders });
+}));
+
+router.post('/start', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  await prisma.liveStream.updateMany({ where: { tenantId: t, status: 'active' }, data: { status: 'ended', endedAt: new Date() } });
+  const s = await prisma.liveStream.create({ data: { tenantId: t, status: 'active', baslik: req.body?.baslik || null } });
+  res.status(201).json(s);
+}));
+
+router.post('/end', asyncHandler(async (req: Request, res: Response) => {
+  await prisma.liveStream.updateMany({ where: { tenantId: req.tenantId!, status: 'active' }, data: { status: 'ended', endedAt: new Date() } });
+  res.json({ ok: true });
+}));
+
+router.get('/history', asyncHandler(async (req: Request, res: Response) => {
+  const streams = await prisma.liveStream.findMany({ where: { tenantId: req.tenantId!, status: 'ended' }, orderBy: { endedAt: 'desc' }, include: { orders: true }, take: 50 });
+  const data = streams.map((s) => {
+    const onayli = s.orders.filter((o) => o.durum === 'onaylandi');
+    const ciro = onayli.reduce((x, o) => x + o.tutar, 0);
+    const kar = onayli.reduce((x, o) => x + (o.tutar - o.alis), 0);
+    return { id: s.id, baslik: s.baslik, startedAt: s.startedAt, endedAt: s.endedAt, siparis: onayli.length, toplamSatir: s.orders.length, ciro, kar };
+  });
+  res.json(data);
+}));
+
+// Yayin siparisi ekle (musteri eslesirse onaylandi, yoksa rezerve) + sepete ekle
+router.post('/order', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const { streamId, user, kod, beden, productId, variation, urun, saticiAd, fiyatOverride } = req.body || {};
+  if (!streamId) throw new ApiError(400, 'Aktif yayin yok');
+
+  const customer = await findCustomerByHandle(t, user || '');
+
+  let logCartId: string | null = null; let logAd = '';
+  const lo = await prisma.$transaction(async (tx) => {
+    let durum = 'riskli'; let tutar = 0; let alis = 0; let urunAd = urun || kod; let storeOrderId: string | null = null;
+    if (productId) {
+      const p = await tx.product.findFirst({ where: { id: productId, tenantId: t } });
+      if (p) {
+        urunAd = p.ad; alis = p.alisFiyat || 0; tutar = p.satisFiyat || 0;
+        let okStock = false;
+        if (variation) {
+          const v = await tx.productVariation.findFirst({ where: { productId, tenantId: t, deger: variation } });
+          if (v) { tutar += v.ekFiyat || 0; if (v.stok >= 1) { await tx.productVariation.update({ where: { id: v.id }, data: { stok: { decrement: 1 } } }); okStock = true; } }
+        } else if ((p.stokAdeti || 0) >= 1) okStock = true;
+        const ov = Number(fiyatOverride) || 0;
+        if (ov > 0) tutar = ov;
+        if (okStock) {
+          await tx.product.update({ where: { id: p.id }, data: { stokAdeti: { decrement: 1 } } });
+          // Kayitli musteri -> onaylandi, degilse rezerve
+          durum = customer ? 'onaylandi' : 'rezerve';
+        } else {
+          durum = 'stok_yok';
+        }
+      }
+    }
+
+    const lord = await tx.liveOrder.create({ data: { tenantId: t, streamId, user, kod: kod || '', urun: urunAd, beden: beden || null, productId: productId || null, variation: variation || null, saticiAd: saticiAd || null, durum, tutar, alis, storeOrderId: null } });
+
+    // Onaylandi/rezerve ise sepete ekle
+    if (durum === 'onaylandi' || durum === 'rezerve') {
+      const cart = await getOrCreateCart(tx, t, customer?.id || null, norm(user || ''));
+      const items: any[] = Array.isArray(cart.items) ? (cart.items as any) : [];
+      items.push({ liveOrderId: lord.id, productId, ad: urunAd + (beden ? ` (${beden})` : ''), varyasyon: variation || beden || null, adet: 1, fiyat: tutar, stokDusuldu: true });
+      const tot = await campaignAdjust(tx, t, items);
+      await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...tot } });
+      storeOrderId = cart.id;
+      await tx.liveOrder.update({ where: { id: lord.id }, data: { storeOrderId } });
+      logCartId = cart.id; logAd = urunAd + (beden ? ` (${beden})` : '');
+    }
+    return lord;
+  });
+  if (logCartId) await logEvent(t, logCartId, user || 'Canlı Yayın', 'Ürün eklendi (canlı yayın)', logAd);
+  res.status(201).json(lo);
+}));
+
+// Siparis iptal + sepetten cikar + bekleyen talipliyi onayla
+router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  let streamId = '';
+  let logCartId: string | null = null; let logAd = '';
+  await prisma.$transaction(async (tx) => {
+    const lo = await tx.liveOrder.findFirst({ where: { id: req.params.id, tenantId: t } });
+    if (!lo) return;
+    streamId = lo.streamId;
+    if (lo.durum === 'onaylandi' || lo.durum === 'rezerve') {
+      if (lo.productId) {
+        if (lo.variation) { const v = await tx.productVariation.findFirst({ where: { productId: lo.productId, tenantId: t, deger: lo.variation } }); if (v) await tx.productVariation.update({ where: { id: v.id }, data: { stok: { increment: 1 } } }); }
+        await tx.product.updateMany({ where: { id: lo.productId, tenantId: t }, data: { stokAdeti: { increment: 1 } } });
+      }
+      // Sepetten cikar
+      if (lo.storeOrderId) {
+        const cart = await tx.storeOrder.findFirst({ where: { id: lo.storeOrderId, tenantId: t } });
+        if (cart) {
+          const items = (Array.isArray(cart.items) ? (cart.items as any) : []).filter((it: any) => it.liveOrderId !== lo.id);
+          await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...(await campaignAdjust(tx, t, items)) } });
+          logCartId = cart.id; logAd = lo.urun + (lo.beden ? ` (${lo.beden})` : '');
+        }
+      }
+    }
+    await tx.liveOrder.update({ where: { id: lo.id }, data: { durum: 'iptal', storeOrderId: null } });
+    // Bekleyen stok_yok talipli
+    if (lo.productId) {
+      const wait = await tx.liveOrder.findFirst({ where: { tenantId: t, streamId: lo.streamId, durum: 'stok_yok', productId: lo.productId, variation: lo.variation ?? null }, orderBy: { createdAt: 'asc' } });
+      if (wait) {
+        const p = await tx.product.findFirst({ where: { id: wait.productId!, tenantId: t } });
+        let okStock = false;
+        if (p) {
+          if (wait.variation) { const v = await tx.productVariation.findFirst({ where: { productId: wait.productId!, tenantId: t, deger: wait.variation } }); if (v && v.stok >= 1) { await tx.productVariation.update({ where: { id: v.id }, data: { stok: { decrement: 1 } } }); okStock = true; } }
+          else if ((p.stokAdeti || 0) >= 1) okStock = true;
+          if (okStock) {
+            await tx.product.update({ where: { id: p.id }, data: { stokAdeti: { decrement: 1 } } });
+            const cust = await prisma.customer.findFirst({ where: { tenantId: t } }).catch(() => null);
+            const matched = await findCustomerByHandle(t, wait.user);
+            const cart = await getOrCreateCart(tx, t, matched?.id || null, norm(wait.user));
+            const items: any[] = Array.isArray(cart.items) ? (cart.items as any) : [];
+            items.push({ liveOrderId: wait.id, productId: wait.productId, ad: wait.urun + (wait.beden ? ` (${wait.beden})` : ''), varyasyon: wait.variation || wait.beden || null, adet: 1, fiyat: wait.tutar, stokDusuldu: true });
+            await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...(await campaignAdjust(tx, t, items)) } });
+            await tx.liveOrder.update({ where: { id: wait.id }, data: { durum: matched ? 'onaylandi' : 'rezerve', storeOrderId: cart.id } });
+            void cust;
+          }
+        }
+      }
+    }
+  });
+  if (logCartId) await logEvent(t, logCartId, req.body?.user || 'Canlı Yayın', 'Ürün iptal edildi (canlı yayın)', logAd);
+  const orders = streamId ? await prisma.liveOrder.findMany({ where: { tenantId: t, streamId }, orderBy: { createdAt: 'desc' } }) : [];
+  res.json({ ok: true, orders });
+}));
+
+// Hizli musteri kaydi (sadece telefon zorunlu) + rezerve siparisleri onayla
+router.post('/musteri', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const { ad, telefon, instagram } = req.body || {};
+  if (!telefon) throw new ApiError(422, 'Telefon zorunludur');
+  const count = await prisma.customer.count({ where: { tenantId: t } });
+  const customer = await prisma.customer.create({ data: { tenantId: t, musteriNo: 1000 + count + 1, ad: ad || instagram || telefon, telefon, instagram: instagram || null, not: 'Canlı yayın kaydı' } });
+  await promoteReserved(t, customer);
+  res.status(201).json(customer);
+}));
+
+// Kayitli musterinin rezerve siparislerini onaylandiya cevir + sepeti baglat
+export async function promoteReserved(tenantId: string, customer: { id: string; instagram?: string | null; ad?: string | null; telefon?: string | null }) {
+  const handles = [customer.instagram, customer.ad].filter(Boolean).map((x) => norm(x as string));
+  const tel = (customer.telefon || '').replace(/\D/g, '');
+  const reserved = await prisma.liveOrder.findMany({ where: { tenantId, durum: 'rezerve' } });
+  for (const lo of reserved) {
+    const h = norm(lo.user);
+    if (handles.includes(h) || (tel.length >= 7 && lo.user.replace(/\D/g, '') === tel)) {
+      await prisma.liveOrder.update({ where: { id: lo.id }, data: { durum: 'onaylandi' } });
+      // sepeti musteriye bagla
+      if (lo.storeOrderId) await prisma.storeOrder.updateMany({ where: { id: lo.storeOrderId, tenantId }, data: { customerId: customer.id } });
+    }
+  }
+}
+
+export default router;
+
+// 5 dk icinde musteri kaydi gelmeyen rezerve siparisleri iptal et (cron)
+export async function autoCancelStaleReservations() {
+  const cutoff = new Date(Date.now() - 5 * 60 * 1000);
+  const stale = await prisma.liveOrder.findMany({ where: { durum: 'rezerve', createdAt: { lt: cutoff } } });
+  for (const lo of stale) {
+    const cust = await findCustomerByHandle(lo.tenantId, lo.user);
+    if (cust) {
+      // Bu arada kayit olmus -> onayla
+      await prisma.liveOrder.update({ where: { id: lo.id }, data: { durum: 'onaylandi' } });
+      if (lo.storeOrderId) await prisma.storeOrder.updateMany({ where: { id: lo.storeOrderId, tenantId: lo.tenantId }, data: { customerId: cust.id } });
+      continue;
+    }
+    try {
+      await prisma.$transaction(async (tx) => {
+        if (lo.productId) {
+          if (lo.variation) { const v = await tx.productVariation.findFirst({ where: { productId: lo.productId!, tenantId: lo.tenantId, deger: lo.variation } }); if (v) await tx.productVariation.update({ where: { id: v.id }, data: { stok: { increment: 1 } } }); }
+          await tx.product.updateMany({ where: { id: lo.productId!, tenantId: lo.tenantId }, data: { stokAdeti: { increment: 1 } } });
+        }
+        if (lo.storeOrderId) {
+          const cart = await tx.storeOrder.findFirst({ where: { id: lo.storeOrderId, tenantId: lo.tenantId } });
+          if (cart) { const items = (Array.isArray(cart.items) ? (cart.items as any) : []).filter((it: any) => it.liveOrderId !== lo.id); await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...(await campaignAdjust(tx, lo.tenantId, items)) } }); }
+        }
+        await tx.liveOrder.update({ where: { id: lo.id }, data: { durum: 'iptal', storeOrderId: null, urun: lo.urun } });
+      });
+    } catch { /* */ }
+  }
+}
