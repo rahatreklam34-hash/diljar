@@ -13,6 +13,7 @@ export interface AuthUser {
   role: 'TENANT_OWNER' | 'TENANT_USER';
   unvan?: string | null;
   permissions?: string[] | null;
+  prefs?: Record<string, any> | null;
   tenantId: string | null;
   tenant: TenantInfo | null;
 }
@@ -26,6 +27,7 @@ interface AuthState {
   register: (data: { fullName: string; companyName: string; phone: string; email: string; password: string }) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updatePrefs: (prefs: Record<string, any>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | undefined>(undefined);
@@ -80,6 +82,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch { /* */ }
   };
 
+  const updatePrefs = async (prefs: Record<string, any>) => {
+    const r = await api.patch('/auth/me/prefs', { prefs });
+    setUser((u) => (u ? { ...u, prefs: r.data.prefs } : u));
+  };
+
   const isOwner = user?.role === 'TENANT_OWNER';
   const canAccess = (path: string) => {
     if (isOwner) return true;
@@ -90,7 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isOwner, canAccess, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, isOwner, canAccess, login, register, logout, refreshUser, updatePrefs }}>
       {children}
     </AuthContext.Provider>
   );

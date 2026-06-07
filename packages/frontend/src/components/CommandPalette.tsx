@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef, useCallback, ReactNode, KeyboardEvent as ReactKeyboardEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, ReactNode, KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fireQuickAction } from '../lib/quickAction';
+import { allMenuItems, groupTitleOf } from '../lib/menu';
+import { useAuth } from '../context/AuthContext';
 import {
   Zap, TrendingUp, TrendingDown, FileText, Users, ArrowLeftRight,
   DollarSign, CreditCard, Briefcase, BarChart3, FolderOpen, Calendar,
@@ -191,6 +193,24 @@ const COMMANDS: Command[] = [
 
 export default function CommandPalette() {
   const navigate = useNavigate();
+  const { canAccess } = useAuth();
+  // Hizli aksiyonlar + erisilebilen TUM menu sayfalari (Ctrl+Space ile aranir)
+  const allCommands = useMemo<Command[]>(() => {
+    const pages: Command[] = allMenuItems
+      .filter((it) => canAccess(it.to))
+      .map((it) => {
+        const Icon = it.icon;
+        return {
+          id: 'page:' + it.to,
+          label: it.label,
+          description: 'Sayfayi ac',
+          icon: <Icon size={16} className="text-slate-500" />,
+          hint: groupTitleOf(it.to),
+          action: (nav) => nav(it.to),
+        };
+      });
+    return [...COMMANDS, ...pages];
+  }, [canAccess]);
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -222,14 +242,14 @@ export default function CommandPalette() {
   }, [open]);
 
   const filtered = query.trim() === ''
-    ? COMMANDS
-    : COMMANDS.filter(c => {
+    ? allCommands
+    : allCommands.filter(c => {
         const normalize = (s: string) => s.toLowerCase().replace(/ı/g,'i').replace(/ö/g,'o').replace(/ü/g,'u').replace(/ş/g,'s').replace(/ç/g,'c').replace(/ğ/g,'g').replace(/İ/g,'i').replace(/Ö/g,'o').replace(/Ü/g,'u').replace(/Ş/g,'s').replace(/Ç/g,'c').replace(/Ğ/g,'g');
         const q = normalize(query);
         return normalize(c.label).includes(q) || (c.description && normalize(c.description).includes(q)) || (c.hint && normalize(c.hint).includes(q));
       });
 
-  const visible = filtered.slice(0, 8);
+  const visible = filtered.slice(0, 50);
 
   const execute = useCallback((cmd: Command) => {
     setOpen(false);

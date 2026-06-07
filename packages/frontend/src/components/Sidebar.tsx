@@ -1,123 +1,34 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
-import {
-  LayoutDashboard, Users, FileText, TrendingUp,
-  Landmark, BarChart3, Calendar, Bell, Settings,
-  Menu, X, Plus, UserCheck, ArrowUpRight, ArrowDownRight,
-  Building2, CreditCard, ClipboardList, FolderOpen, RefreshCw, Target, LogOut, LifeBuoy, MessageSquare,
-  ChevronDown, Plug, Package, PackagePlus, Layers, Tag, Hash, Store, ShoppingBag, Radio, Bot, ScanLine, Award, UserCog, Megaphone,
-} from 'lucide-react';
+import { Menu, X, Plus, LogOut, ChevronDown, Pencil, Check, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { navGroups, allMenuItems, MenuItem } from '../lib/menu';
 
-const navGroups = [
-  {
-    title: null,
-    items: [{ to: '/anasayfa', icon: LayoutDashboard, label: 'Dashboard' }],
-  },
-  {
-    title: 'Gunluk Islemler',
-    items: [
-      { to: '/cari-hesaplar', icon: Users, label: 'Cari Hesaplar' },
-      { to: '/cekler', icon: FileText, label: 'Cekler' },
-      { to: '/gelir-gider', icon: TrendingUp, label: 'Gelir / Gider' },
-      { to: '/kasa-banka', icon: Landmark, label: 'Kasa & Banka' },
-      { to: '/duzenli-odemeler', icon: RefreshCw, label: 'Duzenli Odemelerim' },
-    ],
-  },
-  {
-    title: 'Depo Yonetimi',
-    items: [
-      { to: '/depo/urunlerim', icon: Package, label: 'Urunlerim' },
-      { to: '/depo/urun-ekle', icon: PackagePlus, label: 'Urun Ekle' },
-      { to: '/depo/toplu-urun', icon: Layers, label: 'Toplu Urun Ekle' },
-      { to: '/depo/varyasyonlar', icon: Layers, label: 'Varyasyonlarim' },
-      { to: '/depo/kategoriler', icon: Tag, label: 'Urun Kategorileri' },
-      { to: '/depo/satis-kodu', icon: Hash, label: 'Satis Kodu Havuzu' },
-    ],
-  },
-  {
-    title: 'Magaza & Siparis',
-    items: [
-      { to: '/canli-yayin', icon: Radio, label: 'Canli Yayin Satis' },
-      { to: '/kasa-satis', icon: ScanLine, label: 'Kasa Satisi' },
-      { to: '/satici-performans', icon: Award, label: 'Satici Performansi' },
-      { to: '/sicil', icon: UserCheck, label: 'Personel Sicili' },
-      { to: '/pazarlama', icon: Megaphone, label: 'Pazarlama & SMS' },
-      { to: '/online-magaza', icon: Store, label: 'Online Magazam' },
-      { to: '/asistan', icon: Bot, label: 'Yapay Zeka Asistani' },
-      { to: '/asistan-satislari', icon: Bot, label: 'Asistan Satislari' },
-      { to: '/destek-talepleri', icon: LifeBuoy, label: 'Destek Talepleri' },
-      { to: '/musterilerim', icon: Users, label: 'Musterilerim' },
-      { to: '/siparisler', icon: ShoppingBag, label: 'Tum Siparisler' },
-      { to: '/siparisler/canli', icon: Radio, label: 'Canli Yayin Satislari' },
-      { to: '/siparisler/online', icon: Store, label: 'Online Magaza Satislari' },
-    ],
-  },
-  {
-    title: 'Personel & Ajanda',
-    items: [
-      { to: '/personel', icon: UserCheck, label: 'Personel' },
-      { to: '/ajanda', icon: Calendar, label: 'Ajanda' },
-    ],
-  },
-  {
-    title: 'Finans Yonetimi',
-    items: [
-      { to: '/finansal-durum', icon: BarChart3, label: 'Finansal Durumum' },
-      { to: '/hedeflerim', icon: Target, label: 'Hedeflerim' },
-      { to: '/hareket-loglari', icon: ClipboardList, label: 'Hareket Loglari' },
-    ],
-  },
-  {
-    title: 'Belgeler & Bildirim',
-    items: [
-      { to: '/belgelerim', icon: FolderOpen, label: 'Belgelerim' },
-      { to: '/bildirimler', icon: Bell, label: 'Bildirimler' },
-    ],
-  },
-  {
-    title: 'Hesap & Destek',
-    items: [
-      { to: '/entegrasyonlar', icon: Plug, label: 'Entegrasyonlar' },
-      { to: '/personeller', icon: UserCog, label: 'Personel & Yetki' },
-      { to: '/ekip', icon: MessageSquare, label: 'Ekip Sohbeti' },
-      { to: '/destek', icon: LifeBuoy, label: 'Destek Merkezi' },
-      { to: '/ayarlar', icon: Settings, label: 'Ayarlar' },
-    ],
-  },
-];
-
-const quickActions = [
-  { label: 'Gelir Ekle', icon: ArrowUpRight, path: '/gelir-gider', color: 'text-green-400 hover:bg-green-500/10' },
-  { label: 'Gider Ekle', icon: ArrowDownRight, path: '/gelir-gider', color: 'text-red-400 hover:bg-red-500/10' },
-  { label: 'Cari Ekle', icon: Building2, path: '/cari-hesaplar', color: 'text-blue-400 hover:bg-blue-500/10' },
-  { label: 'Cek Ekle', icon: CreditCard, path: '/cekler', color: 'text-orange-400 hover:bg-orange-500/10' },
-];
+const DEFAULT_SHORTCUTS = ['/canli-yayin', '/kasa-satis', '/siparisler', '/depo/urunlerim', '/musterilerim'];
 
 export default function Sidebar() {
-  const [collapsed, setCollapsed] = useState(false); // masaüstü dar mod
-  const [mobileOpen, setMobileOpen] = useState(false); // mobil drawer
-  const [quickOpen, setQuickOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(
-    () => Object.fromEntries(navGroups.map((g) => [g.title || '_', g.title === 'Gunluk Islemler']))
+    () => Object.fromEntries(navGroups.map((g) => [g.title || '_', true]))
   );
   const navigate = useNavigate();
   const location = useLocation();
-  const quickRef = useRef<HTMLDivElement>(null);
-  const { user, logout, canAccess } = useAuth();
+  const { user, logout, canAccess, updatePrefs } = useAuth();
   const initial = (user?.fullName || 'K').charAt(0).toUpperCase();
 
-  // Sayfa degisince: aktif sayfanin grubu acik, digerleri kapali (yoksa Finans acik)
+  // Aktif sayfanin grubunu acik tut
   useEffect(() => {
-    let activeTitle: string | null = null;
     for (const g of navGroups) {
-      if (g.title && g.items.some((it) => it.to === location.pathname)) { activeTitle = g.title; break; }
+      if (g.title && g.items.some((it) => it.to === location.pathname)) {
+        setOpenGroups((p) => ({ ...p, [g.title!]: true }));
+        break;
+      }
     }
-    const target = activeTitle || 'Gunluk Islemler';
-    setOpenGroups(Object.fromEntries(navGroups.map((g) => [g.title || '_', g.title === target])));
   }, [location.pathname]);
 
-  // Ana içerik kenar boşluğunu sidebar genişliğiyle eşitle (sadece masaüstü)
+  // Ana icerik kenar boslugunu sidebar genisligiyle esitle (masaustu)
   useEffect(() => {
     const apply = () => {
       const main = document.getElementById('main-content');
@@ -130,83 +41,61 @@ export default function Sidebar() {
     return () => window.removeEventListener('resize', apply);
   }, [collapsed]);
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (quickRef.current && !quickRef.current.contains(e.target as Node)) setQuickOpen(false);
-    }
-    if (quickOpen) document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [quickOpen]);
-
-  const handleQuickAction = (path: string) => { setQuickOpen(false); setMobileOpen(false); navigate(path); };
   const toggleGroup = (key: string) => setOpenGroups((p) => ({ ...p, [key]: !p[key] }));
+  const isIconOnly = collapsed && !mobileOpen;
+
+  // Kullanicinin kisisel kisayollari (hesaba kayitli; prefs.shortcuts)
+  const rawShortcuts: string[] = Array.isArray(user?.prefs?.shortcuts) ? user!.prefs!.shortcuts : DEFAULT_SHORTCUTS;
+  const shortcutItems: MenuItem[] = rawShortcuts
+    .map((to) => allMenuItems.find((m) => m.to === to))
+    .filter((m): m is MenuItem => !!m && canAccess(m.to));
+
+  const toggleShortcut = async (to: string) => {
+    const cur: string[] = Array.isArray(user?.prefs?.shortcuts) ? user!.prefs!.shortcuts : DEFAULT_SHORTCUTS;
+    const next = cur.includes(to) ? cur.filter((x) => x !== to) : [...cur, to];
+    try { await updatePrefs({ ...(user?.prefs || {}), shortcuts: next }); } catch { /* */ }
+  };
 
   return (
     <>
-      {/* Mobil hamburger (sadece küçük ekran) */}
-      <button
-        onClick={() => setMobileOpen(true)}
-        className="lg:hidden fixed top-3 left-3 z-[60] p-2 bg-[#1a1a2e] text-white rounded-lg shadow-lg"
-        aria-label="Menüyü aç"
-      >
+      {/* Mobil hamburger */}
+      <button onClick={() => setMobileOpen(true)} className="lg:hidden fixed top-3 left-3 z-[60] p-2 bg-white text-slate-700 rounded-lg shadow border border-slate-200" aria-label="Menuyu ac">
         <Menu size={20} />
       </button>
-
-      {/* Mobil arka plan örtüsü */}
-      {mobileOpen && (
-        <div className="lg:hidden fixed inset-0 bg-black/50 z-[55]" onClick={() => setMobileOpen(false)} />
-      )}
+      {mobileOpen && <div className="lg:hidden fixed inset-0 bg-black/40 z-[55]" onClick={() => setMobileOpen(false)} />}
 
       {/* Sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-[58] flex flex-col bg-[#1a1a2e] text-white transition-all duration-300 h-screen overflow-y-auto
-        ${collapsed ? 'w-64 lg:w-20' : 'w-64'}
-        ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}
-      >
+      <aside className={`fixed inset-y-0 left-0 z-[58] flex flex-col bg-white border-r border-slate-200 text-slate-700 transition-all duration-300 h-screen overflow-y-auto ${collapsed ? 'w-64 lg:w-20' : 'w-64'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
         {/* Header */}
-        <div className="flex items-center justify-between px-4 py-4 border-b border-white/10">
+        <div className="flex items-center justify-between px-4 py-4 border-b border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-[#6c63ff] rounded-lg flex items-center justify-center font-bold text-lg shrink-0">W</div>
-            {(!collapsed || mobileOpen) && <span className="text-lg font-bold lg:inline">WTech</span>}
+            <div className="w-9 h-9 bg-[#6c63ff] rounded-lg flex items-center justify-center font-bold text-lg text-white shrink-0">W</div>
+            {(!collapsed || mobileOpen) && <span className="text-lg font-bold text-slate-800">WTech</span>}
           </div>
-          {/* masaüstü daralt */}
-          <button onClick={() => setCollapsed(!collapsed)} className="hidden lg:block p-1.5 hover:bg-white/10 rounded-lg transition-colors">
+          <button onClick={() => setCollapsed(!collapsed)} className="hidden lg:block p-1.5 hover:bg-slate-100 rounded-lg text-slate-500">
             {collapsed ? <Menu size={18} /> : <X size={18} />}
           </button>
-          {/* mobil kapat */}
-          <button onClick={() => setMobileOpen(false)} className="lg:hidden p-1.5 hover:bg-white/10 rounded-lg transition-colors">
-            <X size={18} />
-          </button>
+          <button onClick={() => setMobileOpen(false)} className="lg:hidden p-1.5 hover:bg-slate-100 rounded-lg text-slate-500"><X size={18} /></button>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 py-3 overflow-y-auto" onClick={() => mobileOpen && setMobileOpen(false)}>
           {navGroups.map((group, gi) => {
             const key = group.title || '_';
-            const isIconOnly = collapsed && !mobileOpen;
             const open = !group.title ? true : (isIconOnly ? true : openGroups[key]);
-            const visibleItems = group.items.filter((it: any) => canAccess(it.to));
+            const visibleItems = group.items.filter((it) => canAccess(it.to));
             if (visibleItems.length === 0) return null;
             return (
               <div key={gi} className={gi > 0 ? 'mt-1' : ''}>
                 {group.title && !isIconOnly && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleGroup(key); }}
-                    className="w-full flex items-center justify-between px-5 pt-2 pb-1 text-[10px] font-semibold text-gray-500 hover:text-gray-300 uppercase tracking-wider"
-                  >
+                  <button onClick={(e) => { e.stopPropagation(); toggleGroup(key); }} className="w-full flex items-center justify-between px-5 pt-2 pb-1 text-[10px] font-semibold text-slate-400 hover:text-slate-600 uppercase tracking-wider">
                     <span>{group.title}</span>
                     <ChevronDown size={14} className={`transition-transform ${open ? '' : '-rotate-90'}`} />
                   </button>
                 )}
-                {group.title && isIconOnly && gi > 0 && <div className="mx-4 my-2 border-t border-white/10" />}
+                {group.title && isIconOnly && gi > 0 && <div className="mx-4 my-2 border-t border-slate-100" />}
                 {open && visibleItems.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-5 py-2.5 mx-2 rounded-xl text-sm transition-all ${isActive ? 'bg-[#6c63ff] text-white shadow-lg shadow-[#6c63ff]/30' : 'text-gray-300 hover:bg-white/10 hover:text-white'}`
-                    }
-                  >
+                  <NavLink key={item.to} to={item.to} className={({ isActive }) => `flex items-center gap-3 px-5 py-2.5 mx-2 rounded-xl text-sm transition-all ${isActive ? 'bg-[#6c63ff]/10 text-[#6c63ff] font-medium' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-800'}`}>
                     <item.icon size={20} className="shrink-0" />
                     {!isIconOnly && <span>{item.label}</span>}
                   </NavLink>
@@ -216,57 +105,95 @@ export default function Sidebar() {
           })}
         </nav>
 
-        {/* Quick Action */}
-        <div className="px-4 py-4 border-t border-white/10 relative" ref={quickRef}>
-          <button
-            onClick={() => setQuickOpen((prev) => !prev)}
-            className={`flex items-center gap-3 w-full px-4 py-3 rounded-xl text-sm transition-all ${quickOpen ? 'bg-[#6c63ff] text-white shadow-lg shadow-[#6c63ff]/30' : 'bg-[#6c63ff]/20 hover:bg-[#6c63ff]/30 text-white'}`}
-          >
-            <Plus size={18} className={`shrink-0 transition-transform duration-200 ${quickOpen ? 'rotate-45' : ''}`} />
-            {(!collapsed || mobileOpen) && <span>Hizli Islem</span>}
-          </button>
-          {quickOpen && (
-            <div className="absolute bottom-full left-4 right-4 mb-2 bg-[#252540] border border-white/10 rounded-xl shadow-2xl overflow-hidden z-50">
-              <div className="px-3 py-2 border-b border-white/10">
-                <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Hizli Islem</p>
-              </div>
-              {quickActions.map((action) => (
-                <button
-                  key={action.label}
-                  onClick={() => handleQuickAction(action.path)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 text-sm text-gray-200 transition-colors ${action.color}`}
-                >
-                  <action.icon size={16} className="shrink-0" />
-                  <span>{action.label}</span>
+        {/* Kisayollarim (kisisel, duzenlenebilir) */}
+        {!isIconOnly && (
+          <div className="px-4 py-3 border-t border-slate-100">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider">Kisayollarim</span>
+              <button onClick={() => setEditOpen(true)} className="text-[11px] text-[#6c63ff] font-medium hover:underline flex items-center gap-0.5"><Pencil size={11} /> Duzenle</button>
+            </div>
+            <div className="grid grid-cols-4 gap-2">
+              {shortcutItems.slice(0, 7).map((it) => (
+                <button key={it.to} onClick={() => { navigate(it.to); setMobileOpen(false); }} title={it.label} className="flex flex-col items-center gap-1 p-2 rounded-xl bg-slate-50 hover:bg-[#6c63ff]/10 text-slate-600 hover:text-[#6c63ff] transition-colors">
+                  <it.icon size={18} />
+                  <span className="text-[8px] leading-none text-center w-full truncate">{it.label.split(' ')[0]}</span>
                 </button>
               ))}
+              <button onClick={() => setEditOpen(true)} title="Kisayol ekle" className="flex items-center justify-center p-2 rounded-xl border border-dashed border-slate-300 text-slate-400 hover:text-[#6c63ff] hover:border-[#6c63ff]"><Plus size={18} /></button>
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         {/* User */}
-        <div className="px-4 py-4 border-t border-white/10">
+        <div className="px-4 py-4 border-t border-slate-100">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 bg-gradient-to-br from-blue-400 to-purple-500 rounded-full flex items-center justify-center text-sm font-bold shrink-0">{initial}</div>
+            <div className="w-9 h-9 bg-gradient-to-br from-indigo-400 to-purple-500 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0">{initial}</div>
             {(!collapsed || mobileOpen) && (
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-medium truncate">{user?.fullName || 'Kullanici'}</p>
-                <p className="text-xs text-gray-400 truncate">{user?.email || ''}</p>
+                <p className="text-sm font-medium text-slate-800 truncate">{user?.fullName || 'Kullanici'}</p>
+                <p className="text-xs text-slate-400 truncate">{user?.email || ''}</p>
               </div>
             )}
             {(!collapsed || mobileOpen) && (
-              <button onClick={() => logout()} title="Cikis Yap" className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors shrink-0">
-                <LogOut size={18} />
-              </button>
+              <button onClick={() => logout()} title="Cikis Yap" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg shrink-0"><LogOut size={18} /></button>
             )}
           </div>
           {(!collapsed || mobileOpen) && (
-            <p className="text-[10px] text-gray-500 text-center mt-3 leading-tight">
-              © {new Date().getFullYear()} WTech Yazilim A.S.<br />Tum haklari saklidir.
-            </p>
+            <p className="text-[10px] text-slate-400 text-center mt-3 leading-tight">© {new Date().getFullYear()} WTech Yazilim A.S.</p>
           )}
         </div>
       </aside>
+
+      {/* Kisayol Duzenle Modal */}
+      {editOpen && (
+        <ShortcutEditor
+          allItems={allMenuItems.filter((it) => canAccess(it.to))}
+          current={rawShortcuts}
+          onToggle={toggleShortcut}
+          onClose={() => setEditOpen(false)}
+        />
+      )}
     </>
+  );
+}
+
+function ShortcutEditor({ allItems, current, onToggle, onClose }: { allItems: MenuItem[]; current: string[]; onToggle: (to: string) => void; onClose: () => void }) {
+  const [q, setQ] = useState('');
+  const norm = (s: string) => s.toLowerCase().replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ğ/g, 'g');
+  const list = q.trim() ? allItems.filter((it) => norm(it.label).includes(norm(q))) : allItems;
+  return (
+    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div>
+            <h3 className="font-bold text-slate-800">Kisayollari Duzenle</h3>
+            <p className="text-xs text-slate-400">Hizli erisim icin sayfa sec. ({current.length} secili)</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
+        </div>
+        <div className="px-4 py-3 border-b border-slate-100">
+          <div className="relative">
+            <Search size={15} className="absolute left-3 top-2.5 text-slate-400" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Sayfa ara..." className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-100" />
+          </div>
+        </div>
+        <div className="overflow-y-auto p-2 flex-1">
+          {list.map((it) => {
+            const on = current.includes(it.to);
+            const Icon = it.icon;
+            return (
+              <button key={it.to} onClick={() => onToggle(it.to)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm transition-colors ${on ? 'bg-[#6c63ff]/10 text-[#6c63ff]' : 'hover:bg-slate-50 text-slate-700'}`}>
+                <Icon size={18} className="shrink-0" />
+                <span className="flex-1">{it.label}</span>
+                {on && <Check size={16} className="text-[#6c63ff]" />}
+              </button>
+            );
+          })}
+        </div>
+        <div className="px-5 py-3 border-t border-slate-100 text-right">
+          <button onClick={onClose} className="px-5 py-2 bg-[#6c63ff] text-white rounded-xl text-sm font-medium hover:bg-[#5a52e0]">Tamam</button>
+        </div>
+      </div>
+    </div>
   );
 }

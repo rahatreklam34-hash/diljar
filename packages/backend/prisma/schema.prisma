@@ -88,6 +88,7 @@ model User {
   role          UserRole @default(TENANT_OWNER)
   unvan         String?
   permissions   Json?
+  prefs         Json?
   aktif         Boolean  @default(true)
   emailVerified Boolean  @default(false)
   tenantId      String?

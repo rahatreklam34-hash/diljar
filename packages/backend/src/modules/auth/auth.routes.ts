@@ -51,6 +51,7 @@ async function buildAuthResponse(userId: string) {
       role: user.role,
       unvan: user.unvan,
       permissions: Array.isArray(user.permissions) ? user.permissions : null,
+      prefs: (user as any).prefs ?? null,
       tenantId: user.tenantId,
       tenant: user.tenant
         ? { id: user.tenant.id, name: user.tenant.name }
@@ -122,6 +123,13 @@ router.post('/logout', (req: Request, res: Response) => {
   res.json({ ok: true });
 });
 
+// PATCH /me/prefs — kullanıcının kendi tercihlerini (kısayollar vb.) günceller
+router.patch('/me/prefs', authenticate, asyncHandler(async (req: Request, res: Response) => {
+  const prefs = req.body?.prefs ?? req.body ?? {};
+  const user = await prisma.user.update({ where: { id: req.auth!.userId }, data: { prefs } });
+  res.json({ prefs: (user as any).prefs ?? null });
+}));
+
 // GET /me
 router.get('/me', authenticate, asyncHandler(async (req: Request, res: Response) => {
   const user = await prisma.user.findUnique({
@@ -137,6 +145,7 @@ router.get('/me', authenticate, asyncHandler(async (req: Request, res: Response)
       role: user.role,
       unvan: user.unvan,
       permissions: Array.isArray(user.permissions) ? user.permissions : null,
+      prefs: (user as any).prefs ?? null,
       tenantId: user.tenantId,
       tenant: user.tenant
         ? { id: user.tenant.id, name: user.tenant.name }
