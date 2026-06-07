@@ -184,7 +184,13 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
         const cart = await tx.storeOrder.findFirst({ where: { id: lo.storeOrderId, tenantId: t } });
         if (cart) {
           const items = (Array.isArray(cart.items) ? (cart.items as any) : []).filter((it: any) => it.liveOrderId !== lo.id);
-          await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...(await campaignAdjust(tx, t, items)) } });
+          if (items.length === 0 && cart.durum === 'sepet') {
+            // Sepette ürün kalmadı -> açık sepeti kapat (sil)
+            await tx.liveOrder.updateMany({ where: { storeOrderId: cart.id }, data: { storeOrderId: null } });
+            await tx.storeOrder.delete({ where: { id: cart.id } });
+          } else {
+            await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...(await campaignAdjust(tx, t, items)) } });
+          }
           logCartId = cart.id; logAd = lo.urun + (lo.beden ? ` (${lo.beden})` : '');
         }
       }
