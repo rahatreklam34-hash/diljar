@@ -21,10 +21,9 @@ async function getPaytr(tenantId: string): Promise<{ config: PaytrConfig; testMo
   return { config: { merchant_id: c.merchant_id, merchant_key: c.merchant_key, merchant_salt: c.merchant_salt }, testMode: s.mode !== 'LIVE' };
 }
 
-// Aktif planlar (acilis sayfasi)
+// Aktif planlar (acilis sayfasi) - bireysel modda plan yok
 router.get('/plans', asyncHandler(async (_req: Request, res: Response) => {
-  const plans = await prisma.plan.findMany({ where: { isActive: true }, orderBy: { priceMonthly: 'asc' } });
-  res.json(plans);
+  res.json([]);
 }));
 
 // ───── Online Magaza Vitrini ─────

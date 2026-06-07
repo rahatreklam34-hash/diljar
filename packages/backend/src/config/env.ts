@@ -21,11 +21,7 @@ export const env = {
   JWT_REFRESH_EXPIRES: process.env.JWT_REFRESH_EXPIRES || '7d',
   APP_NAME: process.env.APP_NAME || 'FinansTakip',
   APP_DOMAIN: process.env.APP_DOMAIN || 'http://localhost:5173',
-  TRIAL_DAYS: parseInt(process.env.TRIAL_DAYS || '7', 10),
   UPLOAD_DIR: process.env.UPLOAD_DIR || './uploads',
   MAX_UPLOAD_MB: parseInt(process.env.MAX_UPLOAD_MB || '10', 10),
-  SEED_ADMIN_EMAIL: process.env.SEED_ADMIN_EMAIL || 'admin@diljar.com',
-  SEED_ADMIN_PASSWORD: process.env.SEED_ADMIN_PASSWORD || 'Admin1234!',
-  SEED_ADMIN_NAME: process.env.SEED_ADMIN_NAME || 'Platform Yöneticisi',
   isProd: (process.env.NODE_ENV || 'development') === 'production',
 };

@@ -19,13 +19,9 @@ export function authenticate(req: Request, _res: Response, next: NextFunction) {
   }
 }
 
-/** Tenant'a kilitli Prisma istemcisini req.db'ye koyar. SUPER_ADMIN dışı kullanıcılar için tenantId zorunlu. */
+/** Tenant'a kilitli Prisma istemcisini req.db'ye koyar. */
 export function attachTenant(req: Request, _res: Response, next: NextFunction) {
   if (!req.auth) return next(new ApiError(401, 'Yetkilendirme gerekli'));
-  if (req.auth.role === 'SUPER_ADMIN' && !req.auth.tenantId) {
-    // Süper admin platform yöneticisidir, tenant verisi yoktur
-    return next();
-  }
   if (!req.auth.tenantId) {
     return next(new ApiError(403, 'Bu hesaba bağlı bir firma bulunamadı'));
   }

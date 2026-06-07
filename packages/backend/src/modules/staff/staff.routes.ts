@@ -7,7 +7,7 @@ const router = Router();
 
 // Yalnızca firma sahibi personel yönetebilir
 function ownerOnly(req: Request) {
-  if (req.auth?.role !== 'TENANT_OWNER' && req.auth?.role !== 'SUPER_ADMIN') throw new ApiError(403, 'Bu işlem için yetkiniz yok (yalnızca patron).');
+  if (req.auth?.role !== 'TENANT_OWNER') throw new ApiError(403, 'Bu işlem için yetkiniz yok (yalnızca patron).');
 }
 
 // Personel listesi

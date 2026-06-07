@@ -5,9 +5,6 @@ import api, { setAccessToken, setOnAuthFail } from '../lib/api';
 export interface TenantInfo {
   id: string;
   name: string;
-  status: 'TRIAL' | 'ACTIVE' | 'TRIAL_EXPIRED' | 'PAST_DUE' | 'FROZEN' | 'CANCELLED';
-  trialEndsAt: string | null;
-  creditBalance: number;
 }
 export interface AuthUser {
   id: string;

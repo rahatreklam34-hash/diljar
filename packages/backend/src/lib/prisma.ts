@@ -9,7 +9,7 @@ const TENANT_SCOPED = new Set<string>([
   'CariHesap', 'CariHareket', 'Hareket', 'KasaBanka', 'KrediKarti',
   'BirikimHesabi', 'Cek', 'Personel', 'PersonelHareket', 'DuzenliOdeme',
   'EmanetPara', 'Hedef', 'SistemLog', 'Upload', 'SupportTicket',
-  'CreditLedger', 'AuditLog', 'Payment', 'Subscription',
+  'AuditLog',
 ]);
 
 const READ_OPS = new Set(['findFirst', 'findFirstOrThrow', 'findMany', 'count', 'aggregate', 'groupBy']);

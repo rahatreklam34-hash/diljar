@@ -15,41 +15,8 @@ datasource db {
 // ─────────────────────────────────────────────
 
 enum UserRole {
-  SUPER_ADMIN
   TENANT_OWNER
   TENANT_USER
-}
-
-enum TenantStatus {
-  TRIAL
-  ACTIVE
-  TRIAL_EXPIRED
-  PAST_DUE
-  FROZEN
-  CANCELLED
-}
-
-enum BillingCycle {
-  MONTHLY
-  YEARLY
-}
-
-enum PaymentMethod {
-  BANK_TRANSFER
-  MANUAL
-  CREDIT_CARD
-}
-
-enum PaymentStatus {
-  PENDING
-  CONFIRMED
-  REJECTED
-}
-
-enum CreditType {
-  PURCHASE
-  USAGE
-  ADJUSTMENT
 }
 
 enum TicketStatus {
@@ -69,18 +36,12 @@ model Tenant {
   id            String       @id @default(cuid())
   name          String
   phone         String?
-  status        TenantStatus @default(TRIAL)
-  trialEndsAt   DateTime?
-  creditBalance Float        @default(0)
   seqNo         Int          @default(0)
   seqYil        Int?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
 
   users         User[]
-  subscriptions Subscription[]
-  payments      Payment[]
-  creditLedger  CreditLedger[]
   tickets       SupportTicket[]
   auditLogs     AuditLog[]
   uploads       Upload[]
@@ -135,70 +96,6 @@ model User {
   updatedAt     DateTime @updatedAt
 
   ticketMessages TicketMessage[]
-
-  @@index([tenantId])
-}
-
-model Plan {
-  id           String   @id @default(cuid())
-  name         String
-  priceMonthly Int // kuruş
-  priceYearly  Int // kuruş
-  features     Json?
-  creditPerMonth Float  @default(0)
-  isActive     Boolean  @default(true)
-  createdAt    DateTime @default(now())
-
-  subscriptions Subscription[]
-}
-
-model Subscription {
-  id                 String       @id @default(cuid())
-  tenantId           String
-  tenant             Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  planId             String?
-  plan               Plan?        @relation(fields: [planId], references: [id])
-  status             TenantStatus @default(TRIAL)
-  billingCycle       BillingCycle @default(MONTHLY)
-  trialEndsAt        DateTime?
-  currentPeriodStart DateTime?
-  currentPeriodEnd   DateTime?
-  createdAt          DateTime     @default(now())
-  updatedAt          DateTime     @updatedAt
-
-  payments Payment[]
-
-  @@index([tenantId])
-}
-
-model Payment {
-  id               String        @id @default(cuid())
-  tenantId         String
-  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  subscriptionId   String?
-  subscription     Subscription? @relation(fields: [subscriptionId], references: [id])
-  amount           Int // kuruş
-  method           PaymentMethod @default(BANK_TRANSFER)
-  status           PaymentStatus @default(PENDING)
-  confirmedByUserId String?
-  confirmedAt      DateTime?
-  adminNote        String?
-  createdAt        DateTime      @default(now())
-
-  @@index([tenantId])
-  @@index([status])
-}
-
-model CreditLedger {
-  id           String     @id @default(cuid())
-  tenantId     String
-  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  amount       Float // +/-
-  balanceAfter Float
-  type         CreditType
-  description  String?
-  createdByUserId String?
-  createdAt    DateTime   @default(now())
 
   @@index([tenantId])
 }

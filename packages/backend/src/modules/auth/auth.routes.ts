@@ -53,24 +53,23 @@ async function buildAuthResponse(userId: string) {
       permissions: Array.isArray(user.permissions) ? user.permissions : null,
       tenantId: user.tenantId,
       tenant: user.tenant
-        ? { id: user.tenant.id, name: user.tenant.name, status: user.tenant.status, trialEndsAt: user.tenant.trialEndsAt, creditBalance: user.tenant.creditBalance }
+        ? { id: user.tenant.id, name: user.tenant.name }
         : null,
     },
   };
 }
 
-// POST /register — yeni firma + sahip kullanıcı + 7 günlük trial
+// POST /register — yeni firma + sahip kullanıcı
 router.post('/register', asyncHandler(async (req: Request, res: Response) => {
   const data = registerSchema.parse(req.body);
   const exists = await prisma.user.findUnique({ where: { email: data.email.toLowerCase() } });
   if (exists) throw new ApiError(409, 'Bu e-posta zaten kayıtlı');
 
   const passwordHash = await bcrypt.hash(data.password, 10);
-  const trialEndsAt = new Date(Date.now() + env.TRIAL_DAYS * 24 * 60 * 60 * 1000);
 
   const result = await prisma.$transaction(async (tx) => {
     const tenant = await tx.tenant.create({
-      data: { name: data.companyName, phone: data.phone, status: 'TRIAL', trialEndsAt },
+      data: { name: data.companyName, phone: data.phone },
     });
     const user = await tx.user.create({
       data: {
@@ -80,9 +79,6 @@ router.post('/register', asyncHandler(async (req: Request, res: Response) => {
         role: 'TENANT_OWNER',
         tenantId: tenant.id,
       },
-    });
-    await tx.subscription.create({
-      data: { tenantId: tenant.id, status: 'TRIAL', trialEndsAt },
     });
     return user;
   });
@@ -143,7 +139,7 @@ router.get('/me', authenticate, asyncHandler(async (req: Request, res: Response)
       permissions: Array.isArray(user.permissions) ? user.permissions : null,
       tenantId: user.tenantId,
       tenant: user.tenant
-        ? { id: user.tenant.id, name: user.tenant.name, status: user.tenant.status, trialEndsAt: user.tenant.trialEndsAt, creditBalance: user.tenant.creditBalance }
+        ? { id: user.tenant.id, name: user.tenant.name }
         : null,
     },
   });
