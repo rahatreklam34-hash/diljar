@@ -206,7 +206,7 @@ export default function Sepet() {
   return (
     <div className="min-h-screen bg-slate-100 sm:bg-gradient-to-br sm:from-indigo-100 sm:via-slate-100 sm:to-violet-100">
       <Toaster position="top-center" />
-      <div className="mx-auto w-full max-w-md bg-slate-50 min-h-screen shadow-sm sm:shadow-2xl sm:ring-1 sm:ring-slate-200/70 relative">
+      <div className="mx-auto w-full max-w-md lg:max-w-6xl bg-slate-50 min-h-screen shadow-sm sm:shadow-2xl sm:ring-1 sm:ring-slate-200/70 relative">
         {/* Header (sticky) */}
         <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-100 px-4 py-3 flex items-center justify-between">
           <button onClick={() => setMenu(true)} className="p-1.5 rounded-lg hover:bg-slate-100"><Menu size={20} className="text-slate-700" /></button>
@@ -236,6 +236,9 @@ export default function Sepet() {
             {!ucretsizKargo && <span className="w-16 h-1.5 bg-white rounded-full overflow-hidden shrink-0"><span className="block h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, ((data.toplam || 0) / FREE_SHIP) * 100)}%` }} /></span>}
           </div>
 
+          {/* WEB: iki kolonlu duzen (mobilde tek kolon, sira korunur) */}
+          <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-5 lg:items-start">
+          <div className="space-y-3 lg:col-span-2">
           {/* Arama + canlı sonuç */}
           <div className="relative" id="arama">
             <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
@@ -320,6 +323,9 @@ export default function Sepet() {
             </div>
           )}
 
+          </div>
+          {/* SAG KOLON (web sticky ozet) */}
+          <div className="space-y-3 lg:sticky lg:top-4">
           {/* Teslimat Bilgileri */}
           <div>
             <div className="flex items-center justify-between mb-2"><h3 className="font-bold text-slate-800 text-sm">Teslimat Bilgileri</h3><button onClick={() => setTeslimat(true)} className="text-sm text-indigo-600 font-medium flex items-center gap-1"><Pencil size={13} /> Düzenle</button></div>
@@ -339,6 +345,8 @@ export default function Sepet() {
               {data.indirim > 0 && <div className="flex justify-between text-green-600"><span>İndirim{data.indirimKodu ? ` (${data.indirimKodu})` : ''}</span><span>-{fmt(data.indirim)}</span></div>}
               <div className="flex justify-between font-extrabold text-slate-900 text-base pt-2 border-t border-slate-100 mt-1"><span>TOPLAM</span><span>{fmt(data.toplam)}</span></div>
             </div>
+          </div>
+          </div>
           </div>
         </div>
 
