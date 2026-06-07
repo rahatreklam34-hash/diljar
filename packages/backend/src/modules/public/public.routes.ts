@@ -685,6 +685,12 @@ router.post('/sepet/:token/item', asyncHandler(async (req: Request, res: Respons
     else { if ((it.adet || 1) <= 1) { await restoreStock(1); newItems = items.filter((_, i) => i !== idx); } else { await restoreStock(1); it.adet = (it.adet || 1) - 1; } }
   }
   const adj = await campaignAdjust(prisma, cart.tenantId, newItems);
+  if (newItems.length === 0 && cart.durum === 'sepet') {
+    // Sepette ürün kalmadı -> açık sepeti iptal et (sil)
+    await prisma.liveOrder.updateMany({ where: { storeOrderId: cart.id }, data: { storeOrderId: null } });
+    await prisma.storeOrder.delete({ where: { id: cart.id } });
+    return res.json({ ok: true, deleted: true });
+  }
   await prisma.storeOrder.update({ where: { id: cart.id }, data: { items: newItems, araToplam: adj.araToplam, indirim: adj.indirim, kampanyalar: adj.kampanyalar, toplam: Math.max(0, adj.toplam + (cart.kargoUcreti || 0)) } });
   try { await prisma.orderEvent.create({ data: { tenantId: cart.tenantId, orderId: cart.id, kullanici: 'Müşteri', islem: remove ? 'Ürün çıkarıldı (sepet linki)' : 'Adet güncellendi (sepet linki)', detay: it.ad || '' } }); } catch { /* */ }
   res.json({ ok: true });

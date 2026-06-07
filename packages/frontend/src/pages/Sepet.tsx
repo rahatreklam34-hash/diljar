@@ -119,7 +119,7 @@ export default function Sepet() {
     return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
   }, [odemeAktif, odemeSonMs, now]);
 
-  const itemAction = async (index: number, body: any) => { try { await api.post(`/public/sepet/${token}/item`, { index, ...body }); load(); } catch (e) { toast.error(apiErrorMessage(e)); } };
+  const itemAction = async (index: number, body: any) => { try { const r = await api.post(`/public/sepet/${token}/item`, { index, ...body }); if (r.data?.deleted) { setErr('Sepetiniz boşaldığı için kapatıldı.'); return; } load(); } catch (e) { toast.error(apiErrorMessage(e)); } };
   const addProduct = async (p: any, beden?: string) => {
     if ((p.bedenler || []).length > 0 && !beden) { toast.error('Lütfen beden seçin'); return; }
     try { await api.post(`/public/sepet/${token}/add`, { productId: p.id, beden: beden || undefined }); toast.success('Sepete eklendi'); setQ(''); setResults([]); load(); } catch (e) { toast.error(apiErrorMessage(e)); }
