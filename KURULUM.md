@@ -57,6 +57,27 @@ git push        # GitHub'a gönder
 
 ---
 
+## 2.5) Yeni bilgisayardan SUNUCUYA SSH erişimi (önemli)
+
+Verdent'in canlı sunucuda (`diljar.com`) işlem yapabilmesi için, o bilgisayarın
+sunucu tarafından **tanınması** gerekir. Her yeni bilgisayarda **bir kez** kurulur,
+sonra o bilgisayar sürekli erişir.
+
+### En kolay yol (Verdent yapar)
+1. Yeni bilgisayarda Verdent'i `diljar` klasöründe aç.
+2. Verdent'e şunu yaz: **"diğer bilgisayardayım, sunucuya bağlan"**
+3. Verdent yeni bir SSH anahtarı üretir ve sana **tek satırlık bir komut** verir.
+4. O komutu, hosting/VPS panelinin **Console / Web Terminal** bölümüne yapıştır, Enter'a bas.
+5. `EKLENDI_TAMAM` görünce Verdent'e "eklendi" de. Bağlanır, devam eder.
+
+### Alternatif (anahtarı taşı — console'a hiç girmeden)
+İlk kurduğun bilgisayardaki `C:\Users\<kullanıcı>\.ssh\` klasöründeki
+`id_ed25519` ve `id_ed25519.pub` dosyalarını, yeni bilgisayarda aynı yere kopyala.
+Sunucu bu anahtarı zaten tanıdığı için tekrar console'a girmen gerekmez.
+> `id_ed25519` (uzantısız) **gizli anahtardır** — kimseyle paylaşma, sadece kendi bilgisayarlarına koy.
+
+---
+
 ## 3) Sunucuyu güncelleme (canlı siteyi yenileme)
 
 Verdent kodu GitHub'a gönderdikten sonra, **canlı sitede görünmesi için** sunucuda
