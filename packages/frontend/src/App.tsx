@@ -1,7 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
-import { AlertTriangle } from 'lucide-react';
 import api from './lib/api';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { AppProvider } from './context/AppContext';
@@ -24,11 +23,8 @@ import DuzenliOdemeler from './pages/DuzenliOdemeler';
 import Hedeflerim from './pages/Hedeflerim';
 import Login from './pages/Login';
 import Register from './pages/Register';
-import TrialExpired from './pages/TrialExpired';
 import DestekMerkezi from './pages/DestekMerkezi';
-import AdminPanel from './pages/AdminPanel';
 import Landing from './pages/Landing';
-import Aboneligim from './pages/Aboneligim';
 import Hakkimizda from './pages/Hakkimizda';
 import Iletisim from './pages/Iletisim';
 import KVKK from './pages/KVKK';
@@ -64,19 +60,6 @@ import PublicChat from './pages/PublicChat';
 import UyeOl from './pages/UyeOl';
 import Sepet from './pages/Sepet';
 
-function LockedBanner() {
-  const { isLocked, user } = useAuth();
-  if (!isLocked) return null;
-  const status = user?.tenant?.status;
-  const msg = status === 'FROZEN' ? 'Hesabınız donduruldu — yalnızca görüntüleme yapabilirsiniz.' : 'Aboneliğiniz aktif değil — değişiklik yapamazsınız.';
-  return (
-    <div className="bg-amber-500 text-white text-sm px-4 py-2 flex items-center justify-center gap-2">
-      <AlertTriangle size={16} /> {msg}
-      <Link to="/trial-expired" className="underline font-medium ml-2">Abonelik / Destek</Link>
-    </div>
-  );
-}
-
 function AccessGuard() {
   const { canAccess, user } = useAuth();
   const location = useLocation();
@@ -102,7 +85,6 @@ function TenantApp() {
       <div className="min-h-screen flex">
         <Sidebar />
         <main className="flex-1 min-w-0 ml-0 lg:ml-64 overflow-x-hidden transition-all duration-300" id="main-content">
-          <LockedBanner />
           <div className="p-4 pt-16 lg:p-5 lg:pt-5">
             <Routes>
               <Route path="/anasayfa" element={<Dashboard />} />
@@ -121,7 +103,6 @@ function TenantApp() {
               <Route path="/duzenli-odemeler" element={<DuzenliOdemeler />} />
               <Route path="/hedeflerim" element={<Hedeflerim />} />
               <Route path="/destek" element={<DestekMerkezi />} />
-              <Route path="/aboneligim" element={<Aboneligim />} />
               <Route path="/entegrasyonlar" element={<Entegrasyonlar />} />
               <Route path="/depo/urunlerim" element={<Urunlerim />} />
               <Route path="/depo/urun/:id" element={<UrunDetay />} />
@@ -157,17 +138,17 @@ function TenantApp() {
 }
 
 function PublicOnly({ children }: { children: React.ReactNode }) {
-  const { user, loading, isAdmin } = useAuth();
+  const { user, loading } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to={isAdmin ? '/admin' : '/anasayfa'} replace />;
+  if (user) return <Navigate to="/anasayfa" replace />;
   return <>{children}</>;
 }
 
-// Kök: ziyaretçi -> videolu mağaza, giriş yapan -> uygulama/admin
+// Kök: ziyaretçi -> videolu mağaza, giriş yapan -> uygulama
 function RootGate() {
-  const { user, loading, isAdmin } = useAuth();
+  const { user, loading } = useAuth();
   if (loading) return null;
-  if (user) return <Navigate to={isAdmin ? '/admin' : '/anasayfa'} replace />;
+  if (user) return <Navigate to="/anasayfa" replace />;
   return <PrimaryStoreRedirect />;
 }
 function PrimaryStoreRedirect() {
@@ -201,8 +182,6 @@ export default function App() {
           <Route path="/iade-iptal" element={<IadeIptal />} />
           <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
           <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
-          <Route path="/admin/*" element={<ProtectedRoute adminOnly><AdminPanel /></ProtectedRoute>} />
-          <Route path="/trial-expired" element={<ProtectedRoute><TrialExpired /></ProtectedRoute>} />
           <Route path="/*" element={<ProtectedRoute><TenantApp /></ProtectedRoute>} />
         </Routes>
       </AuthProvider>

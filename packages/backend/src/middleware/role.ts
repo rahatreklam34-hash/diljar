@@ -11,5 +11,3 @@ export function requireRole(...roles: string[]) {
     next();
   };
 }
-
-export const requireSuperAdmin = requireRole('SUPER_ADMIN');

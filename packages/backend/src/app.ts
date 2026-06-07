@@ -6,14 +6,11 @@ import rateLimit from 'express-rate-limit';
 import { env } from './config/env';
 
 import { authenticate, attachTenant } from './middleware/auth';
-import { subscriptionGuard } from './middleware/subscriptionGuard';
-import { requireSuperAdmin } from './middleware/role';
 import { notFound, errorHandler } from './middleware/error';
 import { prisma } from './lib/prisma';
 
 import authRoutes from './modules/auth/auth.routes';
 import dataRoutes from './modules/data/data.routes';
-import subscriptionRoutes from './modules/subscription/subscription.routes';
 import supportRoutes from './modules/support/support.routes';
 import uploadRoutes from './modules/upload/upload.routes';
 import integrationRoutes from './modules/integrations/integrations.routes';
@@ -23,7 +20,6 @@ import storeRoutes from './modules/store/store.routes';
 import liveRoutes from './modules/store/live.routes';
 import assistantRoutes from './modules/bot/assistant.routes';
 import publicRoutes from './modules/public/public.routes';
-import adminRoutes from './modules/admin/admin.routes';
 
 export function createApp() {
   const app = express();
@@ -45,10 +41,9 @@ export function createApp() {
   // Auth (rate-limited)
   app.use('/api/v1/auth', authLimiter, authRoutes);
 
-  // Tenant verisi (auth + tenant + abonelik kontrolü)
-  app.use('/api/v1', apiLimiter, authenticate, attachTenant, subscriptionGuard);
+  // Tenant verisi (auth + tenant)
+  app.use('/api/v1', apiLimiter, authenticate, attachTenant);
   app.use('/api/v1', dataRoutes);
-  app.use('/api/v1', subscriptionRoutes);
   app.use('/api/v1/support', supportRoutes);
   app.use('/api/v1/uploads', uploadRoutes);
   app.use('/api/v1/integrations', integrationRoutes);
@@ -57,9 +52,6 @@ export function createApp() {
   app.use('/api/v1/store/live', liveRoutes);
   app.use('/api/v1/store', storeRoutes);
   app.use('/api/v1/assistant', assistantRoutes);
-
-  // Admin (super admin)
-  app.use('/api/v1/admin', requireSuperAdmin, adminRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

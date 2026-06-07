@@ -13,7 +13,7 @@ export interface AuthUser {
   id: string;
   email: string;
   fullName: string;
-  role: 'SUPER_ADMIN' | 'TENANT_OWNER' | 'TENANT_USER';
+  role: 'TENANT_OWNER' | 'TENANT_USER';
   unvan?: string | null;
   permissions?: string[] | null;
   tenantId: string | null;
@@ -23,9 +23,7 @@ export interface AuthUser {
 interface AuthState {
   user: AuthUser | null;
   loading: boolean;
-  isAdmin: boolean;
   isOwner: boolean;
-  isLocked: boolean;
   canAccess: (path: string) => boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (data: { fullName: string; companyName: string; phone: string; email: string; password: string }) => Promise<void>;
@@ -85,10 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } catch { /* */ }
   };
 
-  const isAdmin = user?.role === 'SUPER_ADMIN';
-  const isOwner = user?.role === 'TENANT_OWNER' || user?.role === 'SUPER_ADMIN';
-  // Bireysel mod: abonelik kilidi yok
-  const isLocked = false;
+  const isOwner = user?.role === 'TENANT_OWNER';
   const canAccess = (path: string) => {
     if (isOwner) return true;
     if (path.startsWith('/ekip')) return true; // ekip sohbeti herkese açık
@@ -98,7 +93,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isAdmin, isOwner, isLocked, canAccess, login, register, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, loading, isOwner, canAccess, login, register, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -2,8 +2,8 @@ import { ReactNode } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export function ProtectedRoute({ children, adminOnly = false }: { children: ReactNode; adminOnly?: boolean }) {
-  const { user, loading, isAdmin } = useAuth();
+export function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -19,15 +19,6 @@ export function ProtectedRoute({ children, adminOnly = false }: { children: Reac
 
   if (!user) {
     return <Navigate to="/login" state={{ from: location }} replace />;
-  }
-
-  if (adminOnly && !isAdmin) {
-    return <Navigate to="/" replace />;
-  }
-
-  // Süper admin uygulama (tenant) sayfalarına değil yönetim paneline gider
-  if (!adminOnly && isAdmin) {
-    return <Navigate to="/admin" replace />;
   }
 
   return <>{children}</>;
