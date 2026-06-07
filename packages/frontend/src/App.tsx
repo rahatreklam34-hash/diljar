@@ -24,7 +24,6 @@ import Hedeflerim from './pages/Hedeflerim';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import DestekMerkezi from './pages/DestekMerkezi';
-import Landing from './pages/Landing';
 import Hakkimizda from './pages/Hakkimizda';
 import Iletisim from './pages/Iletisim';
 import KVKK from './pages/KVKK';
@@ -155,7 +154,7 @@ function PrimaryStoreRedirect() {
   const [slug, setSlug] = useState<string | null | undefined>(undefined);
   useEffect(() => { api.get('/public/primary-store').then((r) => setSlug(r.data?.slug || null)).catch(() => setSlug(null)); }, []);
   if (slug === undefined) return null;
-  if (!slug) return <Landing />;
+  if (!slug) return <Navigate to="/login" replace />;
   return <VideoMagaza slug={slug} />;
 }
 
@@ -166,7 +165,6 @@ export default function App() {
         <Toaster position="top-right" />
         <Routes>
           <Route path="/" element={<RootGate />} />
-          <Route path="/portal" element={<Landing />} />
           <Route path="/m/:slug" element={<VideoMagaza />} />
           <Route path="/m/:slug/urun/:id" element={<UrunDetayPublic />} />
           <Route path="/urun/:id" element={<UrunDetayPublic />} />
