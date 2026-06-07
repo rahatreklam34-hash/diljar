@@ -2,6 +2,8 @@ import MoneyInput from '../components/MoneyInput';
 import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import { allMenuItems } from '../lib/menu';
 import { Landmark, ArrowUpRight, ArrowDownRight, Plus, Eye, EyeOff, GripVertical, TrendingUp, RefreshCw, Brain, AlertTriangle, Lightbulb, Target, Wallet, Pencil, Check, CreditCard, PiggyBank } from 'lucide-react';
 import { Line, Doughnut, Bar } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
@@ -26,6 +28,12 @@ const loadLS = (k: string, def: any) => { try { const v = localStorage.getItem(k
 
 export default function Dashboard() {
   const { cariHesaplar, cariHareketler, hareketler, kasaBanka, krediKartlari, birikimHesaplari, cekler, duzenliOdemeler, emanetParalar, addHareket } = useApp();
+  const { user, canAccess } = useAuth();
+  const adKisa = (user?.fullName || 'Kullanici').split(' ')[0];
+  const dashShortcuts = (Array.isArray(user?.prefs?.shortcuts) ? user!.prefs!.shortcuts : ['/canli-yayin', '/kasa-satis', '/siparisler', '/depo/urunlerim', '/musterilerim'])
+    .map((to: string) => allMenuItems.find((m) => m.to === to))
+    .filter((m): m is NonNullable<typeof m> => !!m && canAccess(m.to))
+    .slice(0, 6);
   const navigate = useNavigate();
   const [yeniIslemOpen, setYeniIslemOpen] = useState(false);
   const [periyot, setPeriyot] = useState('tumu');
@@ -295,7 +303,7 @@ export default function Dashboard() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <div><h1 className="text-lg font-bold text-gray-800">Genel Bakis</h1><p className="text-[11px] text-gray-400">{new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}</p></div>
+        <div><h1 className="text-lg font-bold text-gray-800">Merhaba, {adKisa} 👋</h1><p className="text-[11px] text-gray-400">{new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}</p></div>
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-1 py-1">
             {[{ key: 'gunluk', label: 'Gun' }, { key: 'haftalik', label: 'Hafta' }, { key: 'aylik', label: 'Ay' }, { key: '6aylik', label: '6 Ay' }, { key: 'yillik', label: 'Yil' }, { key: 'tumu', label: 'Tumu' }].map(p => (
@@ -373,6 +381,24 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* Hizli Islemler (kisisel kisayollar) */}
+      {dashShortcuts.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-[12px] font-semibold text-gray-700 flex items-center gap-1.5"><span className="text-[#6c63ff]">⚡</span> Hizli Islemler</h3>
+            <span className="text-[9px] text-gray-400">Sol menudeki "Kisayollarim" bolumunden duzenleyin</span>
+          </div>
+          <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+            {dashShortcuts.map((it) => { const Icon = it.icon; return (
+              <button key={it.to} onClick={() => navigate(it.to)} className="flex flex-col items-center gap-2 p-3 rounded-xl border border-gray-100 hover:border-[#6c63ff]/40 hover:bg-[#6c63ff]/5 transition-colors">
+                <div className="w-10 h-10 rounded-xl bg-[#6c63ff]/10 flex items-center justify-center"><Icon size={18} className="text-[#6c63ff]" /></div>
+                <span className="text-[10px] text-gray-600 text-center leading-tight">{it.label}</span>
+              </button>
+            ); })}
+          </div>
+        </div>
+      )}
 
       {/* Düzenlenebilir widget grid */}
       <div className="grid gap-4" style={{ gridTemplateColumns: 'repeat(12, minmax(0,1fr))' }}>
