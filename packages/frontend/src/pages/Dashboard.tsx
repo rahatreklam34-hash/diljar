@@ -387,7 +387,7 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[12px] font-semibold text-gray-700 flex items-center gap-1.5"><span className="text-[#6c63ff]">⚡</span> Hizli Islemler</h3>
-            <span className="text-[9px] text-gray-400">Sol menudeki "Kisayollarim" bolumunden duzenleyin</span>
+            <button onClick={() => window.dispatchEvent(new Event('open-shortcut-editor'))} className="text-[11px] text-[#6c63ff] font-medium hover:underline flex items-center gap-0.5"><Pencil size={12} /> Duzenle</button>
           </div>
           <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
             {dashShortcuts.map((it) => { const Icon = it.icon; return (

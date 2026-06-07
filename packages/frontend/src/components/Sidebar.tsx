@@ -44,6 +44,13 @@ export default function Sidebar() {
   const toggleGroup = (key: string) => setOpenGroups((p) => ({ ...p, [key]: !p[key] }));
   const isIconOnly = collapsed && !mobileOpen;
 
+  // Dashboard'daki "Hizli Islemler > Duzenle" butonu da bu modali acabilsin
+  useEffect(() => {
+    const h = () => setEditOpen(true);
+    window.addEventListener('open-shortcut-editor', h);
+    return () => window.removeEventListener('open-shortcut-editor', h);
+  }, []);
+
   // Kullanicinin kisisel kisayollari (hesaba kayitli; prefs.shortcuts)
   const rawShortcuts: string[] = Array.isArray(user?.prefs?.shortcuts) ? user!.prefs!.shortcuts : DEFAULT_SHORTCUTS;
   const shortcutItems: MenuItem[] = rawShortcuts
