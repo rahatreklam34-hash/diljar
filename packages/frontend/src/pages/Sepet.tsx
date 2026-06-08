@@ -17,6 +17,8 @@ export default function Sepet() {
   const [tForm, setTForm] = useState({ musteri: '', telefon: '', adres: '' });
   const [now, setNow] = useState(Date.now());
   const [bildirildi, setBildirildi] = useState(false);
+  const [paytrUrl, setPaytrUrl] = useState('');
+  const [payBusy, setPayBusy] = useState(false);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [oneriBeden, setOneriBeden] = useState<Record<string, string>>({});
@@ -140,6 +142,25 @@ export default function Sepet() {
   );
   const saveTeslimat = async () => { try { await api.patch(`/public/sepet/${token}`, tForm); toast.success('Bilgiler kaydedildi'); setTeslimat(false); load(); } catch (e) { toast.error(apiErrorMessage(e)); } };
   const odemeBildir = async () => { try { await api.post(`/public/sepet/${token}/odeme-bildir`); setBildirildi(true); toast.success('Ödeme bildiriminiz alındı!'); load(); } catch (e) { toast.error(apiErrorMessage(e)); } };
+  // Kredi kartı ile öde (PayTR iframe)
+  const kartlaOde = async () => {
+    if (items.length === 0) { toast.error('Sepetiniz boş'); return; }
+    setPayBusy(true);
+    try {
+      const r = await api.post(`/public/sepet/${token}/paytr`);
+      if (r.data?.ok && r.data?.iframeUrl) { setPaytrUrl(r.data.iframeUrl); return; }
+      if (r.data?.configured === false) { toast('Kredi kartı ödemesi henüz aktif değil. Ödemenizi bildirerek devam edebilirsiniz.', { icon: 'ℹ️' }); return; }
+      toast.error(r.data?.error || 'Ödeme başlatılamadı. Lütfen tekrar deneyin.');
+    } catch (e) { toast.error(apiErrorMessage(e)); }
+    finally { setPayBusy(false); }
+  };
+  // PayTR dönüşü (okUrl/failUrl)
+  useEffect(() => {
+    const p = sp.get('payment');
+    if (p === 'success') toast.success('Ödemeniz alındı! Teşekkür ederiz. 🎉');
+    else if (p === 'fail') toast.error('Ödeme tamamlanamadı. Tekrar deneyebilirsiniz.');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Gömülü asistan sohbeti ──
   const [chatOpen, setChatOpen] = useState(false);
@@ -351,7 +372,7 @@ export default function Sepet() {
         </div>
 
         {/* Alt sabit bar (sticky) */}
-        <div className="sticky bottom-0 z-30 bg-white border-t border-slate-100 px-4 py-3 flex items-center gap-3">
+        <div className="sticky bottom-0 z-30 bg-white border-t border-slate-100 px-4 py-3 flex items-center gap-2.5">
           <div className="shrink-0"><p className="text-[10px] text-slate-400">Toplam</p><p className="text-base font-extrabold text-slate-900">{fmt(data.toplam)}</p></div>
           {odemeAktif ? (
             <button onClick={() => window.open(data.odemeLinki, 'odeme', 'width=480,height=720')} className="flex-1 bg-green-600 text-white rounded-2xl py-2.5 font-bold hover:bg-green-700 flex flex-col items-center leading-tight">
@@ -359,14 +380,31 @@ export default function Sepet() {
               <span className="text-[10px] font-medium text-white/80">{odemeKalan ? `Ödeme için kalan süre: ${odemeKalan}` : 'Güvenli ödeme'}</span>
             </button>
           ) : (
-            <button onClick={odemeBildir} disabled={items.length === 0} className="flex-1 bg-indigo-600 text-white rounded-2xl py-2.5 font-bold hover:bg-indigo-700 disabled:opacity-50 flex flex-col items-center leading-tight">
-              <span className="text-sm">{bildirildi ? 'Ödeme Bildirildi ✓' : 'ÖDEMENİ BİLDİR'}</span>
-              <span className="text-[10px] font-medium text-white/70">%3 VIP Puan Kazan</span>
-            </button>
+            <>
+              <button onClick={kartlaOde} disabled={items.length === 0 || payBusy} className="flex-1 bg-green-600 text-white rounded-2xl py-2.5 font-bold hover:bg-green-700 disabled:opacity-50 flex flex-col items-center leading-tight">
+                <span className="text-sm inline-flex items-center gap-1.5"><CreditCard size={16} /> {payBusy ? 'Yönlendiriliyor...' : 'Kredi Kartı ile Öde'}</span>
+                <span className="text-[10px] font-medium text-white/80">256-bit SSL · Güvenli Ödeme</span>
+              </button>
+              <button onClick={odemeBildir} disabled={items.length === 0} className="shrink-0 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-2xl px-3 py-2.5 font-semibold hover:bg-indigo-100 disabled:opacity-50 flex flex-col items-center leading-tight">
+                <span className="text-[12px]">{bildirildi ? 'Bildirildi ✓' : 'Havale/EFT'}</span>
+                <span className="text-[9px] font-medium text-indigo-400">Ödemeni Bildir</span>
+              </button>
+            </>
           )}
         </div>
 
-        {/* Yüzen asistan butonu (dikkat çekici) */}
+        {/* PayTR güvenli ödeme (kredi kartı) iframe */}
+        {paytrUrl && (
+          <div className="fixed inset-0 z-[200] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4">
+            <div className="w-full h-full sm:max-w-md sm:h-[92vh] bg-white sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                <span className="font-semibold text-slate-800 inline-flex items-center gap-1.5"><CreditCard size={16} /> Güvenli Ödeme</span>
+                <button onClick={() => { setPaytrUrl(''); load(); }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} className="text-slate-400" /></button>
+              </div>
+              <iframe src={paytrUrl} className="flex-1 w-full" title="Kredi Kartı ile Ödeme" />
+            </div>
+          </div>
+        )}
         {!chatOpen && (
           <button onClick={openChat} className="fixed z-40 bottom-24 right-4 sm:right-[calc(50%-13rem+0.5rem)] flex items-center gap-2 pl-3 pr-4 py-3 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-2xl hover:scale-105 transition-transform">
             <span className="absolute inset-0 rounded-full bg-indigo-500/50 animate-ping -z-10" />
