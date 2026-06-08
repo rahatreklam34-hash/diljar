@@ -134,7 +134,7 @@ export default function CanliYayinSatis() {
     if (!k) return null;
     const userOnayli = orders.filter((x) => x.durum === 'onaylandi' && x.user === o.user);
     if (k.tip === 'urun_adet') {
-      const adet = userOnayli.filter((x) => kampInScope(k, x.productId)).length;
+      const adet = userOnayli.filter((x) => kampInScope(k, x.productId)).reduce((s, x) => s + (x.adet || 1), 0);
       return adet >= (k.minAdet || 1) ? k : null;
     }
     if (k.tip === 'sepet_tutar') {
@@ -155,7 +155,8 @@ export default function CanliYayinSatis() {
       } else if (k.tip === 'urun_adet') {
         const scoped = list.filter((o) => kampInScope(k, o.productId));
         const tutar = scoped.reduce((s, o) => s + (o.tutar || 0), 0);
-        if (scoped.length >= (k.minAdet || 1) && scoped.length > 0) kInd = k.indirimTip === 'yuzde' ? tutar * k.indirimDeger / 100 : k.indirimDeger;
+        const adetTop = scoped.reduce((s, o) => s + (o.adet || 1), 0);
+        if (adetTop >= (k.minAdet || 1) && adetTop > 0) kInd = k.indirimTip === 'yuzde' ? tutar * k.indirimDeger / 100 : k.indirimDeger;
       }
       if (kInd > 0) indirim += Math.round(kInd * 100) / 100;
     }

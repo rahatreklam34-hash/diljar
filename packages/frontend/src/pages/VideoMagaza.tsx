@@ -259,9 +259,9 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
 
       {/* Alt nav (mobil) */}
       <nav className="fixed bottom-0 left-0 right-0 sm:hidden bg-white border-t border-slate-100 px-2 py-1.5 flex items-center justify-between z-30">
-        <button className="flex flex-col items-center gap-0.5 text-indigo-600 flex-1"><Home size={20} /><span className="text-[10px]">Ana Sayfa</span></button>
+        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex flex-col items-center gap-0.5 text-indigo-600 flex-1"><Home size={20} /><span className="text-[10px]">Ana Sayfa</span></button>
         <button onClick={() => document.getElementById('urunler')?.scrollIntoView()} className="flex flex-col items-center gap-0.5 text-slate-400 flex-1"><LayoutGrid size={20} /><span className="text-[10px]">Kataloglar</span></button>
-        <button className="w-12 h-12 rounded-full bg-indigo-600 text-white flex flex-col items-center justify-center -mt-5 shadow-lg flex-1 max-w-12 mx-auto"><Radio size={18} /><span className="text-[8px]">CANLI</span></button>
+        <button onClick={() => { setKat('indirim'); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className="w-12 h-12 rounded-full bg-indigo-600 text-white flex flex-col items-center justify-center -mt-5 shadow-lg flex-1 max-w-12 mx-auto"><Radio size={18} /><span className="text-[8px]">FIRSAT</span></button>
         <button onClick={() => setCartOpen(true)} className="flex flex-col items-center gap-0.5 text-slate-400 flex-1 relative"><ShoppingBag size={20} />{count > 0 && <span className="absolute top-0 right-5 w-3.5 h-3.5 rounded-full bg-indigo-600 text-white text-[8px] flex items-center justify-center">{count}</span>}<span className="text-[10px]">Sepetim</span></button>
         <button onClick={() => setAcc(true)} className="flex flex-col items-center gap-0.5 text-slate-400 flex-1"><User size={20} /><span className="text-[10px]">Hesabım</span></button>
       </nav>
@@ -311,7 +311,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
             <input value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} placeholder="E-posta" className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl" />
             <textarea required rows={2} value={cust.adres} onChange={(e) => setCust({ ...cust, adres: e.target.value })} placeholder="Teslimat Adresi *" className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl" />
             <button type="submit" disabled={busy} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"><Lock size={16} /> {busy ? 'Yönlendiriliyor...' : 'Ödemeye Geç'}</button>
-            <p className="text-[11px] text-slate-400 text-center">Kredi/banka kartı ile güvenli ödeme (PayTR/iyzico). Bilgileriniz şifrelenir.</p>
+            <p className="text-[11px] text-slate-400 text-center">Kredi/banka kartı ile güvenli ödeme (PayTR). Bilgileriniz 256-bit SSL ile şifrelenir.</p>
           </form>
         </div>
       )}
