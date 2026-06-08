@@ -8,10 +8,24 @@ export interface ProviderField {
 export interface ProviderDef {
   provider: string;
   label: string;
-  category: 'PAYMENT' | 'CARGO' | 'AI' | 'BANKING';
+  category: 'PAYMENT' | 'CARGO' | 'AI' | 'BANKING' | 'SMS';
   description?: string;
   fields: ProviderField[];
 }
+
+export const SMS_PROVIDERS: ProviderDef[] = [
+  {
+    provider: 'netgsm',
+    label: 'NetGSM (SMS)',
+    category: 'SMS',
+    description: 'Toplu SMS ve sipariş bildirimleri için NetGSM API. Kullanıcı kodu, şifre ve onaylı gönderici başlığı (msgheader) gereklidir.',
+    fields: [
+      { key: 'usercode', label: 'Kullanıcı Kodu (Abone No / 850...)' },
+      { key: 'password', label: 'API Şifresi', type: 'password' },
+      { key: 'msgheader', label: 'Gönderici Başlığı (onaylı başlık)' },
+    ],
+  },
+];
 
 export const AI_PROVIDERS: ProviderDef[] = [
   {
@@ -113,7 +127,7 @@ export const BANKING_PROVIDERS: ProviderDef[] = [
   },
 ];
 
-export const ALL_PROVIDERS = [...PAYMENT_PROVIDERS, ...CARGO_PROVIDERS, ...AI_PROVIDERS, ...BANKING_PROVIDERS];
+export const ALL_PROVIDERS = [...PAYMENT_PROVIDERS, ...CARGO_PROVIDERS, ...AI_PROVIDERS, ...BANKING_PROVIDERS, ...SMS_PROVIDERS];
 
 export function findProvider(provider: string): ProviderDef | undefined {
   return ALL_PROVIDERS.find((p) => p.provider === provider);

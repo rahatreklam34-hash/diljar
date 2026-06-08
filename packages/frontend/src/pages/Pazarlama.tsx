@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Megaphone, Eye, TrendingUp, UserX, Send, Copy } from 'lucide-react';
+import { Megaphone, Eye, TrendingUp, UserX, Send, Copy, Bell } from 'lucide-react';
 import toast from 'react-hot-toast';
-import api from '../lib/api';
+import api, { apiErrorMessage } from '../lib/api';
 
 const fmt0 = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 });
 
@@ -10,11 +10,25 @@ export default function Pazarlama() {
   const [tab, setTab] = useState('ilgi');
   const [sms, setSms] = useState<{ open: boolean; nums: string[]; baslik: string }>({ open: false, nums: [], baslik: '' });
   const [mesaj, setMesaj] = useState('');
+  const [sending, setSending] = useState(false);
 
   useEffect(() => { api.get('/store/pazarlama').then((r) => setD(r.data)).catch(() => {}); }, []);
 
   const smsAc = (baslik: string, nums: (string | null | undefined)[]) => { const list = [...new Set(nums.filter(Boolean) as string[])]; if (!list.length) { toast.error('Telefonu olan kişi yok'); return; } setSms({ open: true, nums: list, baslik }); setMesaj(''); };
   const kopyala = () => { navigator.clipboard.writeText(sms.nums.join(', ')); toast.success(sms.nums.length + ' numara kopyalandı'); };
+
+  const gonder = async () => {
+    if (!mesaj.trim()) { toast.error('Lütfen SMS metnini yazın'); return; }
+    setSending(true);
+    try {
+      const r = await api.post('/sms/send', { numbers: sms.nums, message: mesaj });
+      const res = r.data;
+      if (res?.ok) { toast.success(res.message || `${res.sent} numaraya gönderildi`); setSms({ ...sms, open: false }); }
+      else toast.error(res?.message || 'SMS gönderilemedi');
+    } catch (e: any) {
+      toast.error(e?.response?.data?.message || apiErrorMessage(e));
+    } finally { setSending(false); }
+  };
 
   if (!d) return <div className="p-6 text-slate-400">Yükleniyor...</div>;
 
@@ -69,17 +83,68 @@ export default function Pazarlama() {
         </Segment>
       )}
 
+      {/* Sipariş bildirim ayarları */}
+      <SmsBildirimAyar />
+
       {sms.open && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setSms({ ...sms, open: false })}>
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-white rounded-2xl p-5 space-y-3">
             <h3 className="font-bold text-slate-800">SMS Pazarlama — {sms.baslik}</h3>
             <div className="bg-slate-50 rounded-xl p-3 text-sm flex items-center justify-between"><span className="text-slate-500">{sms.nums.length} alıcı</span><button onClick={kopyala} className="text-indigo-600 inline-flex items-center gap-1 text-xs"><Copy size={13} /> Numaraları Kopyala</button></div>
-            <textarea value={mesaj} onChange={(e) => setMesaj(e.target.value)} rows={4} placeholder="SMS metnini yazın... (ör. Size özel %20 indirim! Mağazamızı ziyaret edin.)" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl" />
-            <button onClick={() => { toast.success('SMS gönderimi için entegrasyon (Netgsm/İletimerkezi) eklenince aktif olacak. Numaralar kopyalandı.'); kopyala(); }} className="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-medium inline-flex items-center justify-center gap-2"><Send size={16} /> Gönder</button>
-            <p className="text-[11px] text-slate-400 text-center">Not: Toplu SMS için Netgsm/İletimerkezi gibi bir sağlayıcı entegrasyonu gerekir; ekleyince buradan otomatik gönderilir.</p>
+            <textarea value={mesaj} onChange={(e) => setMesaj(e.target.value)} rows={4} maxLength={600} placeholder="SMS metnini yazın... (ör. Size özel %20 indirim! Mağazamızı ziyaret edin.)" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-xl" />
+            <div className="flex items-center justify-between text-[11px] text-slate-400"><span>{mesaj.length} karakter (~{Math.max(1, Math.ceil(mesaj.length / 160))} SMS)</span></div>
+            <button onClick={gonder} disabled={sending} className="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-medium inline-flex items-center justify-center gap-2 hover:bg-indigo-700 disabled:opacity-60"><Send size={16} /> {sending ? 'Gönderiliyor...' : 'NetGSM ile Gönder'}</button>
+            <p className="text-[11px] text-slate-400 text-center">NetGSM bağlı değilse Entegrasyonlar &gt; SMS bölümünden bilgilerinizi girin. Numaraları kopyalayıp manuel de gönderebilirsiniz.</p>
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function SmsBildirimAyar() {
+  const [s, setS] = useState<any>(null);
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api.get('/sms/settings').then((r) => setS(r.data)).catch(() => setS({ configured: false, notify_new: false, notify_approved: false, notify_shipped: false, tpl_new: '', tpl_approved: '', tpl_shipped: '' })); }, []);
+  if (!s) return null;
+  const set = (k: string, v: any) => setS((x: any) => ({ ...x, [k]: v }));
+  const save = async () => {
+    setBusy(true);
+    try { const r = await api.put('/sms/settings', s); setS(r.data); toast.success('Bildirim ayarları kaydedildi'); }
+    catch (e) { toast.error(apiErrorMessage(e)); }
+    finally { setBusy(false); }
+  };
+  const rows = [
+    { k: 'notify_new', tk: 'tpl_new', label: 'Sipariş Alındı', desc: 'Yeni sipariş oluşturulduğunda' },
+    { k: 'notify_approved', tk: 'tpl_approved', label: 'Onaylandı / Hazırlanıyor', desc: 'Sipariş durumu hazırlanıyor olunca' },
+    { k: 'notify_shipped', tk: 'tpl_shipped', label: 'Kargoya Verildi', desc: 'Kargoda durumuna geçince veya takip no girilince' },
+  ];
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-4">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center"><Bell size={18} className="text-indigo-600" /></div>
+          <div>
+            <h3 className="font-bold text-slate-800 text-sm">Sipariş Bildirimleri (SMS)</h3>
+            <p className="text-[11px] text-slate-400">Sipariş durumu değişince müşteriye otomatik SMS gönderilir. Değişkenler: <code className="text-indigo-500">{'{ad} {no} {tutar} {kargo} {takip} {firma}'}</code></p>
+          </div>
+        </div>
+        <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${s.configured ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{s.configured ? 'NetGSM bağlı' : 'NetGSM bilgileri eksik'}</span>
+      </div>
+      {!s.configured && <p className="text-[12px] text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Bildirimlerin gönderilmesi için <b>Entegrasyonlar &gt; SMS</b> bölümünden NetGSM bilgilerini girip etkinleştirin.</p>}
+      {rows.map((row) => (
+        <div key={row.k} className="border border-slate-100 rounded-xl p-3">
+          <div className="flex items-center justify-between mb-2">
+            <div><span className="text-sm font-medium text-slate-700">{row.label}</span><span className="block text-[11px] text-slate-400">{row.desc}</span></div>
+            <label className="inline-flex items-center cursor-pointer">
+              <input type="checkbox" className="sr-only peer" checked={!!s[row.k]} onChange={(e) => set(row.k, e.target.checked)} />
+              <div className="w-10 h-5 bg-slate-200 peer-checked:bg-indigo-500 rounded-full relative transition-colors after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-all peer-checked:after:translate-x-5" />
+            </label>
+          </div>
+          <textarea value={s[row.tk] || ''} onChange={(e) => set(row.tk, e.target.value)} rows={2} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-200" />
+        </div>
+      ))}
+      <button onClick={save} disabled={busy} className="bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-60">{busy ? 'Kaydediliyor...' : 'Bildirim Ayarlarını Kaydet'}</button>
     </div>
   );
 }

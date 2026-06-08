@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plug, CreditCard, Truck, Save } from 'lucide-react';
+import { Plug, CreditCard, Truck, Save, MessageSquare } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
 
@@ -66,7 +66,7 @@ function ProviderCard({ def, setting, onSaved }: { def: ProviderDef; setting?: S
 }
 
 export default function Entegrasyonlar() {
-  const [catalog, setCatalog] = useState<{ payment: ProviderDef[]; cargo: ProviderDef[]; ai: ProviderDef[]; banking: ProviderDef[] }>({ payment: [], cargo: [], ai: [], banking: [] });
+  const [catalog, setCatalog] = useState<{ payment: ProviderDef[]; cargo: ProviderDef[]; ai: ProviderDef[]; banking: ProviderDef[]; sms: ProviderDef[] }>({ payment: [], cargo: [], ai: [], banking: [], sms: [] });
   const [settings, setSettings] = useState<Setting[]>([]);
 
   const loadSettings = () => api.get('/integrations').then((r) => setSettings(r.data)).catch(() => {});
@@ -113,6 +113,31 @@ export default function Entegrasyonlar() {
         {catalog.banking.map((d) => <ProviderCard key={d.provider} def={d} setting={getSetting(d.provider)} onSaved={loadSettings} />)}
       </div>
       {catalog.banking.some((d) => getSetting(d.provider)?.enabled) && <IsbankViewer />}
+
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-slate-800 mb-3 mt-8"><MessageSquare size={18} className="text-indigo-600" /> SMS (Toplu SMS & Sipariş Bildirimi)</h2>
+      <p className="text-xs text-slate-400 mb-3">NetGSM ile kampanyalarda toplu SMS gönderin ve sipariş durum değişimlerinde müşterilere otomatik bilgilendirme yapın. Kullanıcı kodu, şifre ve onaylı gönderici başlığı (msgheader) gereklidir.</p>
+      <div className="grid md:grid-cols-2 gap-5">
+        {catalog.sms.map((d) => <ProviderCard key={d.provider} def={d} setting={getSetting(d.provider)} onSaved={loadSettings} />)}
+      </div>
+      {catalog.sms.some((d) => getSetting(d.provider)?.enabled) && <SmsTester />}
+    </div>
+  );
+}
+
+function SmsTester() {
+  const [res, setRes] = useState<string>('');
+  const [busy, setBusy] = useState(false);
+  const test = async () => {
+    setBusy(true); setRes('');
+    try { const r = await api.get('/sms/test'); setRes((r.data?.ok ? '✓ ' : '✗ ') + (r.data?.message || '') + (r.data?.balance ? ' | Bakiye: ' + r.data.balance : '')); }
+    catch (e) { setRes('✗ ' + apiErrorMessage(e)); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div className="mt-4 bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3 flex-wrap">
+      <button onClick={test} disabled={busy} className="px-3.5 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50">{busy ? 'Kontrol ediliyor...' : 'Bağlantıyı / Bakiyeyi Test Et'}</button>
+      {res && <span className={`text-sm ${res.startsWith('✓') ? 'text-green-600' : 'text-red-500'}`}>{res}</span>}
+      <span className="text-xs text-slate-400 ml-auto">Sipariş bildirim metinleri ve toplu gönderim için: <b>Pazarlama & SMS</b> sayfası.</span>
     </div>
   );
 }

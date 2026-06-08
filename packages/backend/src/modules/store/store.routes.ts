@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma';
 import { asyncHandler, ApiError } from '../../lib/http';
 import { promoteReserved, campaignAdjust, recalcOpenCarts } from './live.routes';
+import { notifyOrderSms } from '../sms/netgsm.service';
 
 const router = Router();
 
@@ -259,6 +260,15 @@ router.post('/orders', asyncHandler(async (req: Request, res: Response) => {
     return tx.storeOrder.create({ data: { ...b, ...seq, tenantId: req.tenantId! } });
   });
   await logEvent(req.tenantId!, created.id, who, 'Sipariş oluşturuldu', `${created.orderYil}-${String(created.orderNo).padStart(3, '0')}`);
+  // Sipariş alındı bildirimi (NetGSM SMS) — sessiz
+  try {
+    if (created.customerId) {
+      const cst = await prisma.customer.findFirst({ where: { id: created.customerId, tenantId: req.tenantId! }, select: { telefon: true, ad: true } });
+      const tnt = await prisma.tenant.findUnique({ where: { id: req.tenantId! }, select: { name: true } });
+      const no2 = `${created.orderYil}-${String(created.orderNo).padStart(3, '0')}`;
+      void notifyOrderSms(req.tenantId!, 'new', { phone: cst?.telefon, ad: cst?.ad, no: no2, tutar: created.toplam, firma: tnt?.name || '' });
+    }
+  } catch { /* */ }
   res.status(201).json(created);
 }));
 
@@ -314,6 +324,20 @@ router.patch('/orders/:id', asyncHandler(async (req: Request, res: Response) => 
     if (body.tahsilat !== undefined && Number(body.tahsilat) !== Number(found.tahsilat)) await logEvent(req.tenantId!, found.id, who, 'Tahsilat güncellendi', `${found.tahsilat} → ${body.tahsilat}`);
     if (body.indirim !== undefined && Number(body.indirim) !== Number(found.indirim)) await logEvent(req.tenantId!, found.id, who, 'İndirim güncellendi', `${body.indirim}`);
   }
+  // Sipariş bildirimi (NetGSM SMS) — durum/kargo değişiminde, sessiz
+  try {
+    let event: 'approved' | 'shipped' | null = null;
+    const yeni = updated.durum;
+    if ((yeni === 'hazirlaniyor' || yeni === 'onaylandi') && yeni !== found.durum) event = 'approved';
+    if (yeni === 'kargoda' && yeni !== found.durum) event = 'shipped';
+    if (updated.kargoTakip && updated.kargoTakip !== (found as any).kargoTakip) event = 'shipped';
+    if (event && updated.customerId) {
+      const cst = await prisma.customer.findFirst({ where: { id: updated.customerId, tenantId: req.tenantId! }, select: { telefon: true, ad: true } });
+      const tnt = await prisma.tenant.findUnique({ where: { id: req.tenantId! }, select: { name: true } });
+      const no2 = updated.orderNo ? `${updated.orderYil}-${String(updated.orderNo).padStart(3, '0')}` : updated.id.slice(-5);
+      void notifyOrderSms(req.tenantId!, event, { phone: cst?.telefon, ad: cst?.ad, no: no2, tutar: updated.toplam, kargo: (updated as any).kargoFirmasi || '', takip: (updated as any).kargoTakip || '', firma: tnt?.name || '' });
+    }
+  } catch { /* SMS hatasi siparisi etkilemez */ }
   res.json(updated);
 }));
 

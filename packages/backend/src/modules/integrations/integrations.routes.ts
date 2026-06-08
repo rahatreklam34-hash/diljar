@@ -1,14 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma';
 import { asyncHandler, ApiError } from '../../lib/http';
-import { PAYMENT_PROVIDERS, CARGO_PROVIDERS, AI_PROVIDERS, BANKING_PROVIDERS, findProvider, maskConfig } from './catalog';
+import { PAYMENT_PROVIDERS, CARGO_PROVIDERS, AI_PROVIDERS, BANKING_PROVIDERS, SMS_PROVIDERS, findProvider, maskConfig } from './catalog';
 
 const router = Router();
 const MASK = '••••••••';
 
 // Sağlayıcı kataloğu (form alanları)
 router.get('/catalog', asyncHandler(async (_req: Request, res: Response) => {
-  res.json({ payment: PAYMENT_PROVIDERS, cargo: CARGO_PROVIDERS, ai: AI_PROVIDERS, banking: BANKING_PROVIDERS });
+  res.json({ payment: PAYMENT_PROVIDERS, cargo: CARGO_PROVIDERS, ai: AI_PROVIDERS, banking: BANKING_PROVIDERS, sms: SMS_PROVIDERS });
 }));
 
 // Tenant'ın entegrasyon ayarları (gizli alanlar maskeli)
