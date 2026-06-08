@@ -16,6 +16,7 @@ import uploadRoutes from './modules/upload/upload.routes';
 import integrationRoutes from './modules/integrations/integrations.routes';
 import isbankRoutes from './modules/isbank/isbank.routes';
 import smsRoutes from './modules/sms/sms.routes';
+import cargoRoutes from './modules/cargo/cargo.routes';
 import staffRoutes from './modules/staff/staff.routes';
 import storeRoutes from './modules/store/store.routes';
 import liveRoutes from './modules/store/live.routes';
@@ -50,6 +51,7 @@ export function createApp() {
   app.use('/api/v1/integrations', integrationRoutes);
   app.use('/api/v1/isbank', isbankRoutes);
   app.use('/api/v1/sms', smsRoutes);
+  app.use('/api/v1/cargo', cargoRoutes);
   app.use('/api/v1/staff', staffRoutes);
   app.use('/api/v1/store/live', liveRoutes);
   app.use('/api/v1/store', storeRoutes);

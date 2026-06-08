@@ -66,13 +66,28 @@ export const PAYMENT_PROVIDERS: ProviderDef[] = [
 
 export const CARGO_PROVIDERS: ProviderDef[] = [
   {
+    provider: 'gonderici',
+    label: 'Gönderici (Kargo Çıkış) Bilgileri',
+    category: 'CARGO',
+    description: 'Kargo gönderilerinde kullanılacak gönderici/çıkış adresi. Tüm kargo firmaları için ortaktır.',
+    fields: [
+      { key: 'unvan', label: 'Gönderici Ünvanı / Ad Soyad' },
+      { key: 'telefon', label: 'Gönderici Telefon' },
+      { key: 'il', label: 'İl' },
+      { key: 'ilce', label: 'İlçe' },
+      { key: 'adres', label: 'Çıkış Adresi' },
+    ],
+  },
+  {
     provider: 'yurtici',
     label: 'Yurtiçi Kargo',
     category: 'CARGO',
+    description: 'Yurtiçi Kargo web servisi (KOPS) ile otomatik gönderi oluşturma. WS kullanıcı adı/şifre Yurtiçi’den temin edilir.',
     fields: [
       { key: 'ws_username', label: 'Web Servis Kullanıcı Adı' },
       { key: 'ws_password', label: 'Web Servis Şifre', type: 'password' },
       { key: 'customer_code', label: 'Müşteri Kodu', optional: true },
+      { key: 'env', label: 'Ortam (test / prod — varsayılan prod)', optional: true },
     ],
   },
   {

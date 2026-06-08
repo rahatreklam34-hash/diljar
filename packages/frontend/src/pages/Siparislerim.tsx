@@ -302,6 +302,31 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
   // Manuel indirim/kupon uygulandi mi? (kampanya disi). Kampanyali siparislerde false -> fiyat degisince kampanya yeniden hesaplanir.
   const isManuel = (o: any) => (Number(o.indirim) || 0) > 0 && (!Array.isArray(o.kampanyalar) || o.kampanyalar.length === 0) && !o.indirimKodu;
   const [manuelInd, setManuelInd] = useState<boolean>(isManuel(order));
+  // Kargo gönderisi
+  const [kargoModal, setKargoModal] = useState(false);
+  const [kargoBusy, setKargoBusy] = useState(false);
+  const [cargoSt, setCargoSt] = useState<any>(null);
+  const [kForm, setKForm] = useState({ provider: '', odeme: 'gonderici', desi: '1', kg: '1', il: '', ilce: '', adres: order.adres || '', manualTracking: '' });
+  useEffect(() => {
+    api.get('/cargo/status').then((r) => { setCargoSt(r.data); if (r.data?.carriers?.[0]) setKForm((f) => ({ ...f, provider: f.provider || r.data.carriers[0].provider })); }).catch(() => setCargoSt({ carriers: [], gondericiTanimli: false }));
+  }, []);
+  const kargoOlustur = async () => {
+    if (!kForm.provider) { toast.error('Kargo firması seçin'); return; }
+    setKargoBusy(true);
+    try {
+      const r = await api.post('/cargo/shipment', {
+        orderId: order.id, provider: kForm.provider, odeme: kForm.odeme,
+        desi: Number(kForm.desi) || 1, kg: Number(kForm.kg) || 1,
+        manualTracking: kForm.manualTracking || undefined,
+        alici: { il: kForm.il, ilce: kForm.ilce, adres: kForm.adres },
+      });
+      if (r.data?.ok) {
+        toast.success(`Kargo oluşturuldu · Takip: ${r.data.trackingNo}${r.data.manual ? ' (manuel)' : ''}`);
+        setDurumState('kargoda'); setKargoModal(false); reload(); loadEvents(); loadFresh();
+      } else toast.error('Kargo oluşturulamadı');
+    } catch (e: any) { toast.error(e?.response?.data?.message || apiErrorMessage(e)); }
+    finally { setKargoBusy(false); }
+  };
 
   const prodOf = (pid: string) => products.find((p: any) => p.id === pid);
   const imgOf = (pid: string) => (prodOf(pid)?.images || [])[0] || '';
@@ -504,10 +529,63 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
           </div>
           <div className="flex items-center gap-2">
             <button onClick={exportPDF} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm border border-slate-200 rounded-lg bg-white hover:bg-slate-50"><FileText size={15} /> PDF</button>
-            <button onClick={() => { setDurumState('kargoda'); persist({ durum: 'kargoda' }); }} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"><Truck size={15} /> Kargola</button>
+            <button onClick={() => setKargoModal(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"><Truck size={15} /> Kargo Gönderisi</button>
             <button onClick={onClose} className="p-2 rounded-lg hover:bg-slate-100"><X size={18} className="text-slate-400" /></button>
           </div>
         </div>
+
+        {/* Kargo Gönderisi Oluştur modal */}
+        {kargoModal && (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50" onClick={() => setKargoModal(false)}>
+            <div className="w-full max-w-md bg-white rounded-2xl p-5 space-y-3 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+              <div className="flex items-center justify-between"><h3 className="font-bold text-slate-800 inline-flex items-center gap-1.5"><Truck size={18} className="text-indigo-600" /> Kargo Gönderisi Oluştur</h3><button onClick={() => setKargoModal(false)}><X size={18} className="text-slate-400" /></button></div>
+              {cargoSt && !cargoSt.gondericiTanimli && (
+                <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">Gönderici bilgileri eksik. <b>Entegrasyonlar &gt; Kargo &gt; Gönderici Bilgileri</b>'ni doldurun. (Manuel takip no ile yine de devam edebilirsiniz.)</p>
+              )}
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="block text-[11px] text-slate-500 mb-1">Kargo Firması</label>
+                  <select value={kForm.provider} onChange={(e) => setKForm({ ...kForm, provider: e.target.value })} className="w-full px-2.5 py-2 text-sm border border-slate-200 rounded-lg">
+                    <option value="">Seçin...</option>
+                    {(cargoSt?.carriers || []).map((c: any) => <option key={c.provider} value={c.provider}>{c.label}</option>)}
+                    {(!cargoSt?.carriers || cargoSt.carriers.length === 0) && <>
+                      <option value="yurtici">Yurtiçi Kargo</option>
+                      <option value="aras">Aras Kargo</option>
+                      <option value="mng">MNG Kargo</option>
+                      <option value="surat">Sürat Kargo</option>
+                      <option value="ptt">PTT Kargo</option>
+                    </>}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[11px] text-slate-500 mb-1">Ödeme</label>
+                  <select value={kForm.odeme} onChange={(e) => setKForm({ ...kForm, odeme: e.target.value })} className="w-full px-2.5 py-2 text-sm border border-slate-200 rounded-lg">
+                    <option value="gonderici">Gönderici Ödemeli</option>
+                    <option value="alici">Alıcı Ödemeli</option>
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div><label className="block text-[11px] text-slate-500 mb-1">Desi</label><input type="number" min={1} value={kForm.desi} onChange={(e) => setKForm({ ...kForm, desi: e.target.value })} className="w-full px-2.5 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <div><label className="block text-[11px] text-slate-500 mb-1">Ağırlık (kg)</label><input type="number" min={1} value={kForm.kg} onChange={(e) => setKForm({ ...kForm, kg: e.target.value })} className="w-full px-2.5 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              </div>
+              <div className="border-t border-slate-100 pt-2">
+                <p className="text-[11px] font-semibold text-slate-500 mb-1.5">Alıcı (otomatik dolar, gerekirse düzeltin)</p>
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  <input placeholder="İl" value={kForm.il} onChange={(e) => setKForm({ ...kForm, il: e.target.value })} className="px-2.5 py-2 text-sm border border-slate-200 rounded-lg" />
+                  <input placeholder="İlçe" value={kForm.ilce} onChange={(e) => setKForm({ ...kForm, ilce: e.target.value })} className="px-2.5 py-2 text-sm border border-slate-200 rounded-lg" />
+                </div>
+                <textarea placeholder="Alıcı adresi" rows={2} value={kForm.adres} onChange={(e) => setKForm({ ...kForm, adres: e.target.value })} className="w-full px-2.5 py-2 text-sm border border-slate-200 rounded-lg resize-none" />
+              </div>
+              <div className="border-t border-slate-100 pt-2">
+                <label className="block text-[11px] text-slate-500 mb-1">Manuel Takip No (otomatik API yoksa / barkodu elinizde varsa)</label>
+                <input placeholder="Örn. 1234567890" value={kForm.manualTracking} onChange={(e) => setKForm({ ...kForm, manualTracking: e.target.value })} className="w-full px-2.5 py-2 text-sm border border-slate-200 rounded-lg" />
+                <p className="text-[10px] text-slate-400 mt-1">Boş bırakırsanız seçili firmanın API'si ile otomatik oluşturulur (Yurtiçi destekli). Diğer firmalarda takip no'yu buraya girin.</p>
+              </div>
+              <button onClick={kargoOlustur} disabled={kargoBusy} className="w-full bg-indigo-600 text-white py-2.5 rounded-xl font-bold hover:bg-indigo-700 disabled:opacity-60 inline-flex items-center justify-center gap-2"><Truck size={16} /> {kargoBusy ? 'Oluşturuluyor...' : 'Gönderiyi Oluştur & Kargola'}</button>
+            </div>
+          </div>
+        )}
 
         <div className="p-5 max-h-[82vh] overflow-y-auto">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
