@@ -13,6 +13,44 @@ import { nextOrderNo } from '../store/store.routes';
 
 const router = Router();
 
+// Instagram kullanıcı adı gerçekten var mı? -> 'exists' | 'missing' | 'unknown'
+// - Format hatalıysa kesin 'missing' (kayıt reddedilir).
+// - Canlı kontrol: INSTAGRAM_SESSIONID tanımlıysa kimlik doğrulamalı sorgu yapılır (güvenilir 200/404).
+//   Sunucu IP'si Instagram tarafından engellenirse (429/redirect) sonuç 'unknown' olur ve kayıt engellenmez.
+async function instagramKullaniciVarMi(raw: string): Promise<'exists' | 'missing' | 'unknown'> {
+  const u = String(raw || '').trim().replace(/^@+/, '').toLowerCase();
+  // Format kontrolü: 1-30 karakter, yalnız harf/rakam/nokta/alt çizgi; ardışık nokta yok; nokta ile başlamaz/bitmez
+  if (!/^[a-z0-9._]{1,30}$/.test(u) || /\.\./.test(u) || u.startsWith('.') || u.endsWith('.')) return 'missing';
+  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
+  const sessionid = (process.env.INSTAGRAM_SESSIONID || '').trim();
+  const headers: Record<string, string> = {
+    'x-ig-app-id': '936619743392459',
+    'User-Agent': UA,
+    'Accept': 'application/json',
+    'Accept-Language': 'tr-TR,tr;q=0.9,en;q=0.8',
+    'Referer': `https://www.instagram.com/${u}/`,
+  };
+  if (sessionid) headers['Cookie'] = `sessionid=${sessionid}`;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 7000);
+    try {
+      const resp = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(u)}`, { headers, signal: ctrl.signal });
+      if (resp.status === 404) return 'missing';
+      if (resp.status === 200) {
+        const j: any = await resp.json().catch(() => null);
+        if (j && j.data && j.data.user && j.data.user.username) return 'exists';
+        // 200 ama kullanıcı boş -> giriş duvarı/limit; kesin değil
+        return 'unknown';
+      }
+      // 429 / 401 / 403 -> engellendi, kesin değil
+      return 'unknown';
+    } finally { clearTimeout(timer); }
+  } catch {
+    return 'unknown';
+  }
+}
+
 async function getPaytr(tenantId: string): Promise<{ config: PaytrConfig; testMode: boolean } | null> {
   const s = await prisma.integrationSetting.findFirst({ where: { tenantId, provider: 'paytr', enabled: true } });
   if (!s) return null;
@@ -421,8 +459,12 @@ router.post('/uye/:slug', asyncHandler(async (req: Request, res: Response) => {
   if (!tenantId) throw new ApiError(404, 'Bulunamadi');
   const { ad, instagram, telefon, adres } = req.body || {};
   if (!ad || !instagram || !telefon) throw new ApiError(422, 'Ad soyad, Instagram ve telefon zorunludur');
+  // Instagram kullanıcı adını temizle (@ ve boşluk) + gerçekten var mı kontrol et
+  const igClean = String(instagram).trim().replace(/^@+/, '');
+  const igState = await instagramKullaniciVarMi(igClean);
+  if (igState === 'missing') throw new ApiError(422, `"${igClean}" adlı Instagram kullanıcısı bulunamadı. Lütfen kullanıcı adınızı kontrol edip tekrar deneyin.`);
   const ccount = await prisma.customer.count({ where: { tenantId } });
-  const customer = await prisma.customer.create({ data: { tenantId, musteriNo: 1000 + ccount + 1, ad, instagram, telefon, adres: adres || null, not: 'Üyelik formu' } });
+  const customer = await prisma.customer.create({ data: { tenantId, musteriNo: 1000 + ccount + 1, ad, instagram: igClean, telefon, adres: adres || null, not: 'Üyelik formu' } });
   await promoteReserved(tenantId, customer);
   res.status(201).json({ ok: true });
 }));

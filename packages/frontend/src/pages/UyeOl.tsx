@@ -42,12 +42,13 @@ export default function UyeOl() {
         <div>
           <label className="block text-sm text-slate-600 mb-1">Instagram Kullanıcı Adı *</label>
           <input required value={form.instagram} onChange={(e) => set('instagram', e.target.value)} placeholder="@kullaniciadi" className="w-full px-4 py-2.5 border border-slate-200 rounded-lg" />
+          <p className="text-[11px] text-slate-400 mt-1">Kullanıcı adınız Instagram'da doğrulanır; doğru yazdığınızdan emin olun.</p>
         </div>
         <div>
           <label className="block text-sm text-slate-600 mb-1">Telefon *</label>
           <input required type="tel" value={form.telefon} onChange={(e) => set('telefon', e.target.value)} placeholder="05XX XXX XX XX" className="w-full px-4 py-2.5 border border-slate-200 rounded-lg" />
         </div>
-        <button type="submit" disabled={busy} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-60">{busy ? 'Gönderiliyor...' : 'Üye Ol'}</button>
+        <button type="submit" disabled={busy} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-60">{busy ? 'Kontrol ediliyor...' : 'Üye Ol'}</button>
       </form>
     </div>
   );
