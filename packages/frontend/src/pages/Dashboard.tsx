@@ -2,13 +2,14 @@ import MoneyInput from '../components/MoneyInput';
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
+import { useStore } from '../context/StoreContext';
 import { useAuth } from '../context/AuthContext';
 import { allMenuItems } from '../lib/menu';
 import {
   Landmark, ArrowUpRight, ArrowDownRight, Plus,
   Wallet, Pencil, CreditCard, PiggyBank,
   BarChart3, Activity, Zap, ArrowRight, Calendar, Users,
-  FileText, Receipt, Target
+  FileText, Receipt, Target, Package
 } from 'lucide-react';
 import { Line, Doughnut } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
@@ -18,9 +19,17 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcEleme
 
 export default function Dashboard() {
   const { cariHesaplar, cariHareketler, hareketler, kasaBanka, krediKartlari, birikimHesaplari, cekler, duzenliOdemeler, emanetParalar, addHareket } = useApp();
+  const { products } = useStore();
   const { user, canAccess } = useAuth();
   const adKisa = (user?.fullName || 'Kullanici').split(' ')[0];
   const navigate = useNavigate();
+
+  // Depo: toplam stok adedi + ürün çeşidi
+  const depoStok = useMemo(() => {
+    let adet = 0;
+    for (const p of (products || [])) adet += Number(p?.stokAdeti) || 0;
+    return { adet, cesit: (products || []).length };
+  }, [products]);
 
   const dashShortcuts = (Array.isArray(user?.prefs?.shortcuts) ? user!.prefs!.shortcuts : ['/canli-yayin', '/kasa-satis', '/siparisler', '/depo/urunlerim', '/musterilerim'])
     .map((to: string) => allMenuItems.find((m) => m.to === to))
@@ -155,6 +164,14 @@ export default function Dashboard() {
           <p className="text-[11px] text-gray-400 mt-0.5">{new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => canAccess('/depo/urunlerim') && navigate('/depo/urunlerim')} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg hover:border-[#6c63ff]/40 transition-colors" title="Depodaki toplam stok">
+            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0"><Package size={16} className="text-indigo-600" /></div>
+            <div className="text-left leading-tight">
+              <p className="text-[9px] text-gray-400 font-medium">Depodaki Urun</p>
+              <p className="text-sm font-bold text-gray-800">{depoStok.adet.toLocaleString('tr-TR')} adet</p>
+              <p className="text-[8px] text-gray-400">{depoStok.cesit} cesit urun</p>
+            </div>
+          </button>
           <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-1 py-1">
             {[{ key: 'gunluk', label: 'Gun' }, { key: 'haftalik', label: 'Hafta' }, { key: 'aylik', label: 'Ay' }, { key: '6aylik', label: '6 Ay' }, { key: 'yillik', label: 'Yil' }, { key: 'tumu', label: 'Tumu' }].map(p => (
               <button key={p.key} onClick={() => setPeriyotAndDates(p.key)} className={`px-2.5 py-1 text-[10px] rounded-md font-medium transition-all ${periyot === p.key ? 'bg-[#6c63ff] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{p.label}</button>

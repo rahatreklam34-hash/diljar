@@ -479,17 +479,37 @@ router.get('/chat/:slug/messages', asyncHandler(async (req: Request, res: Respon
 }));
 
 // ───── Uyelik formu (public) ─────
+const igNorm = (s: string) => (s || '').toLowerCase().replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/^@/, '').trim();
+
 router.post('/uye/:slug', asyncHandler(async (req: Request, res: Response) => {
   const tenantId = await tenantBySlug(req.params.slug);
   if (!tenantId) throw new ApiError(404, 'Bulunamadi');
   const { ad, instagram, telefon, adres } = req.body || {};
   if (!ad || !instagram || !telefon) throw new ApiError(422, 'Ad soyad, Instagram ve telefon zorunludur');
-  // Instagram kullanıcı adını temizle (@ ve boşluk) + gerçekten var mı kontrol et
   const igClean = String(instagram).trim().replace(/^@+/, '');
+  // Mükerrer kontrol: aynı Instagram (veya telefon) zaten kayıtlıysa yeni kayıt AÇMA.
+  const igN = igNorm(igClean);
+  const telN = String(telefon).replace(/\D/g, '');
+  const mevcutlar = await prisma.customer.findMany({ where: { tenantId } });
+  const existing = mevcutlar.find((c) =>
+    (igN && igNorm(c.instagram || '') === igN) ||
+    (telN.length >= 7 && (c.telefon || '').replace(/\D/g, '') === telN)
+  );
+  if (existing) {
+    // Eksik bilgileri tamamla (üzerine yazma yok), rezerve siparişleri onayla, mükerrer kayıt oluşturma.
+    const patch: any = {};
+    if (!existing.instagram && igClean) patch.instagram = igClean;
+    if (!existing.telefon && telefon) patch.telefon = telefon;
+    if ((!existing.ad || igNorm(existing.ad) === igNorm(existing.instagram || '')) && ad) patch.ad = ad;
+    if (!existing.adres && adres) patch.adres = adres;
+    const cust = Object.keys(patch).length ? await prisma.customer.update({ where: { id: existing.id }, data: patch }) : existing;
+    await promoteReserved(tenantId, cust);
+    return res.status(200).json({ ok: true, existed: true });
+  }
+  // Yeni kayıt -> Instagram gerçekten var mı kontrol et
   const igState = await instagramKullaniciVarMi(igClean);
   if (igState === 'missing') throw new ApiError(422, `"${igClean}" adlı Instagram kullanıcısı bulunamadı. Lütfen kullanıcı adınızı kontrol edip tekrar deneyin.`);
-  const ccount = await prisma.customer.count({ where: { tenantId } });
-  const customer = await prisma.customer.create({ data: { tenantId, musteriNo: 1000 + ccount + 1, ad, instagram: igClean, telefon, adres: adres || null, not: 'Üyelik formu' } });
+  const customer = await prisma.customer.create({ data: { tenantId, musteriNo: 1000 + mevcutlar.length + 1, ad, instagram: igClean, telefon, adres: adres || null, not: 'Üyelik formu' } });
   await promoteReserved(tenantId, customer);
   res.status(201).json({ ok: true });
 }));
