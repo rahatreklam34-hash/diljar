@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import api from './lib/api';
@@ -159,6 +159,11 @@ function PrimaryStoreRedirect() {
   if (!slug) return <Navigate to="/login" replace />;
   return <VideoMagaza slug={slug} />;
 }
+// Eski /magaza/:slug linklerini yeni mağaza yapısına (/m/:slug) yönlendir
+function MagazaRedirect() {
+  const { slug } = useParams();
+  return <Navigate to={`/m/${slug || ''}`} replace />;
+}
 
 export default function App() {
   return (
@@ -170,7 +175,7 @@ export default function App() {
           <Route path="/m/:slug" element={<VideoMagaza />} />
           <Route path="/m/:slug/urun/:id" element={<UrunDetayPublic />} />
           <Route path="/urun/:id" element={<UrunDetayPublic />} />
-          <Route path="/magaza/:slug" element={<PublicStore />} />
+          <Route path="/magaza/:slug" element={<MagazaRedirect />} />
           <Route path="/sohbet/:slug" element={<PublicChat />} />
           <Route path="/uye/:slug" element={<UyeOl />} />
           <Route path="/sepet/:token" element={<Sepet />} />

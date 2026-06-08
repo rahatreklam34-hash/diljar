@@ -310,9 +310,17 @@ router.post('/store/:slug/order', asyncHandler(async (req: Request, res: Respons
     const kamp = await campaignAdjust(tx, tenantId, orderItems);
     indirim = Math.min(araToplam, indirim + (kamp.indirim || 0));
     const toplam = Math.max(0, araToplam - indirim);
-    const cust = await tx.customer.create({
-      data: { tenantId, ...(await (async () => { const c = await tx.customer.count({ where: { tenantId } }); return { musteriNo: 1000 + c + 1 }; })()), ad: customer.ad, telefon: customer.telefon, email: customer.email || null, adres: customer.adres || null, not: 'Online magaza siparisi' },
-    });
+    // Mükerrer müşteri önleme: aynı telefon zaten varsa onu kullan
+    const telN = String(customer.telefon || '').replace(/\D/g, '');
+    const mevcutlar = await tx.customer.findMany({ where: { tenantId } });
+    let cust = mevcutlar.find((c) => telN.length >= 7 && (c.telefon || '').replace(/\D/g, '') === telN) || null;
+    if (!cust) {
+      cust = await tx.customer.create({
+        data: { tenantId, musteriNo: 1000 + mevcutlar.length + 1, ad: customer.ad, telefon: customer.telefon, email: customer.email || null, adres: customer.adres || null, not: 'Online magaza siparisi' },
+      });
+    } else if (!cust.adres && customer.adres) {
+      await tx.customer.update({ where: { id: cust.id }, data: { adres: customer.adres } });
+    }
     const order = await tx.storeOrder.create({
       data: { tenantId, ...(await nextOrderNo(tx, tenantId)), customerId: cust.id, kanal: 'online', durum: 'yeni', items: orderItems, araToplam, indirim, toplam, not: customer.not || null },
     });
@@ -361,7 +369,15 @@ router.post('/paytr/callback', express.urlencoded({ extended: false }), asyncHan
   const paytr = await getPaytr(order.tenantId);
   if (!paytr || !verifyPaytrCallback(paytr.config, body)) { res.send('OK'); return; }
   if (body.status === 'success') {
-    await prisma.storeOrder.update({ where: { id: order.id }, data: { durum: 'hazirlaniyor', not: 'Odeme alindi (PayTR)' } });
+    const already = (order.gelirKaydedilen || 0) > 0;
+    await prisma.$transaction(async (tx) => {
+      await tx.storeOrder.update({ where: { id: order.id }, data: { durum: 'hazirlaniyor', tahsilat: order.toplam, gelirKaydedilen: order.toplam, odemeYontemi: 'Kredi Kartı (PayTR)', not: 'Odeme alindi (PayTR)' } });
+      if (!already && (order.toplam || 0) > 0) {
+        const now = new Date();
+        const no = order.orderNo ? `${order.orderYil}-${String(order.orderNo).padStart(3, '0')}` : order.id.slice(-5);
+        await tx.hareket.create({ data: { tenantId: order.tenantId, tarih: now.toISOString().slice(0, 10), saat: now.toTimeString().slice(0, 5), aciklama: `Online ödeme (PayTR) #${no}`, tutar: order.toplam, tip: 'gelir', kategori: 'Online Satış', createdBy: null } });
+      }
+    });
   } else {
     await prisma.storeOrder.update({ where: { id: order.id }, data: { durum: 'iptal', not: 'Odeme basarisiz (PayTR)' } });
   }

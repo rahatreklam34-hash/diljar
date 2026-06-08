@@ -120,7 +120,7 @@ export default function Raporlar() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-800">Raporlar</h1>
           <p className="text-sm text-gray-500">Finansal raporlarinizi goruntuleyin ve disari aktarin.</p>
@@ -247,7 +247,7 @@ export default function Raporlar() {
                 <h2 className="text-sm font-semibold text-gray-700">Kategori Ozeti</h2>
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full">
+                <table className="w-full min-w-[820px]">
                   <thead>
                     <tr className="bg-gray-50 border-b border-gray-100">
                       <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Kategori</th>
@@ -284,7 +284,7 @@ export default function Raporlar() {
               <span className="text-xs text-gray-400">{filteredHareketler.length} kayit</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[820px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
                     <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Tarih</th>
@@ -377,7 +377,7 @@ export default function Raporlar() {
               <span className="text-xs text-gray-400">{cariOzet.length} cari</span>
             </div>
             <div className="overflow-x-auto">
-              <table className="w-full">
+              <table className="w-full min-w-[820px]">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-100">
                     <th className="text-left px-6 py-3 text-xs font-semibold text-gray-500 uppercase">Cari Adi</th>

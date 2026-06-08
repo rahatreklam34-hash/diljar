@@ -342,7 +342,7 @@ export default function CanliYayinSatis() {
           <Stat icon={ShoppingBag} label="Sipariş" value={stats.onaylandi} />
           <Stat icon={Users} label="İzleyici" value={stream ? viewers.toLocaleString('tr-TR') : '0'} />
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <button onClick={openHistory} className="inline-flex items-center gap-2 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-200"><History size={16} /> Geçmiş</button>
           <button onClick={() => setKampOpen(true)} className="inline-flex items-center gap-2 bg-amber-100 text-amber-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-amber-200"><Tag size={16} /> Kampanyalar</button>
           <button onClick={() => setReportOpen(true)} className="inline-flex items-center gap-2 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-200"><BarChart3 size={16} /> Raporlar</button>
@@ -431,12 +431,12 @@ export default function CanliYayinSatis() {
             <span className="ml-auto flex items-center gap-2">
               <span className="relative">
                 <Search size={13} className="absolute left-2 top-1.5 text-slate-400" />
-                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ara (ürün, kod, müşteri, satıcı)" className="pl-7 pr-2 py-1 text-xs border border-slate-200 rounded-lg w-56 outline-none" />
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Ara (ürün, kod, müşteri, satıcı)" className="pl-7 pr-2 py-1 text-xs border border-slate-200 rounded-lg w-40 sm:w-56 outline-none" />
               </span>
             </span>
           </div>
           <div className="overflow-x-auto max-h-[58vh] overflow-y-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm min-w-[920px]">
               <thead className="bg-slate-50 text-slate-500 text-left sticky top-0"><tr><th className="px-3 py-2">Kullanıcı</th><th className="px-3 py-2">Ürün</th><th className="px-3 py-2">Kod</th><th className="px-3 py-2">Beden</th><th className="px-3 py-2">Satıcı</th><th className="px-3 py-2">Tutar</th><th className="px-3 py-2">Durum</th><th className="px-3 py-2">Saat</th><th className="px-3 py-2">İşlem</th></tr></thead>
               <tbody>
                 {filtered.map((o) => {

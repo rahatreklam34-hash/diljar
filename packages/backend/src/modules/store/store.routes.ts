@@ -90,6 +90,16 @@ async function returnStock(tx: any, tenantId: string, items: any[]) {
   }
 }
 
+// Iptal/iadede daha once kasaya islenen geliri geri al (ters gider kaydi) - bir kez
+async function reverseIncome(tx: any, tenantId: string, order: any) {
+  const kayitli = Number(order?.gelirKaydedilen) || 0;
+  if (kayitli <= 0.001) return;
+  const now = new Date();
+  const no = order.orderNo ? `${order.orderYil}-${String(order.orderNo).padStart(3, '0')}` : String(order.id).slice(-5);
+  await tx.hareket.create({ data: { tenantId, tarih: now.toISOString().slice(0, 10), saat: now.toTimeString().slice(0, 5), aciklama: `Sipariş iptal/iade #${no}`, tutar: kayitli, tip: 'gider', kategori: 'İade/İptal', createdBy: null } });
+  await tx.storeOrder.update({ where: { id: order.id }, data: { gelirKaydedilen: 0, tahsilat: 0 } });
+}
+
 // ───────── Bootstrap: tum depo/magaza verisi ─────────
 router.get('/bootstrap', asyncHandler(async (req: Request, res: Response) => {
   const t = req.tenantId!;
@@ -308,6 +318,12 @@ router.patch('/orders/:id', asyncHandler(async (req: Request, res: Response) => 
         (body as any).toplam = Math.max(0, adj.toplam + kargo);
       }
     }
+    // İptal'e geçiş: stok iadesi + kasaya işlenen gelirin geri alımı (yalnız bir kez)
+    if (body.durum === 'iptal' && found.durum !== 'iptal') {
+      const oItems: any[] = Array.isArray(found.items) ? (found.items as any[]) : [];
+      await returnStock(tx, req.tenantId!, oItems);
+      await reverseIncome(tx, req.tenantId!, found);
+    }
     return tx.storeOrder.update({ where: { id: req.params.id }, data: body });
   });
   if (gelirDelta > 0.001) {
@@ -349,6 +365,7 @@ router.post('/orders/:id/cancel', asyncHandler(async (req: Request, res: Respons
     if (!o) throw new ApiError(404, 'Siparis bulunamadi');
     const items: any[] = Array.isArray(o.items) ? (o.items as any) : [];
     await returnStock(tx, req.tenantId!, items);
+    if (o.durum !== 'iptal') await reverseIncome(tx, req.tenantId!, o);
     return tx.storeOrder.update({ where: { id: o.id }, data: { durum: 'iptal' } });
   });
   await logEvent(req.tenantId!, updated.id, who, 'Sepet iptal edildi (stok iade)');
@@ -380,6 +397,7 @@ router.delete('/orders/:id', asyncHandler(async (req: Request, res: Response) =>
   await prisma.$transaction(async (tx) => {
     const items: any[] = Array.isArray(found.items) ? (found.items as any) : [];
     await returnStock(tx, req.tenantId!, items);
+    if (found.durum !== 'iptal') await reverseIncome(tx, req.tenantId!, found);
     await tx.storeOrder.delete({ where: { id: req.params.id } });
   });
   res.json({ ok: true });

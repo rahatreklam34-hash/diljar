@@ -506,7 +506,7 @@ export default function Sepet() {
             <button onClick={() => { setYayinOpen(false); document.getElementById('sepetim')?.scrollIntoView(); }} className="relative p-1.5 rounded-lg hover:bg-slate-100"><ShoppingBag size={20} className="text-slate-700" />{adet > 0 && <span className="absolute top-0 right-0 w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] flex items-center justify-center">{adet}</span>}</button>
           </div>
 
-          <div className="max-w-md mx-auto p-4 space-y-3">
+          <div className="max-w-md lg:max-w-4xl mx-auto p-4 space-y-3">
             {/* Banner */}
             <div className="rounded-2xl bg-indigo-50 border border-indigo-100 p-3 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center"><Radio size={20} /></div>
@@ -590,7 +590,7 @@ export default function Sepet() {
             <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><ShoppingBag size={16} className="text-indigo-600" /> Kataloglar</p><p className="text-[11px] text-slate-400">Tüm ürün koleksiyonlarını keşfet</p></div>
             <div className="w-8" />
           </div>
-          <div className="max-w-md mx-auto p-4 space-y-5">
+          <div className="max-w-md lg:max-w-4xl mx-auto p-4 space-y-5">
             {!katalog ? <p className="text-center text-slate-400 py-10">Yükleniyor...</p> : (
               <>
                 <div className="grid grid-cols-2 gap-3">
@@ -620,7 +620,7 @@ export default function Sepet() {
             <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><Sparkles size={16} className="text-indigo-600" /> Yeni Eklenenler</p></div>
             <div className="w-8" />
           </div>
-          <div className="max-w-md mx-auto p-4 space-y-3">
+          <div className="max-w-md lg:max-w-4xl mx-auto p-4 space-y-3">
             <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-700 text-white p-3 flex items-center gap-3">
               <Zap size={22} className="text-amber-300" />
               <div className="flex-1"><p className="text-sm font-semibold">Her gün yeni ürünler ekleniyor!</p><p className="text-[11px] text-white/70">Kaçırmadan keşfedin.</p></div>
@@ -662,7 +662,7 @@ export default function Sepet() {
               <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><Package size={16} className="text-indigo-600" /> Siparişlerim</p></div>
               <div className="w-8" />
             </div>
-            <div className="max-w-md mx-auto p-4 space-y-3">
+            <div className="max-w-md lg:max-w-4xl mx-auto p-4 space-y-3">
               <div className="grid grid-cols-4 gap-2">
                 <div className="bg-white rounded-xl border border-slate-100 p-2 text-center"><p className="text-lg font-bold text-slate-800">{sipData.ozet?.toplam || 0}</p><p className="text-[10px] text-slate-400">Sipariş</p></div>
                 <div className="bg-white rounded-xl border border-slate-100 p-2 text-center"><p className="text-lg font-bold text-green-600">{sipData.ozet?.teslim || 0}</p><p className="text-[10px] text-slate-400">Teslim</p></div>
@@ -719,7 +719,7 @@ export default function Sepet() {
               <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><Truck size={16} className="text-indigo-600" /> Kargo Takibi</p></div>
               <div className="w-8" />
             </div>
-            <div className="max-w-md mx-auto p-4 space-y-3">
+            <div className="max-w-md lg:max-w-4xl mx-auto p-4 space-y-3">
               <div className="bg-white rounded-2xl border border-slate-100 p-4 grid grid-cols-2 gap-3 text-sm">
                 <div><p className="text-[11px] text-slate-400">Sipariş No</p><p className="font-bold text-slate-800">{o.orderNo ? `${o.orderYil}-${String(o.orderNo).padStart(3, '0')}` : '#' + o.id.slice(-5)}</p></div>
                 <div><p className="text-[11px] text-slate-400">Kargo Takip No</p><p className="font-bold text-slate-800 font-mono">{o.kargoTakip || '—'}</p></div>
@@ -755,7 +755,7 @@ export default function Sepet() {
             <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><MessageCircle size={16} className="text-indigo-600" /> Destek Merkezi</p><p className="text-[11px] text-slate-400">Size nasıl yardımcı olabiliriz?</p></div>
             <div className="w-8" />
           </div>
-          <div className="max-w-md mx-auto p-4 space-y-4">
+          <div className="max-w-md lg:max-w-4xl mx-auto p-4 space-y-4">
             <div className="bg-white rounded-2xl border border-slate-100 p-4">
               <h3 className="font-bold text-slate-800 mb-1">Yeni Destek Talebi Oluştur</h3>
               <p className="text-xs text-slate-400 mb-3">Talebinizle ilgili kategori seçerek bizimle paylaşın.</p>
