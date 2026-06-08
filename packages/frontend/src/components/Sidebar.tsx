@@ -82,8 +82,8 @@ export default function Sidebar() {
     iconBtn: 'text-slate-400 hover:text-white hover:bg-white/10',
     card: 'bg-white/[0.04] border-white/10 hover:bg-white/[0.07]',
     cardText: 'text-slate-200',
-    groupTitle: 'text-slate-300',
-    groupBar: 'bg-slate-500',
+    groupTitle: 'text-white',
+    groupBar: 'bg-gradient-to-b from-violet-400 to-indigo-500',
     rozet: 'bg-white/[0.06]',
     itemText: 'text-slate-300',
     itemHover: 'hover:bg-white/[0.06]',
@@ -103,10 +103,10 @@ export default function Sidebar() {
     iconBtn: 'text-slate-400 hover:text-slate-700 hover:bg-slate-100',
     card: 'bg-white border-slate-100 hover:bg-slate-50 shadow-sm',
     cardText: 'text-slate-700',
-    groupTitle: 'text-slate-500',
-    groupBar: 'bg-indigo-500',
+    groupTitle: 'text-slate-800',
+    groupBar: 'bg-gradient-to-b from-indigo-400 to-violet-500',
     rozet: 'bg-slate-50',
-    itemText: 'text-slate-600',
+    itemText: 'text-slate-500',
     itemHover: 'hover:bg-slate-50',
     chevron: 'text-slate-400',
     section: 'bg-slate-50/60 border-slate-100',
@@ -120,14 +120,14 @@ export default function Sidebar() {
   };
 
   const renderItem = (item: MenuItem, gi: number) => (
-    <NavLink key={item.to} to={item.to} onClick={() => setMobileOpen(false)} className={({ isActive }) => `group flex items-center gap-3 px-2.5 py-2.5 my-0.5 rounded-xl text-sm transition-all duration-200 ${isActive ? t.activeItem : `${t.itemText} ${t.itemHover}`}`}>
+    <NavLink key={item.to} to={item.to} onClick={() => setMobileOpen(false)} className={({ isActive }) => `group flex items-center gap-2.5 px-2.5 py-2 my-0.5 rounded-lg text-[13px] transition-all duration-200 ${isActive ? t.activeItem : `${t.itemText} ${t.itemHover}`}`}>
       {({ isActive }) => (
         <>
-          <span className={`flex items-center justify-center w-8 h-8 rounded-lg shrink-0 ${isActive ? t.activeRozet : GROUP_GLOW[gi]}`}>
-            <item.icon size={16} className={isActive ? t.activeIcon : GROUP_COLORS[gi]} />
+          <span className={`flex items-center justify-center w-6 h-6 rounded-md shrink-0 transition-colors ${isActive ? t.activeRozet : `${GROUP_GLOW[gi]} group-hover:scale-110`}`}>
+            <item.icon size={13} className={isActive ? t.activeIcon : GROUP_COLORS[gi]} strokeWidth={2} />
           </span>
           {!isIconOnly && <span className="truncate flex-1">{item.label}</span>}
-          {!isIconOnly && <ChevronRight size={15} className={isActive ? t.activeChevron : t.chevron} />}
+          {!isIconOnly && <ChevronRight size={13} className={`shrink-0 transition-transform ${isActive ? `${t.activeChevron} translate-x-0.5` : `${t.chevron} opacity-0 group-hover:opacity-100`}`} />}
         </>
       )}
     </NavLink>
