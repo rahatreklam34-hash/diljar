@@ -15,35 +15,43 @@ const router = Router();
 
 // Instagram kullanıcı adı gerçekten var mı? -> 'exists' | 'missing' | 'unknown'
 // - Format hatalıysa kesin 'missing' (kayıt reddedilir).
-// - Canlı kontrol: INSTAGRAM_SESSIONID tanımlıysa kimlik doğrulamalı sorgu yapılır (güvenilir 200/404).
-//   Sunucu IP'si Instagram tarafından engellenirse (429/redirect) sonuç 'unknown' olur ve kayıt engellenmez.
+// - Canlı kontrol: RapidAPI "Instagram Scraper Stable" üzerinden yapılır (INSTAGRAM_RAPIDAPI_KEY).
+//   Var: 200 + JSON içinde username/pk. Yok: 200 + { error: "...does not exist..." }.
+//   Anahtar yoksa / API erişilemezse / kota dolarsa -> 'unknown' (kayıt engellenmez, fail-open).
+// - Aynı kullanıcı adı tekrar sorgulanmaz (önbellek) -> kota korunur.
+const igCache = new Map<string, { state: 'exists' | 'missing'; exp: number }>();
+const IG_TTL_EXISTS = 1000 * 60 * 60 * 24 * 30; // var olanlar 30 gün
+const IG_TTL_MISSING = 1000 * 60 * 30;          // olmayanlar 30 dk (sonradan açılabilir)
+
 async function instagramKullaniciVarMi(raw: string): Promise<'exists' | 'missing' | 'unknown'> {
   const u = String(raw || '').trim().replace(/^@+/, '').toLowerCase();
   // Format kontrolü: 1-30 karakter, yalnız harf/rakam/nokta/alt çizgi; ardışık nokta yok; nokta ile başlamaz/bitmez
   if (!/^[a-z0-9._]{1,30}$/.test(u) || /\.\./.test(u) || u.startsWith('.') || u.endsWith('.')) return 'missing';
-  const UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
-  const sessionid = (process.env.INSTAGRAM_SESSIONID || '').trim();
-  const headers: Record<string, string> = {
-    'x-ig-app-id': '936619743392459',
-    'User-Agent': UA,
-    'Accept': 'application/json',
-    'Accept-Language': 'tr-TR,tr;q=0.9,en;q=0.8',
-    'Referer': `https://www.instagram.com/${u}/`,
-  };
-  if (sessionid) headers['Cookie'] = `sessionid=${sessionid}`;
+  const cached = igCache.get(u);
+  if (cached && cached.exp > Date.now()) return cached.state;
+  const key = (process.env.INSTAGRAM_RAPIDAPI_KEY || '').trim();
+  if (!key) return 'unknown'; // anahtar tanımlı değilse kontrol pasif
+  const host = (process.env.INSTAGRAM_RAPIDAPI_HOST || 'instagram-scraper-stable-api.p.rapidapi.com').trim();
+  const url = (process.env.INSTAGRAM_RAPIDAPI_URL || `https://${host}/ig_get_fb_profile_v3.php`).trim();
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 7000);
+    const timer = setTimeout(() => ctrl.abort(), 9000);
     try {
-      const resp = await fetch(`https://www.instagram.com/api/v1/users/web_profile_info/?username=${encodeURIComponent(u)}`, { headers, signal: ctrl.signal });
-      if (resp.status === 404) return 'missing';
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'x-rapidapi-host': host, 'x-rapidapi-key': key },
+        body: 'username_or_url=' + encodeURIComponent(u),
+        signal: ctrl.signal,
+      });
       if (resp.status === 200) {
         const j: any = await resp.json().catch(() => null);
-        if (j && j.data && j.data.user && j.data.user.username) return 'exists';
-        // 200 ama kullanıcı boş -> giriş duvarı/limit; kesin değil
+        if (j && typeof j === 'object') {
+          if (j.username || j.pk || j.id) { igCache.set(u, { state: 'exists', exp: Date.now() + IG_TTL_EXISTS }); return 'exists'; }
+          if (j.error) { igCache.set(u, { state: 'missing', exp: Date.now() + IG_TTL_MISSING }); return 'missing'; }
+        }
         return 'unknown';
       }
-      // 429 / 401 / 403 -> engellendi, kesin değil
+      // 401/403 (abonelik), 429 (kota), 5xx -> kesin değil
       return 'unknown';
     } finally { clearTimeout(timer); }
   } catch {
