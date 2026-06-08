@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import express from 'express';
+import https from 'https';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
 import { prisma } from '../../lib/prisma';
@@ -23,6 +24,25 @@ const igCache = new Map<string, { state: 'exists' | 'missing'; exp: number }>();
 const IG_TTL_EXISTS = 1000 * 60 * 60 * 24 * 30; // var olanlar 30 gün
 const IG_TTL_MISSING = 1000 * 60 * 30;          // olmayanlar 30 dk (sonradan açılabilir)
 
+// IPv4'e zorlanmış HTTPS POST (sunucunun IPv6 rotası RapidAPI'ye takılıyor; family:4 ile çözülür)
+function httpsPostForm(host: string, path: string, headers: Record<string, string>, body: string, timeoutMs: number): Promise<{ status: number; text: string }> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      { method: 'POST', host, path, family: 4, headers: { ...headers, 'Content-Length': Buffer.byteLength(body) }, timeout: timeoutMs },
+      (res) => {
+        let data = '';
+        res.setEncoding('utf8');
+        res.on('data', (c) => { data += c; });
+        res.on('end', () => resolve({ status: res.statusCode || 0, text: data }));
+      }
+    );
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(new Error('timeout')); });
+    req.write(body);
+    req.end();
+  });
+}
+
 async function instagramKullaniciVarMi(raw: string): Promise<'exists' | 'missing' | 'unknown'> {
   const u = String(raw || '').trim().replace(/^@+/, '').toLowerCase();
   // Format kontrolü: 1-30 karakter, yalnız harf/rakam/nokta/alt çizgi; ardışık nokta yok; nokta ile başlamaz/bitmez
@@ -32,28 +52,25 @@ async function instagramKullaniciVarMi(raw: string): Promise<'exists' | 'missing
   const key = (process.env.INSTAGRAM_RAPIDAPI_KEY || '').trim();
   if (!key) return 'unknown'; // anahtar tanımlı değilse kontrol pasif
   const host = (process.env.INSTAGRAM_RAPIDAPI_HOST || 'instagram-scraper-stable-api.p.rapidapi.com').trim();
-  const url = (process.env.INSTAGRAM_RAPIDAPI_URL || `https://${host}/ig_get_fb_profile_v3.php`).trim();
+  const path = (process.env.INSTAGRAM_RAPIDAPI_PATH || '/ig_get_fb_profile_v3.php').trim();
   try {
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 9000);
-    try {
-      const resp = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'x-rapidapi-host': host, 'x-rapidapi-key': key },
-        body: 'username_or_url=' + encodeURIComponent(u),
-        signal: ctrl.signal,
-      });
-      if (resp.status === 200) {
-        const j: any = await resp.json().catch(() => null);
-        if (j && typeof j === 'object') {
-          if (j.username || j.pk || j.id) { igCache.set(u, { state: 'exists', exp: Date.now() + IG_TTL_EXISTS }); return 'exists'; }
-          if (j.error) { igCache.set(u, { state: 'missing', exp: Date.now() + IG_TTL_MISSING }); return 'missing'; }
-        }
-        return 'unknown';
+    const resp = await httpsPostForm(
+      host, path,
+      { 'Content-Type': 'application/x-www-form-urlencoded', 'x-rapidapi-host': host, 'x-rapidapi-key': key },
+      'username_or_url=' + encodeURIComponent(u),
+      9000,
+    );
+    if (resp.status === 200) {
+      let j: any = null;
+      try { j = JSON.parse(resp.text); } catch { j = null; }
+      if (j && typeof j === 'object') {
+        if (j.username || j.pk || j.id) { igCache.set(u, { state: 'exists', exp: Date.now() + IG_TTL_EXISTS }); return 'exists'; }
+        if (j.error) { igCache.set(u, { state: 'missing', exp: Date.now() + IG_TTL_MISSING }); return 'missing'; }
       }
-      // 401/403 (abonelik), 429 (kota), 5xx -> kesin değil
       return 'unknown';
-    } finally { clearTimeout(timer); }
+    }
+    // 401/403 (abonelik), 429 (kota), 5xx -> kesin değil
+    return 'unknown';
   } catch {
     return 'unknown';
   }
