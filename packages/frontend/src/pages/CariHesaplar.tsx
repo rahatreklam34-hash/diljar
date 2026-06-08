@@ -305,9 +305,9 @@ export default function CariHesaplar() {
           <span className="text-gray-700 font-medium">{selectedCari.ad}</span>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="text-xl font-bold text-gray-800">{selectedCari.ad}</h1>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button onClick={() => openHareketModal(selectedCari, 'odeme')} className="px-2 py-1.5 text-[10px] font-medium bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 flex items-center gap-1">Odeme Yap</button>
             <button onClick={() => openHareketModal(selectedCari, 'tahsilat')} className="px-2 py-1.5 text-[10px] font-medium bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 flex items-center gap-1">Tahsilat Al</button>
             <button onClick={() => openHareketModal(selectedCari, 'alis_fatura')} className="px-2 py-1.5 text-[10px] font-medium bg-red-50 text-red-700 rounded-lg hover:bg-red-100 flex items-center gap-1">Alis Faturasi</button>
@@ -317,7 +317,7 @@ export default function CariHesaplar() {
           </div>
         </div>
 
-        <div className="grid grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
           <div className="bg-white rounded-xl p-3 border border-gray-100 shadow-sm">
             <p className="text-[9px] text-gray-400 mb-1">Toplam Alis</p>
             <p className="text-lg font-bold text-red-600">₺{fmt(toplamAlis)}</p>
@@ -343,9 +343,9 @@ export default function CariHesaplar() {
         </div>
 
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-          <div className="flex items-center gap-1 px-4 border-b border-gray-100">
+          <div className="flex items-center gap-1 px-4 border-b border-gray-100 overflow-x-auto">
             {dokumTabs.map(t => (
-              <button key={t} onClick={() => setDetailTab(t)} className={`px-3 py-3 text-[11px] font-medium border-b-2 transition-colors ${detailTab === t ? 'border-[#6c63ff] text-[#6c63ff]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>{dokumTabLabels[t]}</button>
+              <button key={t} onClick={() => setDetailTab(t)} className={`px-3 py-3 text-[11px] font-medium border-b-2 whitespace-nowrap transition-colors ${detailTab === t ? 'border-[#6c63ff] text-[#6c63ff]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>{dokumTabLabels[t]}</button>
             ))}
           </div>
 
@@ -374,6 +374,7 @@ export default function CariHesaplar() {
                   <button onClick={() => exportPDF(selectedCari)} className="px-3 py-1.5 text-[10px] border border-red-200 rounded-lg text-red-600 flex items-center gap-1 hover:bg-red-50"><FileText size={10} /> PDF</button>
                 </div>
 
+                <div className="overflow-x-auto">
                 <table className="w-full text-[10px]">
                   <thead>
                     <tr className="border-b border-gray-200 text-gray-400">
@@ -423,16 +424,19 @@ export default function CariHesaplar() {
                     </tfoot>
                   )}
                 </table>
+                </div>
               </div>
             )}
 
             {detailTab === 'acik' && (
               <div>
                 <p className="text-xs text-gray-500 mb-3">Acik faturalar ({acikIslemler.length} adet)</p>
+                <div className="overflow-x-auto">
                 <table className="w-full text-[10px]">
                   <thead><tr className="border-b border-gray-200 text-gray-400"><th className="text-left py-2">Tarih</th><th className="text-left py-2">Aciklama</th><th className="text-right py-2">Tutar</th><th className="text-left py-2">Tip</th></tr></thead>
                   <tbody>{acikIslemler.map(h => (<tr key={h.id} className="border-b border-gray-50"><td className="py-2 text-gray-600">{h.tarih}</td><td className="py-2 text-gray-700">{h.aciklama}</td><td className="py-2 text-right font-medium text-gray-700">₺{fmt(h.tutar)}</td><td className="py-2">{tipBadge(h.tip)}</td></tr>))}{acikIslemler.length === 0 && <tr><td colSpan={4} className="text-center py-6 text-gray-400">Acik fatura yok</td></tr>}</tbody>
                 </table>
+                </div>
               </div>
             )}
 
@@ -505,13 +509,13 @@ export default function CariHesaplar() {
   return (
     <div className="space-y-5">
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-xl font-bold text-gray-800">Cari Hesaplar</h1>
           <p className="text-[11px] text-gray-400">Cari hesaplarinizin hareketlerini takip edin.</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-[11px] font-medium">
+          <div className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-600 rounded-lg text-[11px] font-medium">
             <Calendar size={13} />
             {new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}
           </div>
@@ -522,7 +526,7 @@ export default function CariHesaplar() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <div className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm flex items-center justify-between hover:border-[#6c63ff]/30 transition-colors cursor-default">
           <div>
             <p className="text-[9px] text-gray-400 uppercase font-semibold tracking-wide">Toplam Cari</p>

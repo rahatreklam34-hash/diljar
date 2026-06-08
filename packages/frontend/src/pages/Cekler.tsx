@@ -117,18 +117,18 @@ export default function Cekler() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h1 className="text-xl font-bold text-gray-800">Cekler</h1><p className="text-[11px] text-gray-400">Alinan ve verilen ceklerinizi takip edin.</p></div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 px-3 py-2 bg-white border border-gray-200 rounded-lg flex items-center gap-1.5"><Calendar size={12} />{new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}</span>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="hidden sm:flex text-xs text-gray-500 px-3 py-2 bg-white border border-gray-200 rounded-lg items-center gap-1.5"><Calendar size={12} />{new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}</span>
           <button onClick={() => setHizliMenuOpen(true)} className="flex items-center gap-1 px-3 py-2 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-medium hover:bg-amber-100" title="Ctrl+Space"><Zap size={12} /> Hizli Islem <span className="text-[8px] text-amber-400 ml-1">(Ctrl+Space)</span></button>
           <button onClick={openCreate} className="flex items-center gap-1.5 px-4 py-2 bg-[#6c63ff] text-white rounded-lg text-xs font-medium hover:bg-[#5b54e6]"><Plus size={14} /> Yeni Cek</button>
         </div>
       </div>
 
-      <div className="grid grid-cols-12 gap-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
         {/* Left Section */}
-        <div className="col-span-9 space-y-4">
+        <div className="lg:col-span-9 space-y-4">
           {/* Summary Cards with mini line charts */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-center gap-4 mb-3">
@@ -137,7 +137,7 @@ export default function Cekler() {
               ))}
               <span className="ml-auto text-[9px] text-gray-400">Bu Ay</span>
             </div>
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div>
                 <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center"><ArrowDownRight size={18} className="text-green-500" /></div><div><p className="text-[9px] text-gray-400">Acik Alinan Cek</p><p className="text-lg font-bold text-gray-800">{fmt(alinanToplam)}</p><p className="text-[9px] text-gray-400">{alinanAcik.length} cek</p></div></div>
                 <div className="h-[50px]"><Line data={{ labels: ['1', '5', '10', '15', '20', '25', '30'], datasets: [{ data: [200000, 350000, 500000, 700000, 900000, 1100000, alinanToplam], borderColor: '#10b981', backgroundColor: 'rgba(16,185,129,0.05)', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 1.5 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { y: { display: false }, x: { display: false } } }} /></div>
@@ -156,7 +156,7 @@ export default function Cekler() {
           {/* Cek Dagilimi */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
             <h3 className="text-[12px] font-semibold text-gray-700 mb-3">Cek Dagilimi</h3>
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               {[
                 { label: 'Islemdeki', value: islemdekiToplam, count: islemdeki.length, color: '#3b82f6' },
                 { label: 'Tahsil Edilen', value: tahsilToplam, count: tahsilEdilen.length, color: '#10b981' },
@@ -173,14 +173,14 @@ export default function Cekler() {
 
           {/* Tabs + Table */}
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-4 px-4 border-b border-gray-100">
+            <div className="flex items-center gap-4 px-4 border-b border-gray-100 overflow-x-auto">
               {[{ k: 'islemdeki', l: 'Islemdeki Cekler' }, { k: 'tahsil', l: 'Tahsil Edilen Cekler' }, { k: 'odenen', l: 'Odenen Cekler' }, { k: 'vadesi', l: 'Vadesi Gelen Cekler' }, { k: 'all', l: 'Tumu' }].map(t => (
-                <button key={t.k} onClick={() => { setTab(t.k); setPage(1); }} className={`py-3 text-[11px] font-medium border-b-2 ${tab === t.k ? 'border-[#6c63ff] text-[#6c63ff]' : 'border-transparent text-gray-400'}`}>{t.l}</button>
+                <button key={t.k} onClick={() => { setTab(t.k); setPage(1); }} className={`py-3 text-[11px] font-medium border-b-2 whitespace-nowrap ${tab === t.k ? 'border-[#6c63ff] text-[#6c63ff]' : 'border-transparent text-gray-400'}`}>{t.l}</button>
               ))}
             </div>
 
             {/* Filters */}
-            <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50">
+            <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-gray-50">
               <div className="flex items-center gap-1 px-2 py-1.5 border border-gray-200 rounded-lg"><Calendar size={10} className="text-gray-400" /><span className="text-[10px] text-gray-500">Tarih Araligi</span></div>
               <select value={filterCari} onChange={e => { setFilterCari(e.target.value); setPage(1); }} className="px-2 py-1.5 text-[10px] border border-gray-200 rounded-lg outline-none"><option value="all">Cari Hesap</option>{cariList.map(c => <option key={c} value={c}>{c}</option>)}</select>
               <select value={filterTur} onChange={e => { setFilterTur(e.target.value); setPage(1); }} className="px-2 py-1.5 text-[10px] border border-gray-200 rounded-lg outline-none"><option value="all">Tur</option><option value="alinan">Alinan</option><option value="verilen">Verilen</option></select>
@@ -255,7 +255,7 @@ export default function Cekler() {
         </div>
 
         {/* Right: Vadesi Yaklasan */}
-        <div className="col-span-3">
+        <div className="lg:col-span-3">
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sticky top-4">
             <div className="flex items-center justify-between mb-4"><h3 className="text-[12px] font-semibold text-gray-700">Vadesi Yaklasan 5 Cek</h3><button className="text-[9px] text-[#6c63ff] font-medium hover:underline">Tumu</button></div>
             <div className="space-y-3">

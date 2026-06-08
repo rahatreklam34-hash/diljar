@@ -173,9 +173,9 @@ export default function GelirGider() {
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div><h1 className="text-xl font-bold text-gray-800">Gelir / Gider</h1><p className="text-[11px] text-gray-400">Gelir ve giderlerinizi anlik olarak takip edin. <span className="text-[#6c63ff]">"hizli islem" yazarak hizli menu acar.</span></p></div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-0.5 bg-white border border-gray-200 rounded-lg px-1 py-1">
             {[{ k: 'gunluk', l: 'Gun' }, { k: 'haftalik', l: 'Hafta' }, { k: 'aylik', l: 'Ay' }, { k: 'yillik', l: 'Yil' }, { k: 'tumu', l: 'Tumu' }].map(p => (
               <button key={p.k} onClick={() => setPeriyotAndDates(p.k)} className={`px-2 py-1 text-[9px] rounded font-medium ${periyot === p.k ? 'bg-[#6c63ff] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{p.l}</button>
@@ -189,7 +189,7 @@ export default function GelirGider() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-green-50 flex items-center justify-center"><ArrowUpRight size={18} className="text-green-500" /></div><div><p className="text-[9px] text-gray-400">Toplam Gelir</p><p className="text-lg font-bold text-gray-800">{fmt(toplamGelir)}</p></div></div><p className="text-[9px] text-gray-400 mt-2">{gelirCount} islem</p></div>
         <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center"><ArrowDownRight size={18} className="text-red-500" /></div><div><p className="text-[9px] text-gray-400">Toplam Gider</p><p className="text-lg font-bold text-gray-800">{fmt(toplamGider)}</p></div></div><p className="text-[9px] text-gray-400 mt-2">{giderCount} islem</p></div>
         <div className="bg-white rounded-xl p-4 border border-gray-100 shadow-sm"><div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center"><DollarSign size={18} className="text-blue-500" /></div><div><p className="text-[9px] text-gray-400">Net Gelir</p><p className="text-lg font-bold text-gray-800">{fmt(netGelir)}</p></div></div></div>
@@ -198,16 +198,16 @@ export default function GelirGider() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid grid-cols-12 gap-4">
-        <div className="col-span-4 bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+        <div className="lg:col-span-4 bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <h3 className="text-[12px] font-semibold text-gray-700 mb-3">Gelir - Gider Dagilimi</h3>
           <div className="flex items-center gap-4"><div className="w-[120px] h-[120px] relative shrink-0"><Doughnut data={doughnutData} options={{ cutout: '65%', plugins: { legend: { display: false } } }} /><div className="absolute inset-0 flex flex-col items-center justify-center"><p className="text-sm font-bold text-gray-800">{fmt(netGelir)}</p><p className="text-[8px] text-gray-400">Net Gelir</p></div></div><div className="space-y-3"><div className="flex items-center gap-2 text-[10px]"><span className="w-2 h-2 rounded-full bg-green-500" /><span>Gelir</span><span className="font-bold ml-auto">{fmt(toplamGelir)}</span><span className="text-gray-400">({toplamGelir + toplamGider > 0 ? Math.round((toplamGelir / (toplamGelir + toplamGider)) * 100) : 0}%)</span></div><div className="flex items-center gap-2 text-[10px]"><span className="w-2 h-2 rounded-full bg-red-500" /><span>Gider</span><span className="font-bold ml-auto">{fmt(toplamGider)}</span><span className="text-gray-400">({toplamGelir + toplamGider > 0 ? Math.round((toplamGider / (toplamGelir + toplamGider)) * 100) : 0}%)</span></div></div></div>
         </div>
-        <div className="col-span-5 bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="lg:col-span-5 bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center justify-between mb-2"><h3 className="text-[12px] font-semibold text-gray-700">Aylik Trend</h3><div className="flex gap-2 text-[9px]"><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500" />Gelir</span><span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500" />Gider</span></div></div>
           <div className="h-[140px]"><Line data={aylikTrend} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { font: { size: 8 }, callback: (v: any) => `${(v / 1000).toFixed(0)}B` } }, x: { ticks: { font: { size: 8 } } } } }} /></div>
         </div>
-        <div className="col-span-3 bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="lg:col-span-3 bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center justify-between mb-2"><h3 className="text-[12px] font-semibold text-gray-700">Gider Kategorileri</h3><button onClick={() => setFilterKategori('all')} className="text-[8px] text-[#6c63ff] hover:underline">Tumunu Goster</button></div>
           <div className="space-y-1.5">{giderKat.labels.map((l, i) => (<div key={l} className="flex items-center justify-between text-[9px] cursor-pointer hover:bg-gray-50 rounded px-1 py-0.5" onClick={() => { setFilterKategori(l); setTab('giderler'); setPage(1); }}><span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full" style={{ backgroundColor: giderKat.colors[i] }} />{l}</span><span className="flex gap-2"><span className="font-medium">{fmt(giderKat.data[i])}</span><span className="text-gray-400">%{giderKat.toplam > 0 ? Math.round((giderKat.data[i] / giderKat.toplam) * 100) : 0}</span></span></div>))}</div>
         </div>
@@ -215,8 +215,8 @@ export default function GelirGider() {
 
       {/* Table Section */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
-        <div className="flex items-center gap-4 px-4 border-b border-gray-100">{[{ key: 'all', label: 'Tum Islemler' }, { key: 'gelirler', label: 'Gelirler' }, { key: 'giderler', label: 'Giderler' }].map(t => (<button key={t.key} onClick={() => { setTab(t.key); setPage(1); }} className={`py-3 text-[11px] font-medium border-b-2 ${tab === t.key ? 'border-[#6c63ff] text-[#6c63ff]' : 'border-transparent text-gray-400'}`}>{t.label}</button>))}</div>
-        <div className="flex items-center gap-2 px-4 py-2.5 border-b border-gray-50">
+        <div className="flex items-center gap-4 px-4 border-b border-gray-100 overflow-x-auto">{[{ key: 'all', label: 'Tum Islemler' }, { key: 'gelirler', label: 'Gelirler' }, { key: 'giderler', label: 'Giderler' }].map(t => (<button key={t.key} onClick={() => { setTab(t.key); setPage(1); }} className={`py-3 text-[11px] font-medium border-b-2 whitespace-nowrap ${tab === t.key ? 'border-[#6c63ff] text-[#6c63ff]' : 'border-transparent text-gray-400'}`}>{t.label}</button>))}</div>
+        <div className="flex flex-wrap items-center gap-2 px-4 py-2.5 border-b border-gray-50">
           <select value={filterKategori} onChange={e => { setFilterKategori(e.target.value); setPage(1); }} className="px-2 py-1.5 text-[10px] border border-gray-200 rounded-lg outline-none"><option value="all">Tum Kategoriler</option>{kategoriler.map(k => <option key={k} value={k}>{k}</option>)}</select>
           <div className="relative flex-1"><Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" /><input type="text" placeholder="Aciklama, kategori ara..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="w-full pl-7 pr-3 py-1.5 text-[10px] border border-gray-200 rounded-lg outline-none" /></div>
           <button onClick={exportExcel} className="px-2.5 py-1.5 text-[10px] border border-gray-200 rounded-lg text-gray-600 flex items-center gap-1 hover:bg-green-50 hover:text-green-600 hover:border-green-200"><FileSpreadsheet size={10} /> Excel</button><button onClick={exportPDF} className="px-2.5 py-1.5 text-[10px] border border-gray-200 rounded-lg text-gray-600 flex items-center gap-1 hover:bg-red-50 hover:text-red-600 hover:border-red-200"><FileText size={10} /> PDF</button>
