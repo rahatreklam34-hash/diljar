@@ -299,6 +299,9 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
   const [saving, setSaving] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
   const [kampanyalar, setKampanyalar] = useState<any[]>(Array.isArray(order.kampanyalar) ? order.kampanyalar : []);
+  // Manuel indirim/kupon uygulandi mi? (kampanya disi). Kampanyali siparislerde false -> fiyat degisince kampanya yeniden hesaplanir.
+  const isManuel = (o: any) => (Number(o.indirim) || 0) > 0 && (!Array.isArray(o.kampanyalar) || o.kampanyalar.length === 0) && !o.indirimKodu;
+  const [manuelInd, setManuelInd] = useState<boolean>(isManuel(order));
 
   const prodOf = (pid: string) => products.find((p: any) => p.id === pid);
   const imgOf = (pid: string) => (prodOf(pid)?.images || [])[0] || '';
@@ -341,6 +344,7 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
       setDurumState(o.durum); setTahsilat(o.tahsilat || 0); setKargoUcreti(o.kargoUcreti || 0);
       setIndirim(o.indirim || 0); setKupon(o.indirimKodu || ''); setAdres(o.adres || ''); setOdemeYontemi(o.odemeYontemi || 'Banka');
       setKampanyalar(Array.isArray(o.kampanyalar) ? o.kampanyalar : []);
+      setManuelInd(isManuel(o));
       setOdemeLinki(o.odemeLinki || '');
     } catch { /* */ }
   };
@@ -359,10 +363,11 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
       await api.patch(`/store/orders/${order.id}`, {
         durum, tahsilat: Number(tahsilat) || 0, kargoUcreti: Number(kargoUcreti) || 0,
         indirim: Number(indirim) || 0, indirimKodu: kupon || null, items,
-        araToplam: sepetTutari, toplam: toplamTutar, odemeYontemi, adres: adres || null, ...extra,
+        araToplam: sepetTutari, toplam: toplamTutar, odemeYontemi, adres: adres || null,
+        manuelIndirim: manuelInd, ...extra,
       });
       toast.success('Kaydedildi');
-      reload(); loadEvents();
+      reload(); loadEvents(); loadFresh();
     } catch (e) { toast.error(apiErrorMessage(e)); }
     finally { setSaving(false); }
   };
@@ -382,15 +387,17 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
     const v = Number(discVal) || 0;
     const amount = discTip === 'yuzde' ? sepetTutari * v / 100 : v;
     setIndirim(Math.min(amount, sepetTutari));
+    setManuelInd(amount > 0);
     toast.success('İndirim uygulandı');
   };
   const applyKupon = () => {
     const code = kupon.trim();
-    if (!code) { setIndirim(0); return; }
+    if (!code) { setIndirim(0); setManuelInd(false); return; }
     const d = discountCodes.find((x: any) => x.aktif && x.code?.toLowerCase() === code.toLowerCase());
     if (!d) { toast.error('Geçersiz / pasif kupon kodu'); return; }
     const amount = d.tip === 'yuzde' ? sepetTutari * d.deger / 100 : d.deger;
     setIndirim(Math.min(amount, sepetTutari));
+    setManuelInd(false);
     toast.success(`Kupon uygulandı: ${d.tip === 'yuzde' ? '%' + d.deger : fmt(d.deger)}`);
   };
 

@@ -267,8 +267,10 @@ router.patch('/orders/:id', asyncHandler(async (req: Request, res: Response) => 
   if (!found) throw new ApiError(404, 'Siparis bulunamadi');
   const who = await actorName(req.auth?.userId);
   const customLog = typeof req.body?._log === 'string' ? req.body._log : '';
+  const manuelIndirim = req.body?.manuelIndirim === true;
   const body = clean(req.body);
   delete (body as any)._log;
+  delete (body as any).manuelIndirim;
   // Tahsilat artışında otomatik gelir kaydı (çift kayıt önlenir: gelirKaydedilen takibi)
   let gelirDelta = 0;
   if (body.tahsilat !== undefined) {
@@ -276,7 +278,28 @@ router.patch('/orders/:id', asyncHandler(async (req: Request, res: Response) => 
     const kayitli = found.gelirKaydedilen || 0;
     if (yeniTahsilat > kayitli) { gelirDelta = yeniTahsilat - kayitli; (body as any).gelirKaydedilen = yeniTahsilat; }
   }
-  const updated = await prisma.storeOrder.update({ where: { id: req.params.id }, data: body });
+  const updated = await prisma.$transaction(async (tx) => {
+    // Kalemler güncelleniyorsa: (1) bağlı canlı yayın satırlarının fiyatını sepetle eşitle,
+    // (2) kupon/manuel indirim yoksa kampanya indirimini sunucuda yeniden hesapla (tek kaynak).
+    if (Array.isArray(body.items)) {
+      const items = body.items as any[];
+      for (const it of items) {
+        if (it && it.liveOrderId) {
+          await tx.liveOrder.updateMany({ where: { id: it.liveOrderId, tenantId: req.tenantId! }, data: { tutar: Number(it.fiyat) || 0, ...(it.durum ? { durum: it.durum } : {}) } });
+        }
+      }
+      const kupon = (body.indirimKodu ?? found.indirimKodu);
+      if (!kupon && !manuelIndirim) {
+        const adj = await campaignAdjust(tx, req.tenantId!, items);
+        const kargo = Number(body.kargoUcreti ?? found.kargoUcreti) || 0;
+        (body as any).araToplam = adj.araToplam;
+        (body as any).indirim = adj.indirim;
+        (body as any).kampanyalar = adj.kampanyalar;
+        (body as any).toplam = Math.max(0, adj.toplam + kargo);
+      }
+    }
+    return tx.storeOrder.update({ where: { id: req.params.id }, data: body });
+  });
   if (gelirDelta > 0.001) {
     const now = new Date();
     const cust = updated.customerId ? await prisma.customer.findFirst({ where: { id: updated.customerId, tenantId: req.tenantId! } }) : null;
