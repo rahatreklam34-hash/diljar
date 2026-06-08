@@ -403,7 +403,12 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
     if (!confirm('Ürün sepetten çıkarılsın mı? (Stok iade edilir)')) return;
     try {
       const r = await api.post(`/store/orders/${order.id}/item-remove`, { index: i });
-      setItems(Array.isArray(r.data?.items) ? r.data.items : []);
+      const o = r.data || {};
+      // Backend kampanya indirimini yeniden hesaplar -> yerel ekranı da hemen senkronla (yoksa eski indirim kalır)
+      setItems(Array.isArray(o.items) ? o.items.map((x: any) => ({ ...x })) : []);
+      setIndirim(Number(o.indirim) || 0);
+      setKampanyalar(Array.isArray(o.kampanyalar) ? o.kampanyalar : []);
+      setManuelInd(isManuel(o));
       toast.success('Ürün çıkarıldı, stok iade edildi'); reload(); loadEvents();
     } catch (e) { toast.error(apiErrorMessage(e)); }
   };
