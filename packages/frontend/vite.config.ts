@@ -7,6 +7,17 @@ export default defineConfig({
   base: '/',
   build: {
     target: 'esnext',
+    chunkSizeWarningLimit: 1200,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
+          'charts': ['chart.js', 'react-chartjs-2'],
+          'pdf': ['jspdf', 'jspdf-autotable'],
+          'xlsx': ['xlsx'],
+        },
+      },
+    },
   },
   server: {
     proxy: {

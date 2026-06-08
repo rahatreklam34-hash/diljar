@@ -503,11 +503,11 @@ export default function CariHesaplar() {
 
   // ========== LIST VIEW ==========
   return (
-    <div className="space-y-3">
+    <div className="space-y-5">
 
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-lg font-bold text-gray-800">Cari Hesaplar</h1>
+          <h1 className="text-xl font-bold text-gray-800">Cari Hesaplar</h1>
           <p className="text-[11px] text-gray-400">Cari hesaplarinizin hareketlerini takip edin.</p>
         </div>
         <div className="flex items-center gap-2">
