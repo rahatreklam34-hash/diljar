@@ -11,6 +11,7 @@ import Dashboard from './pages/Dashboard';
 import CariHesaplar from './pages/CariHesaplar';
 import GelirGider from './pages/GelirGider';
 import KasaBankaPage from './pages/KasaBanka';
+import BankaHareketleri from './pages/BankaHareketleri';
 import Cekler from './pages/Cekler';
 import PersonelPage from './pages/Personel';
 import FinansalDurum from './pages/FinansalDurum';
@@ -90,6 +91,7 @@ function TenantApp() {
               <Route path="/cari-hesaplar" element={<CariHesaplar />} />
               <Route path="/gelir-gider" element={<GelirGider />} />
               <Route path="/kasa-banka" element={<KasaBankaPage />} />
+              <Route path="/banka-hareketleri" element={<BankaHareketleri />} />
               <Route path="/cekler" element={<Cekler />} />
               <Route path="/personel" element={<PersonelPage />} />
               <Route path="/raporlar" element={<FinansalDurum />} />

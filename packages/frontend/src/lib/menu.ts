@@ -3,7 +3,7 @@ import {
   Package, PackagePlus, Layers, Tag, Hash, Radio, ScanLine, Award,
   UserCheck, Megaphone, Store, Bot, LifeBuoy, ShoppingBag, Calendar,
   BarChart3, Target, ClipboardList, FolderOpen, Bell, Plug, UserCog,
-  MessageSquare, Settings,
+  MessageSquare, Settings, Banknote,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -32,6 +32,7 @@ export const navGroups: MenuGroup[] = [
     items: [
       { to: '/cari-hesaplar', icon: Users, label: 'Cari Hesaplar' },
       { to: '/kasa-banka', icon: Landmark, label: 'Kasa & Banka' },
+      { to: '/banka-hareketleri', icon: Banknote, label: 'Banka Hareketleri' },
       { to: '/gelir-gider', icon: TrendingUp, label: 'Gelir / Gider' },
       { to: '/cekler', icon: FileText, label: 'Cekler' },
       { to: '/duzenli-odemeler', icon: RefreshCw, label: 'Duzenli Odemelerim' },
