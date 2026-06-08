@@ -19,7 +19,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, ArcEleme
 
 export default function Dashboard() {
   const { cariHesaplar, cariHareketler, hareketler, kasaBanka, krediKartlari, birikimHesaplari, cekler, duzenliOdemeler, emanetParalar, addHareket } = useApp();
-  const { products } = useStore();
+  const { products, orders } = useStore();
   const { user, canAccess } = useAuth();
   const adKisa = (user?.fullName || 'Kullanici').split(' ')[0];
   const navigate = useNavigate();
@@ -93,6 +93,15 @@ export default function Dashboard() {
   const toplamGelir = filteredHareketler.filter(h => h.tip === 'gelir').reduce((s, h) => s + h.tutar, 0);
   const toplamGider = filteredHareketler.filter(h => h.tip === 'gider').reduce((s, h) => s + h.tutar, 0);
   const netKar = toplamGelir - toplamGider;
+
+  // --- Satilan urun maliyeti (SMM / COGS) -> kar buna gore duzeltilir ---
+  const prodCost = useMemo(() => new Map((products || []).map((p: any) => [p.id, Number(p.alisFiyat) || 0])), [products]);
+  const smm = useMemo(() => (orders || [])
+    .filter((o: any) => o.durum && o.durum !== 'sepet' && o.durum !== 'iptal')
+    .filter((o: any) => { const d = String(o.createdAt || '').slice(0, 10); return d >= dateFrom && d <= dateTo; })
+    .reduce((s: number, o: any) => s + (Array.isArray(o.items) ? o.items : []).reduce((x: number, it: any) => x + (prodCost.get(it.productId) || 0) * (Number(it.adet) || 1), 0), 0), [orders, prodCost, dateFrom, dateTo]);
+  const gercekKar = netKar - smm; // urun maliyeti dusulmus gercek kar
+  const donemNet = toplamGelir - toplamGider; // gelen para - giderler (kasaya yansiyan net)
 
   // Önceki dönem
   const periodDays = Math.max(1, Math.round((new Date(dateTo).getTime() - new Date(dateFrom).getTime()) / 86400000));
@@ -223,20 +232,22 @@ export default function Dashboard() {
             <p className="text-[9px] text-amber-600/70 mt-0.5">Kasa {fmt(kasaToplam)} · Banka {fmt(bankaToplam)} · Birikim {fmt(birikimToplam)}</p>
           </div>
         </div>
+        <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
+          <span className="text-[10px] text-gray-500">Bu donem net (Aldim - Verdim)</span>
+          <span className={`text-sm font-bold ${donemNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>{donemNet >= 0 ? '+' : ''}{fmt(donemNet)} TL</span>
+        </div>
       </div>
-
-      {/* KPI + Finansal Saglik */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
         {[
-          { label: 'Toplam Gelir', value: toplamGelir, color: 'text-gray-800', trend: `${Number(gelirChange) >= 0 ? '+' : ''}%${gelirChange}`, trendColor: Number(gelirChange) >= 0 ? 'text-green-500' : 'text-red-500', icon: '📈' },
-          { label: 'Toplam Gider', value: toplamGider, color: 'text-gray-800', trend: `${Number(giderChange) >= 0 ? '+' : ''}%${giderChange}`, trendColor: Number(giderChange) >= 0 ? 'text-red-500' : 'text-green-500', icon: '📉' },
-          { label: 'Net Kar', value: netKar, color: netKar >= 0 ? 'text-green-600' : 'text-red-600', trend: `${Number(netChange) >= 0 ? '+' : ''}%${netChange}`, trendColor: Number(netChange) >= 0 ? 'text-green-500' : 'text-red-500', icon: '💰' },
-          { label: 'Nakit Bakiye', value: likitToplam, color: 'text-amber-600', trend: '', trendColor: '', icon: '💵' },
+          { label: 'Toplam Gelir', value: toplamGelir, color: 'text-gray-800', trend: `${Number(gelirChange) >= 0 ? '+' : ''}%${gelirChange}`, trendColor: Number(gelirChange) >= 0 ? 'text-green-500' : 'text-red-500', icon: '📈', sub: '' },
+          { label: 'Toplam Gider', value: toplamGider, color: 'text-gray-800', trend: `${Number(giderChange) >= 0 ? '+' : ''}%${giderChange}`, trendColor: Number(giderChange) >= 0 ? 'text-red-500' : 'text-green-500', icon: '📉', sub: '' },
+          { label: 'Net Kar (Maliyet Dusuldu)', value: gercekKar, color: gercekKar >= 0 ? 'text-green-600' : 'text-red-600', trend: '', trendColor: '', icon: '💰', sub: smm > 0 ? `Urun maliyeti (SMM) -${fmt(smm)} dusuldu` : 'Gelir - Gider - urun maliyeti' },
+          { label: 'Nakit Bakiye', value: likitToplam, color: 'text-amber-600', trend: '', trendColor: '', icon: '💵', sub: '' },
         ].map(card => (
           <div key={card.label} className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
             <div className="flex items-center gap-2 mb-1"><span className="text-sm">{card.icon}</span><span className="text-[9px] text-gray-400 font-medium">{card.label}</span></div>
             <p className={`text-lg font-bold ${card.color}`}>{fmt(card.value)} TL</p>
-            <p className="text-[9px] text-gray-400 mt-0.5">{card.trend ? <><span className={`${card.trendColor} font-medium`}>{card.trend}</span> Onceki doneme gore</> : 'Guncel'}</p>
+            <p className="text-[9px] text-gray-400 mt-0.5">{card.sub ? <span className="text-amber-600 font-medium">{card.sub}</span> : card.trend ? <><span className={`${card.trendColor} font-medium`}>{card.trend}</span> Onceki doneme gore</> : 'Guncel'}</p>
           </div>
         ))}
         <div className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm flex flex-col justify-between">
@@ -273,8 +284,9 @@ export default function Dashboard() {
             <tbody>
               <tr className="border-b border-gray-50"><td className="py-1.5 text-gray-700">Toplam Gelir</td><td className="py-1.5 text-right font-bold text-green-500">{fmt(toplamGelir)}</td><td className="py-1.5 text-right text-gray-400">%100</td></tr>
               <tr className="border-b border-gray-50"><td className="py-1.5 text-gray-700">Toplam Gider</td><td className="py-1.5 text-right font-medium text-red-500">{fmt(toplamGider)}</td><td className="py-1.5 text-right text-gray-400">%{toplamGelir > 0 ? ((toplamGider / toplamGelir) * 100).toFixed(1) : 0}</td></tr>
+              <tr className="border-b border-gray-50"><td className="py-1.5 text-gray-700">Satilan Urun Maliyeti (SMM)</td><td className="py-1.5 text-right font-medium text-orange-500">{fmt(smm)}</td><td className="py-1.5 text-right text-gray-400">%{toplamGelir > 0 ? ((smm / toplamGelir) * 100).toFixed(1) : 0}</td></tr>
               <tr className="border-b border-gray-50"><td className="py-1.5 text-gray-700">Cari Borc Odemesi</td><td className="py-1.5 text-right font-medium text-gray-700">{fmt(borcAzalis)}</td><td className="py-1.5 text-right text-gray-400">-</td></tr>
-              <tr><td className="py-1.5 text-gray-700 font-medium">Net Nakit Akisi</td><td className={`py-1.5 text-right font-bold ${netKar >= 0 ? 'text-blue-500' : 'text-red-500'}`}>{fmt(netKar)}</td><td className="py-1.5 text-right text-gray-400">%{toplamGelir > 0 ? ((netKar / toplamGelir) * 100).toFixed(1) : 0}</td></tr>
+              <tr><td className="py-1.5 text-gray-700 font-medium">Net Kar (maliyet dusulmus)</td><td className={`py-1.5 text-right font-bold ${gercekKar >= 0 ? 'text-blue-500' : 'text-red-500'}`}>{fmt(gercekKar)}</td><td className="py-1.5 text-right text-gray-400">%{toplamGelir > 0 ? ((gercekKar / toplamGelir) * 100).toFixed(1) : 0}</td></tr>
             </tbody>
           </table>
           <div className="mt-3 pt-3 border-t border-gray-100">
