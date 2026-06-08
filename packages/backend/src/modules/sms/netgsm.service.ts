@@ -153,6 +153,7 @@ export async function checkNetgsm(tenantId: string): Promise<{ ok: boolean; bala
   try {
     const r = await httpsReq({ method: 'GET', host: 'api.netgsm.com.tr', path });
     const t = (r.text || '').trim();
+    if (r.status !== 200) return { ok: false, message: `NetGSM kimlik dogrulama basarisiz (HTTP ${r.status}). Kullanici kodu/sifre hatali olabilir.` };
     // Hata kodu donduyse (30/40/70...) basariz
     const first = t.split(/\s+/)[0];
     if (CODE_MSG[first] && first !== '00') return { ok: false, message: CODE_MSG[first] };
