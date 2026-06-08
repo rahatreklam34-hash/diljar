@@ -9,10 +9,10 @@ import { navGroups, allMenuItems, MenuItem, IconType } from '../lib/menu';
 
 const DEFAULT_SHORTCUTS = ['/canli-yayin', '/kasa-satis', '/siparisler', '/depo/urunlerim', '/musterilerim'];
 
-// Her grup icin temsili ikon (kapali grup kartinda gosterilir) ve renk
+// Her grup icin temsili ikon (kapali grup kartinda) ve renk
 const GROUP_ICONS: IconType[] = [LayoutDashboard, Wallet, Package, ShoppingCart, ClipboardList, Users, Megaphone, UsersRound, Headphones];
-const GROUP_COLORS = ['text-violet-400', 'text-violet-400', 'text-sky-400', 'text-fuchsia-400', 'text-blue-400', 'text-emerald-400', 'text-orange-400', 'text-pink-400', 'text-cyan-400'];
-const GROUP_GLOW = ['bg-violet-500/15', 'bg-violet-500/15', 'bg-sky-500/15', 'bg-fuchsia-500/15', 'bg-blue-500/15', 'bg-emerald-500/15', 'bg-orange-500/15', 'bg-pink-500/15', 'bg-cyan-500/15'];
+const GROUP_COLORS = ['text-violet-500', 'text-violet-500', 'text-sky-500', 'text-fuchsia-500', 'text-orange-500', 'text-emerald-500', 'text-amber-500', 'text-pink-500', 'text-cyan-500'];
+const GROUP_GLOW = ['bg-violet-500/10', 'bg-violet-500/10', 'bg-sky-500/10', 'bg-fuchsia-500/10', 'bg-orange-500/10', 'bg-emerald-500/10', 'bg-amber-500/10', 'bg-pink-500/10', 'bg-cyan-500/10'];
 
 type Theme = 'dark' | 'light';
 
@@ -26,11 +26,10 @@ export default function Sidebar() {
   const { user, logout, canAccess, updatePrefs } = useAuth();
   const initial = (user?.fullName || 'K').charAt(0).toUpperCase();
 
-  // Tema (gece/gunduz) — localStorage anlik, prefs.theme hesaba kayitli
-  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('wtech_theme') as Theme) || 'dark');
+  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('wtech_theme') as Theme) || 'light');
   useEffect(() => {
-    const t = user?.prefs?.theme;
-    if ((t === 'light' || t === 'dark') && t !== theme) { setTheme(t); localStorage.setItem('wtech_theme', t); }
+    const tp = user?.prefs?.theme;
+    if ((tp === 'light' || tp === 'dark') && tp !== theme) { setTheme(tp); localStorage.setItem('wtech_theme', tp); }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.prefs?.theme]);
   const toggleTheme = async () => {
@@ -40,7 +39,6 @@ export default function Sidebar() {
   };
   const dark = theme === 'dark';
 
-  // Sayfa degisince yalnizca aktif grup acik
   useEffect(() => {
     for (const g of navGroups) {
       if (g.title && g.items.some((it) => it.to === location.pathname)) { setOpenGroup(g.title); return; }
@@ -76,7 +74,7 @@ export default function Sidebar() {
     try { await updatePrefs({ ...(user?.prefs || {}), shortcuts: next }); } catch { /* */ }
   };
 
-  // Tema sinif setleri
+  // Tema sinif setleri. SECILI oge NOTR (renksiz) — kullanici istegi.
   const t = dark ? {
     aside: 'bg-gradient-to-b from-[#0a0e1a] via-[#0b1020] to-[#0d1326] border-white/10',
     headerBg: 'bg-white/[0.03] border-white/10',
@@ -84,42 +82,52 @@ export default function Sidebar() {
     iconBtn: 'text-slate-400 hover:text-white hover:bg-white/10',
     card: 'bg-white/[0.04] border-white/10 hover:bg-white/[0.07]',
     cardText: 'text-slate-200',
-    groupTitle: 'text-violet-300',
+    groupTitle: 'text-slate-300',
+    groupBar: 'bg-slate-500',
     rozet: 'bg-white/[0.06]',
     itemText: 'text-slate-300',
     itemHover: 'hover:bg-white/[0.06]',
     chevron: 'text-slate-500',
     section: 'bg-white/[0.02] border-white/[0.06]',
     userCard: 'bg-gradient-to-r from-[#6d28d9] to-[#4338ca] text-white',
-    accentGrad: 'from-[#7c3aed] to-[#4f46e5]',
-    accentShadow: 'shadow-violet-900/50',
+    // SECILI (notr)
+    activeItem: 'bg-white/[0.10] text-white font-semibold border-l-[3px] border-white/50',
+    activeRozet: 'bg-white/15',
+    activeIcon: 'text-white',
+    activeChevron: 'text-white/70',
+    accent: 'text-violet-300',
   } : {
-    aside: 'bg-gradient-to-b from-orange-50 via-amber-50/60 to-white border-orange-100',
-    headerBg: 'bg-white border-orange-100',
+    aside: 'bg-gradient-to-b from-white to-slate-50 border-slate-200',
+    headerBg: 'bg-slate-50 border-slate-200',
     brand: 'text-slate-800',
-    iconBtn: 'text-slate-400 hover:text-orange-600 hover:bg-orange-50',
-    card: 'bg-white border-orange-100 hover:bg-orange-50/70 shadow-sm',
+    iconBtn: 'text-slate-400 hover:text-slate-700 hover:bg-slate-100',
+    card: 'bg-white border-slate-100 hover:bg-slate-50 shadow-sm',
     cardText: 'text-slate-700',
-    groupTitle: 'text-orange-600',
-    rozet: 'bg-orange-50',
+    groupTitle: 'text-slate-500',
+    groupBar: 'bg-indigo-500',
+    rozet: 'bg-slate-50',
     itemText: 'text-slate-600',
-    itemHover: 'hover:bg-orange-50',
+    itemHover: 'hover:bg-slate-50',
     chevron: 'text-slate-400',
-    section: 'bg-orange-50/40 border-orange-100',
-    userCard: 'bg-gradient-to-r from-orange-500 to-amber-500 text-white',
-    accentGrad: 'from-orange-500 to-amber-500',
-    accentShadow: 'shadow-orange-300/50',
+    section: 'bg-slate-50/60 border-slate-100',
+    userCard: 'bg-gradient-to-r from-[#7c3aed] to-[#6366f1] text-white',
+    // SECILI (notr)
+    activeItem: 'bg-slate-100 text-slate-900 font-bold border-l-[3px] border-slate-400',
+    activeRozet: 'bg-white shadow-sm',
+    activeIcon: 'text-slate-600',
+    activeChevron: 'text-slate-500',
+    accent: 'text-indigo-600',
   };
 
   const renderItem = (item: MenuItem, gi: number) => (
-    <NavLink key={item.to} to={item.to} onClick={() => setMobileOpen(false)} className={({ isActive }) => `group flex items-center gap-3 px-2.5 py-2.5 my-0.5 rounded-xl text-sm transition-all duration-200 ${isActive ? `bg-gradient-to-r ${t.accentGrad} text-white font-semibold shadow-lg ${t.accentShadow}` : `${t.itemText} ${t.itemHover}`}`}>
+    <NavLink key={item.to} to={item.to} onClick={() => setMobileOpen(false)} className={({ isActive }) => `group flex items-center gap-3 px-2.5 py-2.5 my-0.5 rounded-xl text-sm transition-all duration-200 ${isActive ? t.activeItem : `${t.itemText} ${t.itemHover}`}`}>
       {({ isActive }) => (
         <>
-          <span className={`flex items-center justify-center w-8 h-8 rounded-lg shrink-0 ${isActive ? 'bg-white/20' : GROUP_GLOW[gi]}`}>
-            <item.icon size={16} className={isActive ? 'text-white' : GROUP_COLORS[gi]} />
+          <span className={`flex items-center justify-center w-8 h-8 rounded-lg shrink-0 ${isActive ? t.activeRozet : GROUP_GLOW[gi]}`}>
+            <item.icon size={16} className={isActive ? t.activeIcon : GROUP_COLORS[gi]} />
           </span>
           {!isIconOnly && <span className="truncate flex-1">{item.label}</span>}
-          {!isIconOnly && <ChevronRight size={15} className={isActive ? 'text-white/70' : t.chevron} />}
+          {!isIconOnly && <ChevronRight size={15} className={isActive ? t.activeChevron : t.chevron} />}
         </>
       )}
     </NavLink>
@@ -132,7 +140,7 @@ export default function Sidebar() {
 
       <aside className={`fixed inset-y-0 left-0 z-[58] flex flex-col ${t.aside} border-r transition-all duration-300 h-screen overflow-y-auto ${collapsed ? 'w-64 lg:w-20' : 'w-64'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
         {/* Header */}
-        <div className={`flex items-center justify-between px-3 py-3.5 m-2 rounded-2xl border ${t.headerBg} sticky top-2 z-10 backdrop-blur`}>
+        <div className={`flex items-center justify-between px-3 py-3 m-2 rounded-2xl border ${t.headerBg} sticky top-2 z-10 backdrop-blur`}>
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 bg-gradient-to-br from-[#7c3aed] to-[#6366f1] rounded-xl flex items-center justify-center font-extrabold text-white shrink-0 shadow-lg shadow-violet-600/40">W</div>
             {(!collapsed || mobileOpen) && <span className={`text-lg font-extrabold ${t.brand}`}>WTech</span>}
@@ -151,29 +159,30 @@ export default function Sidebar() {
             const visibleItems = group.items.filter((it) => canAccess(it.to));
             if (visibleItems.length === 0) return null;
 
-            // Dashboard (basliksiz tek oge)
             if (!group.title) return <div key={gi}>{renderItem(visibleItems[0], gi)}</div>;
 
             const open = isIconOnly ? true : openGroup === key;
             const GroupIcon = GROUP_ICONS[gi] || Wallet;
 
-            // Kapali grup -> kart (ikon + baslik + ok)
             if (!open && !isIconOnly) {
               return (
-                <button key={gi} onClick={() => toggleGroup(key)} className={`w-full flex items-center gap-3 px-2.5 py-2.5 rounded-2xl border transition-all ${t.card}`}>
-                  <span className={`flex items-center justify-center w-9 h-9 rounded-xl shrink-0 ${GROUP_GLOW[gi]}`}><GroupIcon size={18} className={GROUP_COLORS[gi]} /></span>
-                  <span className={`flex-1 text-left text-[12px] font-bold uppercase tracking-wide ${t.cardText}`}>{group.title}</span>
-                  <ChevronRight size={16} className={t.chevron} />
+                <button key={gi} onClick={() => toggleGroup(key)} className={`relative w-full flex items-center gap-3 px-2.5 py-2.5 rounded-2xl border overflow-hidden transition-all ${t.card}`}>
+                  <span className={`absolute right-0 top-0 bottom-0 w-24 ${GROUP_GLOW[gi]} blur-2xl rounded-full pointer-events-none`} />
+                  <span className={`relative flex items-center justify-center w-9 h-9 rounded-xl shrink-0 ${GROUP_GLOW[gi]}`}><GroupIcon size={18} className={GROUP_COLORS[gi]} /></span>
+                  <span className={`relative flex-1 text-left text-[12px] font-bold uppercase tracking-wide ${t.cardText}`}>{group.title}</span>
+                  <ChevronRight size={16} className={`relative ${t.chevron}`} />
                 </button>
               );
             }
 
-            // Acik grup -> baslik + oge listesi
             return (
               <div key={gi}>
                 {!isIconOnly && (
-                  <button onClick={() => toggleGroup(key)} className="w-full flex items-center justify-between px-3 pt-2 pb-1.5">
-                    <span className={`text-[11px] font-bold uppercase tracking-widest ${t.groupTitle}`}>{group.title}</span>
+                  <button onClick={() => toggleGroup(key)} className="w-full flex items-center justify-between px-2.5 pt-2 pb-1.5">
+                    <span className="flex items-center gap-2">
+                      <span className={`w-1 h-3.5 rounded-full ${t.groupBar}`} />
+                      <span className={`text-[11px] font-bold uppercase tracking-widest ${t.groupTitle}`}>{group.title}</span>
+                    </span>
                     <ChevronUp size={15} className={t.chevron} />
                   </button>
                 )}
@@ -189,17 +198,17 @@ export default function Sidebar() {
         {!isIconOnly && (
           <div className="px-3 py-3">
             <div className="flex items-center justify-between mb-2">
-              <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${dark ? 'text-slate-400' : 'text-slate-500'}`}><Sparkles size={11} className={dark ? 'text-violet-400' : 'text-orange-500'} /> Kisayollarim</span>
-              <button onClick={() => setEditOpen(true)} className={`text-[11px] font-semibold hover:underline flex items-center gap-0.5 ${dark ? 'text-violet-400' : 'text-orange-600'}`}><Pencil size={11} /> Duzenle</button>
+              <span className={`text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 ${dark ? 'text-slate-400' : 'text-slate-500'}`}><Sparkles size={11} className={t.accent} /> Kisayollarim</span>
+              <button onClick={() => setEditOpen(true)} className={`text-[11px] font-semibold hover:underline flex items-center gap-0.5 ${t.accent}`}><Pencil size={11} /> Duzenle</button>
             </div>
             <div className="grid grid-cols-4 gap-2">
               {shortcutItems.slice(0, 7).map((it) => (
                 <button key={it.to} onClick={() => { navigate(it.to); setMobileOpen(false); }} title={it.label} className={`flex flex-col items-center gap-1 p-2 rounded-xl border transition-all ${t.card} ${t.cardText}`}>
-                  <it.icon size={18} className={dark ? 'text-violet-300' : 'text-orange-500'} />
+                  <it.icon size={18} className={t.accent} />
                   <span className="text-[8px] leading-none text-center w-full truncate">{it.label.split(' ')[0]}</span>
                 </button>
               ))}
-              <button onClick={() => setEditOpen(true)} title="Kisayol ekle" className={`flex items-center justify-center p-2 rounded-xl border border-dashed ${dark ? 'border-white/20 text-slate-400 hover:text-violet-300 hover:border-violet-400/50' : 'border-orange-200 text-slate-400 hover:text-orange-600 hover:border-orange-400'} transition-colors`}><Plus size={18} /></button>
+              <button onClick={() => setEditOpen(true)} title="Kisayol ekle" className={`flex items-center justify-center p-2 rounded-xl border border-dashed ${dark ? 'border-white/20 text-slate-400 hover:text-white hover:border-white/40' : 'border-slate-300 text-slate-400 hover:text-indigo-600 hover:border-indigo-400'} transition-colors`}><Plus size={18} /></button>
             </div>
           </div>
         )}
@@ -207,7 +216,7 @@ export default function Sidebar() {
         {/* User kart */}
         <div className="px-2 pb-2">
           <div className={`relative overflow-hidden flex items-center gap-3 p-3 rounded-2xl ${t.userCard} shadow-lg`}>
-            <div className="absolute inset-0 opacity-30 pointer-events-none" style={{ background: 'radial-gradient(120px 60px at 80% 120%, rgba(255,255,255,0.5), transparent)' }} />
+            <div className="absolute inset-0 opacity-30 pointer-events-none" style={{ background: 'radial-gradient(140px 70px at 85% 130%, rgba(255,255,255,0.55), transparent)' }} />
             <div className="w-10 h-10 bg-white/20 rounded-full flex items-center justify-center text-sm font-bold text-white shrink-0 backdrop-blur">{initial}</div>
             {(!collapsed || mobileOpen) && (
               <div className="min-w-0 flex-1 relative">
@@ -233,13 +242,13 @@ function ShortcutEditor({ dark, allItems, current, onToggle, onClose }: { dark: 
   const [q, setQ] = useState('');
   const norm = (s: string) => s.toLowerCase().replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ğ/g, 'g');
   const list = q.trim() ? allItems.filter((it) => norm(it.label).includes(norm(q))) : allItems;
-  const accent = dark ? 'from-[#7c3aed] to-[#4f46e5]' : 'from-orange-500 to-amber-500';
+  const accent = dark ? 'text-violet-500' : 'text-indigo-600';
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
-        <div className={`px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r ${accent} bg-opacity-5`}>
+        <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
           <div>
-            <h3 className="font-bold text-slate-800 flex items-center gap-1.5"><Sparkles size={15} className={dark ? 'text-violet-500' : 'text-orange-500'} /> Kisayollari Duzenle</h3>
+            <h3 className="font-bold text-slate-800 flex items-center gap-1.5"><Sparkles size={15} className={accent} /> Kisayollari Duzenle</h3>
             <p className="text-xs text-slate-400">Hizli erisim icin sayfa sec. ({current.length} secili)</p>
           </div>
           <button onClick={onClose} className="p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg"><X size={18} /></button>
@@ -255,16 +264,16 @@ function ShortcutEditor({ dark, allItems, current, onToggle, onClose }: { dark: 
             const on = current.includes(it.to);
             const Icon = it.icon;
             return (
-              <button key={it.to} onClick={() => onToggle(it.to)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm transition-colors ${on ? (dark ? 'bg-violet-50 text-violet-700' : 'bg-orange-50 text-orange-700') : 'hover:bg-slate-50 text-slate-700'}`}>
-                <span className={`flex items-center justify-center w-8 h-8 rounded-lg ${on ? `bg-gradient-to-r ${accent} text-white` : 'bg-slate-100 text-slate-500'}`}><Icon size={16} /></span>
+              <button key={it.to} onClick={() => onToggle(it.to)} className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-sm transition-colors ${on ? 'bg-slate-100 text-slate-900' : 'hover:bg-slate-50 text-slate-700'}`}>
+                <span className={`flex items-center justify-center w-8 h-8 rounded-lg ${on ? 'bg-white shadow-sm text-slate-700' : 'bg-slate-100 text-slate-500'}`}><Icon size={16} /></span>
                 <span className="flex-1 font-medium">{it.label}</span>
-                {on && <Check size={16} className={dark ? 'text-violet-600' : 'text-orange-600'} />}
+                {on && <Check size={16} className="text-slate-700" />}
               </button>
             );
           })}
         </div>
         <div className="px-5 py-3 border-t border-slate-100 text-right">
-          <button onClick={onClose} className={`px-5 py-2 bg-gradient-to-r ${accent} text-white rounded-xl text-sm font-semibold hover:shadow-lg transition-shadow`}>Tamam</button>
+          <button onClick={onClose} className="px-5 py-2 bg-slate-800 text-white rounded-xl text-sm font-semibold hover:bg-slate-900 transition-colors">Tamam</button>
         </div>
       </div>
     </div>
