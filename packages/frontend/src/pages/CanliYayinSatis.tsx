@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Clock, TrendingUp, Wallet, ShoppingBag, Users, BarChart3, Radio, Square, Send, X, Filter, Trash2, History, UserCircle, Plus, Search, UserPlus, Tag } from 'lucide-react';
+import { Clock, TrendingUp, Wallet, ShoppingBag, Users, BarChart3, Radio, Square, Send, X, Filter, Trash2, History, UserCircle, Plus, Search, UserPlus, Tag, Brain, AlertTriangle, Lightbulb, Sparkles, Package, Target } from 'lucide-react';
 import { Doughnut, Line } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend, Filler } from 'chart.js';
 import toast from 'react-hot-toast';
@@ -310,6 +310,42 @@ export default function CanliYayinSatis() {
     return Object.entries(m).sort((a, b) => b[1].ciro - a[1].ciro);
   }, [orders]);
 
+  // Bu yayından alışveriş yapan tekil kişi sayısı (onaylanmış)
+  const alisverisYapan = useMemo(() => new Set(orders.filter((o) => o.durum === 'onaylandi').map((o) => o.user)).size, [orders]);
+
+  // Yapay zeka tavsiyeleri (canlı veriden, kural tabanlı)
+  const aiTavsiye = useMemo(() => {
+    const tips: { t: 'warn' | 'tip' | 'good'; m: string }[] = [];
+    const ona = orders.filter((o) => o.durum === 'onaylandi');
+    const iptal = orders.filter((o) => o.durum === 'iptal').length;
+    const iptalOran = orders.length ? Math.round((iptal / orders.length) * 100) : 0;
+    const ortSepet = alisverisYapan ? stats.ciro / alisverisYapan : 0;
+    const now = Date.now();
+    const son10 = ona.filter((o) => { const t = new Date(o.createdAt).getTime(); return !isNaN(t) && now - t < 600000; }).length;
+    const kayitsiz = new Set(ona.filter((o) => !isRegistered(o.user)).map((o) => o.user)).size;
+    if (iptalOran >= 25) tips.push({ t: 'warn', m: `İptal oranı yüksek (%${iptalOran}). Riskli/kayıtsız müşterilerden ön ödeme iste; sahte sipariş riskine dikkat et.` });
+    else if (iptalOran >= 10) tips.push({ t: 'tip', m: `İptal oranı %${iptalOran}. İptal edenleri "riskli" işaretleyip takip et.` });
+    if (kayitsiz > 0) tips.push({ t: 'warn', m: `${kayitsiz} kayıtsız kişi alışveriş yaptı. Yayında "üye ol" linkini paylaş — teslimat/iletişim sorununu önler.` });
+    if (enCokUrun.length) {
+      const [urunAd, adet] = enCokUrun[0] as [string, number];
+      const prod = products.find((p: any) => (p.ad || '') === urunAd);
+      const stok = prod?.stokAdeti;
+      if (typeof stok === 'number' && stok <= 5) tips.push({ t: 'warn', m: `En çok satan "${urunAd}" stoğu azaldı (${stok} kaldı). Şimdi öne çıkar, bitmeden tamamla.` });
+      else tips.push({ t: 'good', m: `En çok ilgi gören ürün: "${urunAd}" (${adet} satış). Tekrar göster, momentumu kullan.` });
+    }
+    const kamp: any = aktifKampanyalar[0];
+    if (kamp && kamp.minTutar) tips.push({ t: 'tip', m: `Ortalama sepet ${fmt(ortSepet)}. "${fmt(kamp.minTutar)} üzeri" kampanyanı hatırlat; sepeti eşiğe taşı.` });
+    else if (ortSepet > 0) tips.push({ t: 'tip', m: `Ortalama sepet ${fmt(ortSepet)}. Kombin / "2 al 1 öde" önerisiyle sepeti büyüt.` });
+    if (ona.length >= 3) {
+      if (son10 === 0) tips.push({ t: 'warn', m: 'Son 10 dakikada yeni sipariş yok. Yeni ürün çıkar ya da kısa süreli flaş indirim başlat.' });
+      else tips.push({ t: 'good', m: `Son 10 dk ${son10} sipariş — ivme iyi. İndirimli ürünleri öne al.` });
+    }
+    if (saticiPerf.length && saticiPerf[0][0] !== '(belirsiz)') tips.push({ t: 'good', m: `Lider satıcı: ${saticiPerf[0][0]} (${saticiPerf[0][1].adet} satış, ${fmt(saticiPerf[0][1].ciro)}).` });
+    if (!tips.length) tips.push({ t: 'tip', m: 'Yayına yeni başladın. İlk ürünü öne çıkar, kampanyaları duyur ve "üye ol" linkini paylaş.' });
+    return tips;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, products, aktifKampanyalar, alisverisYapan, stats, saticiPerf, enCokUrun]);
+
   const saticilar = useMemo(() => Array.from(new Set([...sellers, ...orders.map((o) => o.saticiAd).filter(Boolean)])), [sellers, orders]);
   const filtered = useMemo(() => {
     let list = tab === 'tumu' ? orders : orders.filter((o) => o.durum === tab);
@@ -341,7 +377,7 @@ export default function CanliYayinSatis() {
           {stats.kampanyaIndirimi > 0 && <Stat icon={Tag} label="Kampanya İnd." value={'-' + fmt(stats.kampanyaIndirimi)} color="text-amber-600" />}
           <Stat icon={Wallet} label="Tahmini Kâr" value={fmt(stats.kar)} color="text-indigo-600" />
           <Stat icon={ShoppingBag} label="Sipariş" value={stats.onaylandi} />
-          <Stat icon={Users} label="İzleyici" value={stream ? viewers.toLocaleString('tr-TR') : '0'} />
+          <Stat icon={ShoppingBag} label="Alışveriş Yapan" value={String(alisverisYapan)} />
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button onClick={openHistory} className="inline-flex items-center gap-2 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-200"><History size={16} /> Geçmiş</button>
@@ -358,23 +394,6 @@ export default function CanliYayinSatis() {
       <div className="grid lg:grid-cols-[320px_1fr] gap-4">
         {/* Sol */}
         <div className="space-y-4">
-          {/* Satici secimi */}
-          <div className="bg-white rounded-2xl border border-slate-200 p-4">
-            <h3 className="font-semibold text-slate-800 mb-2 flex items-center gap-2"><UserCircle size={18} className="text-indigo-600" /> Aktif Satıcı {satici && <span className="text-xs bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">{satici}</span>}</h3>
-            <div className="flex gap-2">
-              <input value={satici} onChange={(e) => setSatici(e.target.value)} placeholder="Satıcı adı" className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300" />
-              <button onClick={addSeller} title="Satıcı kaydet" className="bg-indigo-600 text-white px-3 rounded-lg hover:bg-indigo-700"><Plus size={16} /></button>
-            </div>
-            {sellers.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {sellers.map((s) => (
-                  <button key={s} onClick={() => setSatici(s)} className={`px-2.5 py-1 rounded-full text-xs ${satici === s ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{s}</button>
-                ))}
-              </div>
-            )}
-            <p className="text-[10px] text-slate-400 mt-1">Kaydettikten sonra isme tıklayarak satıcıyı anında değiştirebilirsiniz.</p>
-          </div>
-
           {/* Barkod ile urun arama */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4">
             <h3 className="font-semibold text-slate-800 mb-2 flex items-center gap-2"><Filter size={16} className="text-indigo-600" /> Barkod / Kod ile Ürün</h3>
@@ -382,6 +401,42 @@ export default function CanliYayinSatis() {
               <input value={barkod} onChange={(e) => setBarkod(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && scanBarcode()} placeholder="Barkod okut veya kod yaz" className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300" autoFocus />
               <button onClick={scanBarcode} className="bg-slate-800 text-white px-3 rounded-lg hover:bg-slate-700 text-sm">Okut</button>
             </div>
+
+            {/* Okutulan ürün stok kartı (inline — popup değil) */}
+            {barkodModal && (
+              <div className="mt-3 border border-indigo-200 bg-indigo-50/40 rounded-xl p-3 space-y-2.5">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-14 h-14 rounded-lg bg-white border border-slate-100 overflow-hidden shrink-0">{(barkodModal.images || [])[0] ? <img src={barkodModal.images[0]} className="w-full h-full object-cover" /> : null}</div>
+                    <div><p className="font-semibold text-slate-800 text-sm leading-tight">{barkodModal.ad}</p><p className="text-[10px] text-slate-400 font-mono">Kod: {barkodModal.salesCode || '-'} · Barkod: {barkodModal.barkod || '-'}</p></div>
+                  </div>
+                  <button onClick={() => setBarkodModal(null)} className="p-1 hover:bg-white rounded-lg"><X size={16} className="text-slate-400" /></button>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="bg-white rounded-lg p-2 border border-slate-100"><p className="text-[10px] text-slate-400">Güncel Stok</p><p className={`font-bold ${(barkodModal.stokAdeti || 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>{barkodModal.stokAdeti || 0} adet</p></div>
+                  <div className="bg-white rounded-lg p-2 border border-slate-100"><p className="text-[10px] text-slate-400">Satış Fiyatı</p><p className="font-bold text-slate-700">{fmt(barkodModal.satisFiyat || 0)}</p></div>
+                </div>
+                {(barkodModal.variations || []).length > 0 ? (
+                  <div>
+                    <p className="text-[10px] text-slate-400 uppercase mb-1">Varyasyon / Beden Stoğu</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {barkodModal.variations.map((v: any) => <span key={v.id} className={`text-xs px-2 py-1 rounded-lg border ${v.stok > 0 ? 'bg-white border-slate-200 text-slate-700' : 'bg-red-50 border-red-200 text-red-500 line-through'}`}>{v.deger}: <b>{v.stok}</b></span>)}
+                    </div>
+                  </div>
+                ) : <p className="text-[10px] text-slate-400">Varyasyon yok (tek stok).</p>}
+                {activeFlash(barkodModal.id) > 0 && <p className="text-xs text-green-600 font-medium">Aktif süreli indirim: {fmt(activeFlash(barkodModal.id))}</p>}
+                <div className="border-t border-indigo-100 pt-2">
+                  <p className="text-[11px] font-medium text-slate-700 mb-1.5">Süreli İndirimli Fiyat</p>
+                  <div className="flex gap-2">
+                    <input type="number" value={discForm.price} onChange={(e) => setDiscForm({ ...discForm, price: e.target.value })} placeholder="İndirimli ₺" className="flex-1 px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg" />
+                    <input type="number" value={discForm.dakika} onChange={(e) => setDiscForm({ ...discForm, dakika: e.target.value })} placeholder="dk" className="w-16 px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg" />
+                    <button onClick={setFlashDiscount} className="bg-indigo-600 text-white px-3 rounded-lg text-sm font-medium hover:bg-indigo-700 shrink-0">Başlat</button>
+                  </div>
+                  <p className="text-[10px] text-slate-400 mt-1">Yalnızca bu süre içinde gelen siparişler indirimli işlenir.</p>
+                </div>
+              </div>
+            )}
+
             {barHistory.length > 0 && (
               <div className="mt-3 space-y-1 max-h-40 overflow-y-auto">
                 <p className="text-[10px] text-slate-400 uppercase">Okutulan Geçmiş</p>
@@ -417,10 +472,22 @@ export default function CanliYayinSatis() {
           </div>
         </div>
 
-        {/* Orta tablo */}
-        <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-          {aktifKampanyalar.length > 0 && (
-            <div className="px-3 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2 flex-wrap">
+        {/* Sağ kolon */}
+        <div className="space-y-4 min-w-0">
+          {/* Aktif Satıcı — sağ üst */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-3 flex items-center gap-2 flex-wrap">
+            <span className="text-xs font-semibold text-slate-700 inline-flex items-center gap-1.5 shrink-0"><UserCircle size={16} className="text-indigo-600" /> Aktif Satıcı{satici && <span className="text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">{satici}</span>}</span>
+            <input value={satici} onChange={(e) => setSatici(e.target.value)} placeholder="Satıcı adı" className="px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300 w-36" />
+            <button onClick={addSeller} title="Satıcı kaydet" className="bg-indigo-600 text-white px-2.5 py-1.5 rounded-lg hover:bg-indigo-700"><Plus size={14} /></button>
+            <div className="flex flex-wrap gap-1.5">
+              {sellers.map((s) => (<button key={s} onClick={() => setSatici(s)} className={`px-2.5 py-1 rounded-full text-xs ${satici === s ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>{s}</button>))}
+            </div>
+          </div>
+
+          {/* Sipariş tablosu */}
+          <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+            {aktifKampanyalar.length > 0 && (
+              <div className="px-3 py-2 bg-amber-50 border-b border-amber-100 flex items-center gap-2 flex-wrap">
               <span className="text-xs font-semibold text-amber-700">🏷 Aktif Kampanyalar:</span>
               {aktifKampanyalar.map((k: any) => <span key={k.id} className="text-[11px] bg-white border border-amber-200 text-amber-700 px-2 py-0.5 rounded-full" title={kampKisa(k)}>{kampKisa(k)}</span>)}
             </div>
@@ -436,7 +503,7 @@ export default function CanliYayinSatis() {
               </span>
             </span>
           </div>
-          <div className="overflow-x-auto max-h-[58vh] overflow-y-auto">
+          <div className="overflow-x-auto max-h-[42vh] overflow-y-auto">
             <table className="w-full text-sm min-w-[920px]">
               <thead className="bg-slate-50 text-slate-500 text-left sticky top-0"><tr><th className="px-3 py-2">Kullanıcı</th><th className="px-3 py-2">Ürün</th><th className="px-3 py-2">Kod</th><th className="px-3 py-2">Beden</th><th className="px-3 py-2">Satıcı</th><th className="px-3 py-2">Tutar</th><th className="px-3 py-2">Durum</th><th className="px-3 py-2">Saat</th><th className="px-3 py-2">İşlem</th></tr></thead>
               <tbody>
@@ -469,40 +536,43 @@ export default function CanliYayinSatis() {
               </tbody>
             </table>
           </div>
-        </div>
-      </div>
+          </div>
 
-      {/* Barkod urun modali */}
-      {barkodModal && (
-        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50" onClick={() => setBarkodModal(null)}>
-          <div className="w-full max-w-md bg-white rounded-2xl p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between"><h3 className="text-lg font-bold text-slate-800">Ürün Bilgisi</h3><button onClick={() => setBarkodModal(null)}><X size={20} className="text-slate-400" /></button></div>
-            <div className="flex items-center gap-3">
-              <div className="w-16 h-16 rounded-lg bg-slate-100 overflow-hidden shrink-0">{(barkodModal.images || [])[0] ? <img src={barkodModal.images[0]} className="w-full h-full object-cover" /> : null}</div>
-              <div><p className="font-semibold text-slate-800">{barkodModal.ad}</p><p className="text-xs text-slate-400 font-mono">Kod: {barkodModal.salesCode || '-'} · Barkod: {barkodModal.barkod || '-'}</p></div>
+          {/* Yapay Zeka Asistanı — tavsiye & raporlama */}
+          <div className="bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center"><Brain size={17} className="text-white" /></div>
+              <div><h3 className="font-bold text-slate-800 text-sm leading-tight">Yapay Zeka Asistanı</h3><p className="text-[10px] text-slate-400">Bu yayın için canlı tavsiye & uyarılar — bir sonraki hamleni doğru oyna</p></div>
+              <span className="ml-auto text-[10px] text-indigo-500 inline-flex items-center gap-1"><Sparkles size={12} /> Canlı</span>
             </div>
-            <div className="grid grid-cols-2 gap-2 text-sm">
-              <div className="bg-slate-50 rounded-lg p-2"><p className="text-[10px] text-slate-400">Güncel Stok</p><p className={`font-bold ${(barkodModal.stokAdeti || 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>{barkodModal.stokAdeti || 0}</p></div>
-              <div className="bg-slate-50 rounded-lg p-2"><p className="text-[10px] text-slate-400">Satış Fiyatı</p><p className="font-bold text-slate-700">{fmt(barkodModal.satisFiyat || 0)}</p></div>
+            <div className="space-y-2">
+              {aiTavsiye.map((a, i) => {
+                const cfg = a.t === 'warn' ? { Ic: AlertTriangle, c: 'text-red-500', bg: 'bg-red-50 border-red-100' } : a.t === 'good' ? { Ic: TrendingUp, c: 'text-green-600', bg: 'bg-green-50 border-green-100' } : { Ic: Lightbulb, c: 'text-amber-500', bg: 'bg-amber-50 border-amber-100' };
+                const Ic = cfg.Ic;
+                return <div key={i} className={`flex items-start gap-2 rounded-xl border px-3 py-2 ${cfg.bg}`}><Ic size={15} className={`${cfg.c} shrink-0 mt-0.5`} /><span className="text-[12px] text-slate-700 leading-snug">{a.m}</span></div>;
+              })}
             </div>
-            {(barkodModal.variations || []).length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {barkodModal.variations.map((v: any) => <span key={v.id} className={`text-xs px-2 py-0.5 rounded border ${v.stok > 0 ? 'border-slate-200 text-slate-600' : 'border-red-200 text-red-500 line-through'}`}>{v.deger}: {v.stok}</span>)}
+            <div className="grid sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-indigo-100">
+              <div>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase mb-1.5 flex items-center gap-1"><Package size={12} /> En Çok Satan</p>
+                <div className="space-y-1">
+                  {enCokUrun.slice(0, 4).map(([ad, adet]: any, i: number) => <div key={i} className="flex items-center justify-between text-[11px]"><span className="text-slate-600 truncate pr-2">{i + 1}. {ad}</span><span className="font-semibold text-slate-700 shrink-0">{adet} adet</span></div>)}
+                  {enCokUrun.length === 0 && <p className="text-[11px] text-slate-400">Henüz satış yok.</p>}
+                </div>
               </div>
-            )}
-            {activeFlash(barkodModal.id) > 0 && <p className="text-xs text-green-600">Aktif süreli indirim: {fmt(activeFlash(barkodModal.id))}</p>}
-            <div className="border-t border-slate-100 pt-3">
-              <p className="text-sm font-medium text-slate-700 mb-2">Süreli İndirimli Fiyat</p>
-              <div className="flex gap-2">
-                <input type="number" value={discForm.price} onChange={(e) => setDiscForm({ ...discForm, price: e.target.value })} placeholder="İndirimli fiyat ₺" className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg" />
-                <input type="number" value={discForm.dakika} onChange={(e) => setDiscForm({ ...discForm, dakika: e.target.value })} placeholder="Süre (dk)" className="w-28 px-3 py-2 text-sm border border-slate-200 rounded-lg" />
+              <div>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase mb-1.5 flex items-center gap-1"><Target size={12} /> Satıcı Performansı</p>
+                <div className="space-y-1">
+                  {saticiPerf.slice(0, 4).map(([ad, v]: any, i: number) => <div key={i} className="flex items-center justify-between text-[11px]"><span className="text-slate-600 truncate pr-2">{i + 1}. {ad}</span><span className="font-semibold text-slate-700 shrink-0">{v.adet} · {fmt(v.ciro)}</span></div>)}
+                  {saticiPerf.length === 0 && <p className="text-[11px] text-slate-400">Satıcı verisi yok.</p>}
+                </div>
               </div>
-              <p className="text-[10px] text-slate-400 mt-1">Yalnızca bu süre içinde gelen siparişler indirimli fiyattan işlenir.</p>
-              <button onClick={setFlashDiscount} className="w-full mt-2 bg-indigo-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">İndirimi Başlat</button>
             </div>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Barkod ürün bilgisi artık barkod kutusunun altında inline gösteriliyor (popup kaldırıldı) */}
 
       {/* Hizli kayit modal */}
       {kayitModal && (
