@@ -119,6 +119,7 @@ export default function Dashboard() {
   // Dönem içi cari borç hareketi
   const filteredCari = useMemo(() => cariHareketler.filter(h => h.tarih >= dateFrom && h.tarih <= dateTo), [cariHareketler, dateFrom, dateTo]);
   const borcAzalis = filteredCari.filter(h => h.tip === 'odeme').reduce((s, h) => s + h.tutar, 0);
+  const kalanKasa = toplamGelir - toplamGider - borcAzalis; // gelirden gider ve borc odemesi dusuldukten sonra kalan
 
   const gelirGiderChart = useMemo(() => {
     const dates = [...new Set(filteredHareketler.map(h => h.tarih))].sort();
@@ -156,12 +157,12 @@ export default function Dashboard() {
   const financeCards = [
     { label: 'Cari Hesaplar', to: '/cari-hesaplar', icon: Users, color: 'bg-blue-50 text-blue-600', desc: `${cariHesaplar.length} hesap` },
     { label: 'Kasa & Banka', to: '/kasa-banka', icon: Landmark, color: 'bg-amber-50 text-amber-600', desc: `${fmt(likitToplam)} TL` },
-    { label: 'Gelir / Gider', to: '/gelir-gider', icon: BarChart3, color: 'bg-emerald-50 text-emerald-600', desc: `${fmt(netKar)} TL` },
+    { label: 'Gelir / Gider', to: '/gelir-gider', icon: BarChart3, color: 'bg-emerald-50 text-emerald-600', desc: `Net ${fmt(netKar)} TL` },
     { label: 'Cekler', to: '/cekler', icon: FileText, color: 'bg-rose-50 text-rose-600', desc: `${fmt(cekBorc + cekAlacak)} TL` },
     { label: 'Duzenli Odemeler', to: '/duzenli-odemeler', icon: Calendar, color: 'bg-indigo-50 text-indigo-600', desc: `${duzenliOdemeler.filter(o => o.durum === 'aktif').length} aktif` },
-    { label: 'Finansal Durum', to: '/gelir-gider', icon: Activity, color: 'bg-cyan-50 text-cyan-600', desc: `Net ${fmt(netVarlik)} TL` },
+    { label: 'Finansal Durum', to: '/finansal-durum', icon: Activity, color: 'bg-cyan-50 text-cyan-600', desc: `Net ${fmt(netVarlik)} TL` },
     { label: 'Hedeflerim', to: '/hedeflerim', icon: Target, color: 'bg-purple-50 text-purple-600', desc: 'Incele' },
-    { label: 'Hareket Loglari', to: '/gelir-gider', icon: Receipt, color: 'bg-orange-50 text-orange-600', desc: `${hareketler.length} kayit` },
+    { label: 'Banka Hareketleri', to: '/banka-hareketleri', icon: Receipt, color: 'bg-orange-50 text-orange-600', desc: `${hareketler.length} kayit` },
   ].filter(c => canAccess(c.to));
 
   return (
@@ -209,32 +210,37 @@ export default function Dashboard() {
         })}
       </div>
 
-      {/* Kasa Durumu: Aldim / Verdim / Ne Kaldi */}
+      {/* Kasa Durumu: Aldim - Verdim - Borc Odemesi = Kalan */}
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
         <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[13px] font-bold text-gray-800 flex items-center gap-1.5"><Wallet size={15} className="text-amber-500" /> Kasa Durumu</h3>
+          <h3 className="text-[13px] font-bold text-gray-800 flex items-center gap-1.5"><Wallet size={15} className="text-amber-500" /> Kasa Durumu <span className="text-[9px] text-gray-400 font-normal">(secili donem)</span></h3>
           {canAccess('/kasa-banka') && <button onClick={() => navigate('/kasa-banka')} className="text-[10px] text-[#6c63ff] font-medium hover:underline flex items-center gap-0.5">Detay <ArrowRight size={11} /></button>}
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="rounded-xl bg-green-50 border border-green-100 p-3">
-            <div className="flex items-center gap-1.5 mb-1"><ArrowDownRight size={14} className="text-green-600" /><span className="text-[10px] text-green-700 font-semibold">Aldim (Para Girisi)</span></div>
+            <div className="flex items-center gap-1.5 mb-1"><ArrowDownRight size={14} className="text-green-600" /><span className="text-[10px] text-green-700 font-semibold">Aldim (Gelir)</span></div>
             <p className="text-xl font-bold text-green-700">{fmt(toplamGelir)} TL</p>
-            <p className="text-[9px] text-green-600/70 mt-0.5">Bu donem tahsilat / gelir</p>
+            <p className="text-[9px] text-green-600/70 mt-0.5">Tahsilat / satis geliri</p>
           </div>
           <div className="rounded-xl bg-red-50 border border-red-100 p-3">
-            <div className="flex items-center gap-1.5 mb-1"><ArrowUpRight size={14} className="text-red-500" /><span className="text-[10px] text-red-600 font-semibold">Verdim (Para Cikisi)</span></div>
+            <div className="flex items-center gap-1.5 mb-1"><ArrowUpRight size={14} className="text-red-500" /><span className="text-[10px] text-red-600 font-semibold">Verdim (Gider)</span></div>
             <p className="text-xl font-bold text-red-600">{fmt(toplamGider)} TL</p>
-            <p className="text-[9px] text-red-500/70 mt-0.5">Bu donem odeme / gider</p>
+            <p className="text-[9px] text-red-500/70 mt-0.5">Odeme / masraf</p>
           </div>
-          <div className="rounded-xl bg-amber-50 border border-amber-100 p-3">
-            <div className="flex items-center gap-1.5 mb-1"><Wallet size={14} className="text-amber-600" /><span className="text-[10px] text-amber-700 font-semibold">Ne Kaldi (Kasa Bakiye)</span></div>
-            <p className="text-xl font-bold text-amber-700">{fmt(likitToplam)} TL</p>
-            <p className="text-[9px] text-amber-600/70 mt-0.5">Kasa {fmt(kasaToplam)} · Banka {fmt(bankaToplam)} · Birikim {fmt(birikimToplam)}</p>
+          <div className="rounded-xl bg-orange-50 border border-orange-100 p-3">
+            <div className="flex items-center gap-1.5 mb-1"><CreditCard size={14} className="text-orange-500" /><span className="text-[10px] text-orange-600 font-semibold">Borca Odenen</span></div>
+            <p className="text-xl font-bold text-orange-600">{fmt(borcAzalis)} TL</p>
+            <p className="text-[9px] text-orange-500/70 mt-0.5">Cari borc odemesi</p>
+          </div>
+          <div className={`rounded-xl p-3 border ${kalanKasa >= 0 ? 'bg-amber-50 border-amber-200' : 'bg-red-50 border-red-200'}`}>
+            <div className="flex items-center gap-1.5 mb-1"><Wallet size={14} className={kalanKasa >= 0 ? 'text-amber-600' : 'text-red-600'} /><span className={`text-[10px] font-semibold ${kalanKasa >= 0 ? 'text-amber-700' : 'text-red-700'}`}>Kalan Kasa</span></div>
+            <p className={`text-xl font-bold ${kalanKasa >= 0 ? 'text-amber-700' : 'text-red-700'}`}>{fmt(kalanKasa)} TL</p>
+            <p className={`text-[9px] mt-0.5 ${kalanKasa >= 0 ? 'text-amber-600/70' : 'text-red-600/70'}`}>Gelir - Gider - Borc odemesi</p>
           </div>
         </div>
         <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
-          <span className="text-[10px] text-gray-500">Bu donem net (Aldim - Verdim)</span>
-          <span className={`text-sm font-bold ${donemNet >= 0 ? 'text-green-600' : 'text-red-600'}`}>{donemNet >= 0 ? '+' : ''}{fmt(donemNet)} TL</span>
+          <span className="text-[10px] text-gray-500">Gercek hesap bakiyesi (Kasa + Banka + Birikim)</span>
+          <span className="text-sm font-bold text-amber-700">{fmt(likitToplam)} TL <span className="text-[9px] text-gray-400 font-normal">· Kasa {fmt(kasaToplam)} · Banka {fmt(bankaToplam)} · Birikim {fmt(birikimToplam)}</span></span>
         </div>
       </div>
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
