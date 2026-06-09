@@ -220,6 +220,10 @@ router.post('/products', asyncHandler(async (req: Request, res: Response) => {
       if (!v?.deger) continue;
       await tx.productVariation.create({ data: { tenantId: req.tenantId!, productId: p.id, ad: v.ad || 'Varyasyon', deger: v.deger, stok: Number(v.stok) || 0, ekFiyat: Number(v.ekFiyat) || 0 } });
     }
+    if (vars.some((v) => v?.deger)) {
+      const toplam = vars.reduce((s, v) => s + (v?.deger ? (Number(v.stok) || 0) : 0), 0);
+      await tx.product.update({ where: { id: p.id }, data: { stokAdeti: toplam } });
+    }
     return p;
   });
   res.status(201).json(product);
@@ -236,9 +240,15 @@ router.patch('/products/:id', asyncHandler(async (req: Request, res: Response) =
     }
     if (Array.isArray(req.body.variations)) {
       await tx.productVariation.deleteMany({ where: { productId: p.id, tenantId: req.tenantId! } });
+      let toplam = 0;
       for (const v of req.body.variations) {
         if (!v?.deger) continue;
+        toplam += Number(v.stok) || 0;
         await tx.productVariation.create({ data: { tenantId: req.tenantId!, productId: p.id, ad: v.ad || 'Varyasyon', deger: v.deger, stok: Number(v.stok) || 0, ekFiyat: Number(v.ekFiyat) || 0 } });
+      }
+      // Varyasyonlu üründe toplam stok = varyasyon stokları toplamı
+      if (req.body.variations.some((v: any) => v?.deger)) {
+        await tx.product.update({ where: { id: p.id }, data: { stokAdeti: toplam } });
       }
     }
     return p;

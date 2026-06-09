@@ -178,7 +178,16 @@ export default function Urunlerim({ autoAdd }: Props) {
     try {
       for (const p of list) {
         if (bulk === 'fiyat') { const v = Number(bulkForm.val) || 0; const yeni = bulkForm.mode === 'yuzde' ? Math.round((p.satisFiyat || 0) * (1 + v / 100)) : bulkForm.mode === 'set' ? v : (p.satisFiyat || 0) + v; await api.patch(`/store/products/${p.id}`, { satisFiyat: yeni }); }
-        else if (bulk === 'stok') { await api.patch(`/store/products/${p.id}`, { stokAdeti: Number(bulkForm.val) || 0 }); }
+        else if (bulk === 'stok') {
+          const val = Number(bulkForm.val) || 0;
+          if (p.variations && p.variations.length) {
+            // Varyasyonlu üründe her varyasyonun stoğu güncellenir; toplam stok backend'de yeniden hesaplanır
+            const variations = p.variations.map((v: any) => ({ ad: v.ad, deger: v.deger, stok: val, ekFiyat: v.ekFiyat || 0 }));
+            await api.patch(`/store/products/${p.id}`, { variations });
+          } else {
+            await api.patch(`/store/products/${p.id}`, { stokAdeti: val });
+          }
+        }
         else if (bulk === 'kategori') { await api.patch(`/store/products/${p.id}`, { kategoriId: bulkForm.kategoriId || null }); }
       }
       toast.success(`${list.length} ürün güncellendi`); setBulk(null); setSel(new Set()); reload();
@@ -403,7 +412,7 @@ export default function Urunlerim({ autoAdd }: Props) {
               <div className="grid grid-cols-3 gap-2">{[['yuzde', '% Değişim'], ['tutar', '± Tutar'], ['set', 'Sabit']].map(([m, t]) => <button key={m} onClick={() => setBulkForm((f: any) => ({ ...f, mode: m }))} className={`py-2 text-xs rounded-lg border ${bulkForm.mode === m ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500'}`}>{t}</button>)}</div>
               <input type="number" value={bulkForm.val} onChange={(e) => setBulkForm((f: any) => ({ ...f, val: e.target.value }))} placeholder={bulkForm.mode === 'yuzde' ? 'ör. 10 (=%10 zam), -10 (indirim)' : 'Tutar'} className={inp} />
             </>)}
-            {bulk === 'stok' && <input type="number" value={bulkForm.val} onChange={(e) => setBulkForm((f: any) => ({ ...f, val: e.target.value }))} placeholder="Yeni stok adedi" className={inp} />}
+            {bulk === 'stok' && <><input type="number" value={bulkForm.val} onChange={(e) => setBulkForm((f: any) => ({ ...f, val: e.target.value }))} placeholder="Yeni stok adedi" className={inp} /><p className="text-[11px] text-slate-400 -mt-1">Varyasyonlu ürünlerde her varyasyonun stoğu bu değere ayarlanır; toplam stok otomatik hesaplanır.</p></>}
             {bulk === 'kategori' && <select value={bulkForm.kategoriId} onChange={(e) => setBulkForm((f: any) => ({ ...f, kategoriId: e.target.value }))} className={inp}><option value="">Kategori yok</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.ad}</option>)}</select>}
             <button onClick={runBulk} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700">Uygula</button>
           </div>
