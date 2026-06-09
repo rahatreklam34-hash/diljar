@@ -81,6 +81,7 @@ export const navGroups: MenuGroup[] = [
     title: 'Pazarlama & Asistan',
     items: [
       { to: '/pazarlama', icon: Megaphone, label: 'Pazarlama & SMS' },
+      { to: '/musteri-davranislari', icon: UserCheck, label: 'Musteri Davranislari' },
       { to: '/asistan', icon: Bot, label: 'Yapay Zeka Asistani' },
       { to: '/asistan-satislari', icon: Bot, label: 'Asistan Satislari' },
     ],

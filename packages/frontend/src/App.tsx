@@ -50,6 +50,7 @@ import SaticiPerformans from './pages/SaticiPerformans';
 import Personeller from './pages/Personeller';
 import EkipSohbet from './pages/EkipSohbet';
 import Pazarlama from './pages/Pazarlama';
+import MusteriDavranislari from './pages/MusteriDavranislari';
 import Sicil from './pages/Sicil';
 import Asistan from './pages/Asistan';
 import AsistanSatislari from './pages/AsistanSatislari';
@@ -126,6 +127,7 @@ function TenantApp() {
               <Route path="/personeller" element={<Personeller />} />
               <Route path="/ekip" element={<EkipSohbet />} />
               <Route path="/pazarlama" element={<Pazarlama />} />
+              <Route path="/musteri-davranislari" element={<MusteriDavranislari />} />
               <Route path="/sicil" element={<Sicil />} />
               <Route path="/asistan" element={<Asistan />} />
               <Route path="/asistan-satislari" element={<AsistanSatislari />} />
