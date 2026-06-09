@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Search, Heart, ShoppingBag, Zap, Home, LayoutGrid, Radio, User, Plus, Minus, X, Star, ChevronDown, Grid2x2, List, Truck, RotateCcw, ShieldCheck, Headphones, Lock, SlidersHorizontal, Tag } from 'lucide-react';
+import { Search, Heart, ShoppingBag, Zap, Home, LayoutGrid, Radio, User, Plus, Minus, X, Star, ChevronDown, Grid2x2, List, Truck, RotateCcw, ShieldCheck, Headphones, Lock, SlidersHorizontal, Tag, CreditCard, Check } from 'lucide-react';
 import api, { apiErrorMessage } from '../lib/api';
 
 const fmt = (n: number) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
@@ -40,6 +40,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [checkout, setCheckout] = useState(false);
+  const [checkoutStep, setCheckoutStep] = useState<'teslimat' | 'odeme' | 'onay'>('teslimat');
   const [cust, setCust] = useState({ ad: '', telefon: '', email: '', adres: '' });
   const [paytrUrl, setPaytrUrl] = useState('');
   const [done, setDone] = useState<any>(null);
@@ -191,15 +192,15 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const sepeteEkle = (p: any) => { if ((p.variations || []).length > 0) { setVarModal(p); setVarSel(''); } else addToCart(p); };
   const sub = (key: string) => setCart((c) => { const n = (c[key]?.adet || 0) - 1; const copy = { ...c }; if (n <= 0) delete copy[key]; else copy[key] = { ...copy[key], adet: n }; return copy; });
   const inc = (key: string) => setCart((c) => ({ ...c, [key]: { ...c[key], adet: c[key].adet + 1 } }));
-  const tamamla = () => { if (cartItems.length === 0) return; setCartOpen(false); setCheckout(true); };
-  const odemeYap = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!cust.ad || !cust.telefon) { alert('Ad ve telefon zorunludur'); return; }
+  const tamamla = () => { if (cartItems.length === 0) return; setCartOpen(false); setCheckoutStep('teslimat'); setCheckout(true); };
+  const odemeYap = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    if (!cust.ad || !cust.telefon || !cust.adres) { alert('Ad Soyad, telefon ve teslimat adresi zorunludur'); return; }
     setBusy(true);
     try {
       const items = cartItems.map((x: any) => ({ productId: x.productId, adet: x.adet, varyasyon: x.varyasyon || undefined }));
       const r = await api.post(`/public/store/${slug}/order`, { customer: cust, items, discountCode: discountCode || undefined });
-      if (r.data.iframeUrl) { setPaytrUrl(r.data.iframeUrl); setCheckout(false); return; }
+      if (r.data.iframeUrl) { setPaytrUrl(r.data.iframeUrl); setCheckoutStep('odeme'); return; }
       if (r.data.paytrError) alert('Ödeme başlatılamadı: ' + r.data.paytrError + '\nSiparişiniz kaydedildi, sizinle iletişime geçilecek.');
       track('browse', null, 'order');
       setDone(r.data); setCart({}); setCheckout(false); setDiscountCode(''); setCodeInput(''); setPreview(null);
@@ -523,28 +524,104 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
         </div>
       )}
 
-      {/* Checkout (teslimat + ödeme) */}
+      {/* Çok adımlı Ödeme (Sepetim → Teslimat → Ödeme → Onay) */}
       {checkout && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50" onClick={() => setCheckout(false)}>
-          <form onClick={(e) => e.stopPropagation()} onSubmit={odemeYap} className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 space-y-3 max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between"><h3 className="font-bold text-slate-800">Teslimat & Ödeme</h3><button type="button" onClick={() => setCheckout(false)}><X size={20} className="text-slate-400" /></button></div>
-            <div className="bg-slate-50 rounded-xl p-3 text-sm flex justify-between"><span className="text-slate-500">Ödenecek Tutar</span><span className="font-bold text-slate-900">{fmt(odenecek)}</span></div>
-            <input required value={cust.ad} onChange={(e) => setCust({ ...cust, ad: e.target.value })} placeholder="Ad Soyad *" className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl" />
-            <input required value={cust.telefon} onChange={(e) => setCust({ ...cust, telefon: e.target.value })} placeholder="Telefon *" className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl" />
-            <input value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} placeholder="E-posta" className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl" />
-            <textarea required rows={2} value={cust.adres} onChange={(e) => setCust({ ...cust, adres: e.target.value })} placeholder="Teslimat Adresi *" className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl" />
-            <button type="submit" disabled={busy} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"><Lock size={16} /> {busy ? 'Yönlendiriliyor...' : 'Ödemeye Geç'}</button>
-            <p className="text-[11px] text-slate-400 text-center">Kredi/banka kartı ile güvenli ödeme (PayTR). Bilgileriniz 256-bit SSL ile şifrelenir.</p>
-          </form>
-        </div>
-      )}
+        <div className="fixed inset-0 z-[100] bg-slate-50 overflow-y-auto">
+          {/* Üst bar */}
+          <div className="bg-white border-b border-slate-100 sticky top-0 z-10">
+            <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+              <div className="flex items-center gap-2 shrink-0">
+                {data.logo ? <img src={data.logo} className="w-8 h-8 rounded-lg object-cover" /> : <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center text-white font-bold">{(comp.magaza || 'M')[0]}</div>}
+                <span className="font-bold text-slate-800 hidden sm:block">{comp.magaza}</span>
+              </div>
+              <button onClick={() => setCheckout(false)} className="ml-auto text-sm text-slate-500 hover:text-slate-800 inline-flex items-center gap-1"><X size={16} /> Alışverişe Dön</button>
+            </div>
+            {/* Adım göstergesi */}
+            <div className="max-w-3xl mx-auto px-4 pb-3">
+              <div className="flex items-center">
+                {[['Sepetim', true, false], ['Teslimat Bilgileri', checkoutStep === 'odeme', checkoutStep === 'teslimat'], ['Ödeme', false, checkoutStep === 'odeme'], ['Sipariş Onayı', false, false]].map(([t, done, active]: any, i: number, arr: any[]) => (
+                  <div key={t} className="flex items-center flex-1 last:flex-none">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${done ? 'bg-emerald-500 text-white' : active ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>{done ? <Check size={13} /> : i + 1}</span>
+                      <span className={`text-[11px] sm:text-xs font-medium ${active ? 'text-indigo-600' : done ? 'text-emerald-600' : 'text-slate-400'} hidden xs:inline sm:inline`}>{t}</span>
+                    </div>
+                    {i < arr.length - 1 && <div className={`flex-1 h-0.5 mx-2 ${done ? 'bg-emerald-400' : 'bg-slate-200'}`} />}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
 
-      {/* PayTR iframe */}
-      {paytrUrl && (
-        <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center p-3" onClick={() => setPaytrUrl('')}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-white rounded-2xl overflow-hidden h-[88vh] flex flex-col">
-            <div className="flex items-center justify-between p-3 border-b border-slate-100"><span className="font-semibold text-slate-800 inline-flex items-center gap-1.5"><Lock size={15} /> Güvenli Ödeme</span><button onClick={() => setPaytrUrl('')}><X size={20} className="text-slate-400" /></button></div>
-            <iframe src={paytrUrl} className="flex-1 w-full" title="Ödeme" />
+          <div className="max-w-6xl mx-auto px-4 py-5 grid lg:grid-cols-[1fr_minmax(300px,360px)] gap-5 items-start">
+            {/* Sol: adım içeriği */}
+            <div className="space-y-4 min-w-0">
+              {checkoutStep === 'teslimat' && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+                  <h2 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Truck size={18} className="text-indigo-600" /> Teslimat Bilgileri</h2>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <div className="sm:col-span-2"><label className="block text-xs text-slate-500 mb-1">Ad Soyad *</label><input value={cust.ad} onChange={(e) => setCust({ ...cust, ad: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
+                    <div><label className="block text-xs text-slate-500 mb-1">Telefon *</label><input value={cust.telefon} onChange={(e) => setCust({ ...cust, telefon: e.target.value })} placeholder="05xx xxx xx xx" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
+                    <div><label className="block text-xs text-slate-500 mb-1">E-posta</label><input value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
+                    <div className="sm:col-span-2"><label className="block text-xs text-slate-500 mb-1">Teslimat Adresi *</label><textarea rows={3} value={cust.adres} onChange={(e) => setCust({ ...cust, adres: e.target.value })} placeholder="Mahalle, sokak, no, daire, ilçe/il" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
+                  </div>
+                  <p className="text-[11px] text-slate-400 inline-flex items-center gap-1"><Lock size={12} /> Bilgileriniz yalnızca siparişinizin teslimatı için kullanılır.</p>
+                </div>
+              )}
+
+              {checkoutStep === 'odeme' && (
+                <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                  <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center"><CreditCard size={18} /></span><div><h2 className="font-bold text-slate-800">Kredi / Banka Kartı ile Ödeme</h2><p className="text-[11px] text-slate-400">Kart bilgileriniz 256-bit SSL ile PayTR güvencesiyle işlenir, saklanmaz.</p></div></div>
+                    <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400"><span className="px-1.5 py-0.5 bg-slate-100 rounded">VISA</span><span className="px-1.5 py-0.5 bg-slate-100 rounded">MC</span><span className="px-1.5 py-0.5 bg-slate-100 rounded">TROY</span></div>
+                  </div>
+                  {paytrUrl ? (
+                    <iframe src={paytrUrl} className="w-full" style={{ height: '70vh', minHeight: 520 }} title="Kart ile Ödeme" />
+                  ) : (
+                    <div className="p-6 text-center text-slate-500">
+                      <Lock size={26} className="mx-auto mb-3 text-slate-300" />
+                      <p className="font-medium text-slate-700">Kart ödeme ekranı yüklenemedi.</p>
+                      <p className="text-sm mt-1">Siparişiniz alındı; ödeme/iletişim için sizinle iletişime geçilecektir.{cfg.iban ? ` Havale/EFT: ${cfg.bankaAd || ''} ${cfg.iban}` : ''}</p>
+                      <button onClick={() => { setCheckout(false); setDone({ ok: true }); }} className="mt-4 px-5 py-2.5 bg-indigo-600 text-white rounded-xl font-medium">Tamam</button>
+                    </div>
+                  )}
+                  <div className="p-3 bg-slate-50 text-[11px] text-slate-400 flex items-center justify-center gap-1.5"><Lock size={12} /> Taksit seçenekleri ödeme ekranında kartınıza göre gösterilir.</div>
+                </div>
+              )}
+            </div>
+
+            {/* Sağ: Sipariş Özeti */}
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 lg:sticky lg:top-24">
+              <div className="flex items-center justify-between mb-3"><h3 className="font-bold text-slate-800">Sipariş Özeti</h3><span className="text-xs text-slate-400">{cartItems.length} Ürün</span></div>
+              <div className="space-y-3 max-h-56 overflow-y-auto mb-3">
+                {cartItems.map((it: any, i: number) => (
+                  <div key={i} className="flex items-center gap-2.5">
+                    <div className="w-12 h-12 rounded-lg bg-slate-100 overflow-hidden shrink-0">{it.img && <img src={it.img} className="w-full h-full object-cover" />}</div>
+                    <div className="min-w-0 flex-1"><p className="text-[13px] font-medium text-slate-800 truncate">{it.ad}</p><p className="text-[11px] text-slate-400">{it.varyasyon ? `Beden: ${it.varyasyon} · ` : ''}Adet: {it.adet}</p></div>
+                    <span className="text-sm font-semibold text-slate-800 shrink-0">{fmt(it.fiyat * it.adet)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="space-y-1.5 text-sm border-t border-slate-100 pt-3">
+                <div className="flex justify-between text-slate-500"><span>Ara Toplam</span><span>{fmt(preview ? preview.araToplam : araToplam)}</span></div>
+                {toplamIndirim > 0 && <div className="flex justify-between text-emerald-600"><span>İndirimler</span><span>-{fmt(toplamIndirim)}</span></div>}
+                <div className="flex justify-between text-slate-500"><span>Kargo</span><span className="text-emerald-600 font-medium">Ücretsiz</span></div>
+              </div>
+              <div className="flex justify-between items-center border-t border-slate-100 mt-2 pt-2"><span className="font-bold text-slate-800">Toplam <span className="text-[10px] text-slate-400 font-normal">(KDV Dahil)</span></span><span className="text-xl font-extrabold text-indigo-600">{fmt(odenecek)}</span></div>
+              {(Number(data.puanOrani) || 0) > 0 && <div className="mt-3 bg-violet-50 rounded-xl px-3 py-2 text-xs text-violet-700 flex items-center justify-between"><span>Bu siparişten kazanılacak puan</span><span className="font-bold">+{Math.round(odenecek * Number(data.puanOrani) / 100)}</span></div>}
+
+              {checkoutStep === 'teslimat' && (
+                <button onClick={() => odemeYap()} disabled={busy} className="w-full mt-4 bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"><Lock size={16} /> {busy ? 'Hazırlanıyor...' : 'Ödemeye Geç'}</button>
+              )}
+              {checkoutStep === 'odeme' && (
+                <button onClick={() => setCheckoutStep('teslimat')} className="w-full mt-4 border border-slate-200 text-slate-600 py-2.5 rounded-2xl font-medium hover:bg-slate-50">← Teslimat Bilgilerine Dön</button>
+              )}
+
+              <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">
+                <div className="flex items-center gap-2 text-[11px] text-slate-500"><ShieldCheck size={15} className="text-emerald-500" /> 256-bit SSL Güvenli Ödeme</div>
+                <div className="flex items-center gap-2 text-[11px] text-slate-500"><RotateCcw size={15} className="text-indigo-500" /> 14 gün içinde kolay iade</div>
+                <div className="flex items-center gap-2 text-[11px] text-slate-500"><Headphones size={15} className="text-violet-500" /> 7/24 müşteri desteği</div>
+              </div>
+            </div>
           </div>
         </div>
       )}
