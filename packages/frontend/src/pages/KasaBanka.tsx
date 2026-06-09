@@ -1,5 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuickAction } from '../lib/quickAction';
+import api from '../lib/api';
+import toast from 'react-hot-toast';
 import {
   Wallet, Building2, CreditCard, PiggyBank, TrendingUp,
   ArrowLeftRight, Plus, Pencil, Trash2, RefreshCw, ArrowDownLeft,
@@ -116,6 +118,14 @@ export default function KasaBankaPage() {
   } = useApp();
 
   const [activeModal, setActiveModal] = useState<ModalType>(null);
+  // Ödeme yönlendirme & POS
+  const [routing, setRouting] = useState<any>({ posKomisyon: '', posAktif: false });
+  const [routingOpen, setRoutingOpen] = useState(false);
+  useEffect(() => { api.get('/store/payment-routing').then((r) => setRouting({ posKomisyon: '', posAktif: false, ...(r.data || {}) })).catch(() => {}); }, []);
+  const saveRouting = () => { api.put('/store/payment-routing', { ...routing, posKomisyon: Number(routing.posKomisyon) || 0 }).then(() => { toast.success('Ödeme yönlendirme kaydedildi'); setRoutingOpen(false); }).catch(() => toast.error('Kaydedilemedi')); };
+  const setR = (k: string, v: any) => setRouting((x: any) => ({ ...x, [k]: v }));
+  const accOpts = useMemo(() => kasaBanka.map((k) => ({ id: k.id, ad: `${k.ad} (${k.tip === 'kasa' ? 'Kasa' : 'Banka'})` })), [kasaBanka]);
+  const routingEksik = !routing.online && !routing.canli && !routing.kasa;
   const [hesaplarimTab, setHesaplarimTab] = useState<HesaplarimTab>('hepsi');
   const [odemelerTab, setOdemelerTab] = useState<OdemelerTab>('tumu');
   const [nakit_period, setNakitPeriod] = useState<'7' | '30' | 'ay'>('ay');
@@ -389,6 +399,47 @@ export default function KasaBankaPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* ODEME YONLENDIRME & POS */}
+      <div className={`rounded-xl border shadow-sm p-3 ${routingEksik ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100'}`}>
+        <div className="flex items-center justify-between gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
+            <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${routingEksik ? 'bg-amber-100 text-amber-600' : 'bg-purple-100 text-purple-600'}`}><ArrowLeftRight size={15} /></div>
+            <div>
+              <p className="text-xs font-semibold text-gray-800">Ödeme Yönlendirme & POS</p>
+              <p className="text-[10px] text-gray-500">{routingEksik ? 'Hesap seçili değil — sipariş gelirleri kasaya yansımıyor. Lütfen ayarlayın.' : 'Sipariş gelirleri seçili hesaplara işleniyor.'}</p>
+            </div>
+          </div>
+          <button onClick={() => setRoutingOpen((o) => !o)} className="px-3 py-1.5 text-[11px] font-medium rounded-lg bg-purple-600 text-white hover:bg-purple-700">{routingOpen ? 'Kapat' : 'Ayarla'}</button>
+        </div>
+        {routingOpen && (
+          <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
+            {accOpts.length === 0 && <p className="text-[11px] text-amber-700 bg-amber-50 rounded-lg px-3 py-2">Önce bir Kasa veya Banka hesabı ekleyin.</p>}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {([['online', 'Online Mağaza Satışları'], ['canli', 'Canlı Yayın Satışları'], ['kasa', 'Kasa Satışları'], ['manuel', 'Manuel Siparişler'], ['asistan', 'Asistan Satışları']] as [string, string][]).map(([k, lbl]) => (
+                <div key={k}>
+                  <label className="block text-[10px] font-medium text-gray-600 mb-1">{lbl}</label>
+                  <select value={routing[k] || ''} onChange={(e) => setR(k, e.target.value)} className="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-xs bg-white">
+                    <option value="">Hesap seçin...</option>
+                    {accOpts.map((a) => <option key={a.id} value={a.id}>{a.ad}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <div className="rounded-lg border border-gray-100 p-3 bg-gray-50/50">
+              <label className="flex items-center gap-2 text-xs font-medium text-gray-700 mb-2"><input type="checkbox" checked={!!routing.posAktif} onChange={(e) => setR('posAktif', e.target.checked)} /> <CreditCard size={14} className="text-purple-600" /> POS Cihazı (kart/kredi ödemeleri için)</label>
+              {routing.posAktif && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div><label className="block text-[10px] font-medium text-gray-600 mb-1">POS Geliri Hesabı</label><select value={routing.pos || ''} onChange={(e) => setR('pos', e.target.value)} className="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-xs bg-white"><option value="">Hesap seçin...</option>{accOpts.map((a) => <option key={a.id} value={a.id}>{a.ad}</option>)}</select></div>
+                  <div><label className="block text-[10px] font-medium text-gray-600 mb-1">POS Komisyon Oranı (%)</label><input type="number" min={0} step="0.1" value={routing.posKomisyon} onChange={(e) => setR('posKomisyon', e.target.value)} placeholder="ör. 1.8" className="w-full border border-gray-200 rounded-lg px-2.5 py-2 text-xs" /></div>
+                  <p className="text-[10px] text-gray-400 sm:col-span-2">Kart/kredi ile ödenen satışlar POS hesabına işlenir; komisyon tutarı otomatik gider olarak kaydedilip hesaba net tutar yansıtılır.</p>
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end"><button onClick={saveRouting} className="px-4 py-2 text-xs font-semibold bg-purple-600 text-white rounded-lg hover:bg-purple-700">Kaydet</button></div>
+          </div>
+        )}
       </div>
 
       {/* 5 KPI CARDS */}

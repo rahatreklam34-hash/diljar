@@ -96,8 +96,35 @@ async function reverseIncome(tx: any, tenantId: string, order: any) {
   if (kayitli <= 0.001) return;
   const now = new Date();
   const no = order.orderNo ? `${order.orderYil}-${String(order.orderNo).padStart(3, '0')}` : String(order.id).slice(-5);
-  await tx.hareket.create({ data: { tenantId, tarih: now.toISOString().slice(0, 10), saat: now.toTimeString().slice(0, 5), aciklama: `Sipariş iptal/iade #${no}`, tutar: kayitli, tip: 'gider', kategori: 'İade/İptal', createdBy: null } });
+  const r = await getRouting(tx, tenantId);
+  const accId = routeAccount(r, order.kanal, order.odemeYontemi);
+  await tx.hareket.create({ data: { tenantId, tarih: now.toISOString().slice(0, 10), saat: now.toTimeString().slice(0, 5), aciklama: `Sipariş iptal/iade #${no}`, tutar: kayitli, tip: 'gider', kategori: 'İade/İptal', kasaBankaId: accId || null, createdBy: null } });
+  if (accId) await tx.kasaBanka.update({ where: { id: accId }, data: { bakiye: { decrement: kayitli } } }).catch(() => null);
   await tx.storeOrder.update({ where: { id: order.id }, data: { gelirKaydedilen: 0, tahsilat: 0 } });
+}
+
+// Ödeme yönlendirme ayarını oku (kanal -> kasa/banka hesabı + POS komisyonu)
+async function getRouting(tx: any, tenantId: string): Promise<any> {
+  const s = await tx.integrationSetting.findFirst({ where: { tenantId, category: 'PAYMENT', provider: 'kasa-routing' } }).catch(() => null);
+  return (s?.config as any) || {};
+}
+function isPosPayment(odemeYontemi?: string | null) { return /kart|kredi|pos/i.test(odemeYontemi || ''); }
+function routeAccount(r: any, kanal?: string | null, odemeYontemi?: string | null): string | null {
+  if (r.posAktif && r.pos && isPosPayment(odemeYontemi)) return r.pos;
+  return r[kanal || ''] || r.online || r.magaza || r.kasa || null;
+}
+// Sipariş gelirini ilgili kasa/banka hesabına işle (+ POS komisyonu)
+async function creditIncome(tx: any, tenantId: string, opt: { tutar: number; kanal?: string | null; odemeYontemi?: string | null; aciklama: string; kategori: string; createdBy?: string | null }) {
+  if (!(opt.tutar > 0)) return;
+  const now = new Date();
+  const tarih = now.toISOString().slice(0, 10), saat = now.toTimeString().slice(0, 5);
+  const r = await getRouting(tx, tenantId);
+  const accId = routeAccount(r, opt.kanal, opt.odemeYontemi);
+  const pos = !!(r.posAktif && r.pos && isPosPayment(opt.odemeYontemi));
+  const komisyon = pos && (Number(r.posKomisyon) || 0) > 0 ? Math.round(opt.tutar * (Number(r.posKomisyon) / 100) * 100) / 100 : 0;
+  await tx.hareket.create({ data: { tenantId, tarih, saat, aciklama: opt.aciklama, tutar: opt.tutar, tip: 'gelir', kategori: opt.kategori, kasaBankaId: accId || null, createdBy: opt.createdBy || null } }).catch(() => null);
+  if (accId) await tx.kasaBanka.update({ where: { id: accId }, data: { bakiye: { increment: opt.tutar - komisyon } } }).catch(() => null);
+  if (komisyon > 0) await tx.hareket.create({ data: { tenantId, tarih, saat, aciklama: `POS komisyonu - ${opt.aciklama}`, tutar: komisyon, tip: 'gider', kategori: 'POS Komisyonu', kasaBankaId: accId || null, createdBy: opt.createdBy || null } }).catch(() => null);
 }
 
 // ───────── Bootstrap: tum depo/magaza verisi ─────────
@@ -330,7 +357,8 @@ router.patch('/orders/:id', asyncHandler(async (req: Request, res: Response) => 
     const now = new Date();
     const cust = updated.customerId ? await prisma.customer.findFirst({ where: { id: updated.customerId, tenantId: req.tenantId! } }) : null;
     const no = updated.orderNo ? `${updated.orderYil}-${String(updated.orderNo).padStart(3, '0')}` : updated.id.slice(-5);
-    await prisma.hareket.create({ data: { tenantId: req.tenantId!, tarih: now.toISOString().slice(0, 10), saat: now.toTimeString().slice(0, 5), aciklama: `Satış tahsilatı #${no}${cust ? ' - ' + cust.ad : ''}`, tutar: gelirDelta, tip: 'gelir', kategori: 'Satış', createdBy: req.auth?.userId || null } }).catch(() => null);
+    await creditIncome(prisma, req.tenantId!, { tutar: gelirDelta, kanal: updated.kanal, odemeYontemi: updated.odemeYontemi, aciklama: `Satış tahsilatı #${no}${cust ? ' - ' + cust.ad : ''}`, kategori: 'Satış', createdBy: req.auth?.userId || null }).catch(() => null);
+    void now;
     await logEvent(req.tenantId!, found.id, who, 'Gelire işlendi', `${gelirDelta.toLocaleString('tr-TR')}₺ Gelir/Gider'e eklendi`);
   }
   // Otomatik degisiklik loglari
@@ -454,10 +482,9 @@ router.post('/kasa-order', asyncHandler(async (req: Request, res: Response) => {
     const seq = await nextOrderNo(tx, req.tenantId!);
     return tx.storeOrder.create({ data: { tenantId: req.tenantId!, ...seq, kanal: 'magaza', durum: 'teslim', items: orderItems, araToplam: kamp.araToplam, indirim: kamp.indirim, kampanyalar: kamp.kampanyalar, toplam: kamp.toplam, tahsilat: kamp.toplam, gelirKaydedilen: kamp.toplam, odemeYontemi: odemeYontemi || 'Nakit', not: saticiAd ? `Kasa satışı - ${saticiAd}` : 'Kasa satışı' } });
   });
-  // Gelir kaydı
+  // Gelir kaydı (ödeme yönlendirme + POS komisyonu uygulanır)
   try {
-    const now = new Date();
-    await prisma.hareket.create({ data: { tenantId: req.tenantId!, tarih: now.toISOString().slice(0, 10), saat: now.toTimeString().slice(0, 5), aciklama: `Kasa satışı #${order.orderYil}-${String(order.orderNo).padStart(3, '0')}`, tutar: order.toplam, tip: 'gelir', kategori: 'Kasa Satışı', createdBy: req.auth?.userId || null } });
+    await creditIncome(prisma, req.tenantId!, { tutar: order.toplam, kanal: 'kasa', odemeYontemi: odemeYontemi || 'Nakit', aciklama: `Kasa satışı #${order.orderYil}-${String(order.orderNo).padStart(3, '0')}`, kategori: 'Kasa Satışı', createdBy: req.auth?.userId || null });
     await logEvent(req.tenantId!, order.id, who, 'Kasa satışı tamamlandı', `${order.toplam.toLocaleString('tr-TR')}₺ (${odemeYontemi || 'Nakit'})`);
   } catch { /* */ }
   res.status(201).json({ ok: true, order });
@@ -587,6 +614,21 @@ router.put('/settings', asyncHandler(async (req: Request, res: Response) => {
     create: { ...b, tenantId: req.tenantId! },
   });
   res.json(saved);
+}));
+
+// ───────── Ödeme Yönlendirme & POS ayarları ─────────
+router.get('/payment-routing', asyncHandler(async (req: Request, res: Response) => {
+  const s = await prisma.integrationSetting.findFirst({ where: { tenantId: req.tenantId!, category: 'PAYMENT', provider: 'kasa-routing' } });
+  res.json((s?.config as any) || {});
+}));
+router.put('/payment-routing', asyncHandler(async (req: Request, res: Response) => {
+  const cfg = req.body || {};
+  await prisma.integrationSetting.upsert({
+    where: { scope_tenantId_provider: { scope: 'TENANT', tenantId: req.tenantId!, provider: 'kasa-routing' } },
+    update: { config: cfg, category: 'PAYMENT', enabled: true },
+    create: { scope: 'TENANT', tenantId: req.tenantId!, category: 'PAYMENT', provider: 'kasa-routing', enabled: true, config: cfg },
+  });
+  res.json({ ok: true });
 }));
 
 export default router;
