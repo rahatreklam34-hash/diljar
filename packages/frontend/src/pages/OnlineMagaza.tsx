@@ -53,6 +53,9 @@ export default function OnlineMagaza() {
 
   const [s, setS] = useState<any>({ active: false, slug: '', logoText: '', heroTitle: '', heroSubtitle: '', heroImage: '', heroVideo: '', bankaAd: '', iban: '', hesapSahibi: '', slides: [] as any[], productOrder: [] as string[], topMenu: [] as any[], freeShipThreshold: 0, puanOrani: 0, config: { ...DEFAULT_CONFIG } });
   const [aTab, setATab] = useState('bilgi');
+  const [paytr, setPaytr] = useState<any>({ merchant_id: '', merchant_key: '', merchant_salt: '', mode: 'TEST', enabled: false });
+  useEffect(() => { api.get('/store/paytr').then((r) => setPaytr((p: any) => ({ ...p, ...r.data }))).catch(() => {}); }, []);
+  const savePaytr = () => { api.put('/store/paytr', paytr).then(() => toast.success('PayTR ayarları kaydedildi')).catch(() => toast.error('Kaydedilemedi')); };
   const [disc, setDisc] = useState({ code: '', tip: 'yuzde', deger: '' });
   const [dragId, setDragId] = useState<string | null>(null);
   const [urunQ, setUrunQ] = useState('');
@@ -452,6 +455,23 @@ export default function OnlineMagaza() {
               </div>
             </div>
             <p className="text-[11px] text-slate-400">Havale/EFT seçen müşteriye asistan banka bilgilerini iletir.</p>
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                <h4 className="font-semibold text-slate-800 text-sm flex items-center gap-2"><CreditCard size={15} className="text-violet-600" /> PayTR Sanal POS (Kredi/Banka Kartı)</h4>
+                <label className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer text-xs ${paytr.enabled ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'border-slate-200 text-slate-500'}`}><input type="checkbox" checked={!!paytr.enabled} onChange={(e) => setPaytr({ ...paytr, enabled: e.target.checked })} /> {paytr.enabled ? 'Aktif' : 'Pasif'}</label>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-3">PayTR Mağaza Paneli → Bilgi sayfasındaki bilgileri girin. Doldurulup "Aktif" yapıldığında müşteri ödeme adımında kart ile ödeme ekranı açılır.</p>
+              <div className="grid sm:grid-cols-3 gap-3">
+                <div><label className="block text-xs text-slate-500 mb-1">Mağaza No (merchant_id)</label><input value={paytr.merchant_id} onChange={(e) => setPaytr({ ...paytr, merchant_id: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Mağaza Parolası (merchant_key)</label><input value={paytr.merchant_key} onChange={(e) => setPaytr({ ...paytr, merchant_key: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Mağaza Gizli Anahtarı (merchant_salt)</label><input value={paytr.merchant_salt} onChange={(e) => setPaytr({ ...paytr, merchant_salt: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              </div>
+              <div className="flex items-center gap-3 mt-3 flex-wrap">
+                <div><label className="block text-xs text-slate-500 mb-1">Mod</label><select value={paytr.mode} onChange={(e) => setPaytr({ ...paytr, mode: e.target.value })} className="px-3 py-2 text-sm border border-slate-200 rounded-lg"><option value="TEST">Test</option><option value="LIVE">Canlı</option></select></div>
+                <button onClick={savePaytr} className="self-end inline-flex items-center gap-1.5 bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-violet-700"><Save size={15} /> PayTR Ayarlarını Kaydet</button>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2">Not: PayTR panelinizde "Bildirim/Callback URL" alanına mağaza alan adınız + <b>/api/v1/public/paytr/callback</b> yazılmalıdır.</p>
+            </div>
           </div>
           )}
 

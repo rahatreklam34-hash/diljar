@@ -664,4 +664,21 @@ router.delete('/catalog/:id', asyncHandler(async (req: Request, res: Response) =
   res.json({ ok: true });
 }));
 
+// ───────── PayTR (Sanal POS) yapılandırması ─────────
+router.get('/paytr', asyncHandler(async (req: Request, res: Response) => {
+  const s = await prisma.integrationSetting.findFirst({ where: { tenantId: req.tenantId!, provider: 'paytr' } });
+  const c: any = s?.config || {};
+  res.json({ merchant_id: c.merchant_id || '', merchant_key: c.merchant_key || '', merchant_salt: c.merchant_salt || '', mode: s?.mode || 'TEST', enabled: s?.enabled ?? false });
+}));
+router.put('/paytr', asyncHandler(async (req: Request, res: Response) => {
+  const { merchant_id, merchant_key, merchant_salt, mode, enabled } = req.body || {};
+  const config = { merchant_id: String(merchant_id || '').trim(), merchant_key: String(merchant_key || '').trim(), merchant_salt: String(merchant_salt || '').trim() };
+  await prisma.integrationSetting.upsert({
+    where: { scope_tenantId_provider: { scope: 'TENANT', tenantId: req.tenantId!, provider: 'paytr' } },
+    update: { config, mode: mode === 'LIVE' ? 'LIVE' : 'TEST', enabled: !!enabled, category: 'PAYMENT' },
+    create: { scope: 'TENANT', tenantId: req.tenantId!, provider: 'paytr', category: 'PAYMENT', config, mode: mode === 'LIVE' ? 'LIVE' : 'TEST', enabled: !!enabled },
+  });
+  res.json({ ok: true });
+}));
+
 export default router;
