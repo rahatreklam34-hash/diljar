@@ -23,6 +23,7 @@ const DEFAULT_CONFIG = {
   odemeHavale: true, odemeKart: true, odemeKapida: false,
   bildirimYeniSiparis: true, bildirimStok: true, bildirimYorum: true,
   iade: '', gizlilik: '', kullanim: '',
+  firmaUnvan: '', vkn: '', vergiDairesi: '', firmaAdres: '', firmaEmail: '', firmaTel: '', mersis: '',
   metaPixel: '', tiktokPixel: '', ga4: '', googleAds: '', googleAdsLabel: '', customHead: '',
   collections: [] as { id: string; ad: string }[],
   collectionItems: {} as Record<string, string[]>, // productId -> [collectionId]
@@ -623,11 +624,26 @@ export default function OnlineMagaza() {
 
           {/* ── Politikalar ── */}
           {aTab === 'politika' && (
+          <div className="space-y-5">
           <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
-            <div><h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><FileText size={16} className="text-indigo-600" /> Politikalar</h3><p className="text-xs text-slate-400">İade, gizlilik ve kullanım şartları. Mağaza sayfasında müşterilere gösterilir.</p></div>
-            <div><label className="block text-xs text-slate-500 mb-1">İade & Değişim Politikası</label><textarea rows={3} value={cfg.iade} onChange={(e) => setCfg('iade', e.target.value)} placeholder="ör. 14 gün içinde koşulsuz iade..." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
-            <div><label className="block text-xs text-slate-500 mb-1">Gizlilik Politikası</label><textarea rows={3} value={cfg.gizlilik} onChange={(e) => setCfg('gizlilik', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            <div><h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><FileText size={16} className="text-indigo-600" /> Yasal & Kurumsal Bilgiler <span className="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full">Sanal POS için zorunlu</span></h3><p className="text-xs text-slate-400">Bu bilgiler mağaza altındaki sözleşme/iletişim sayfalarında ve sanal POS başvurunuzda kullanılır.</p></div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div className="sm:col-span-2"><label className="block text-xs text-slate-500 mb-1">Firma Ünvanı</label><input value={cfg.firmaUnvan} onChange={(e) => setCfg('firmaUnvan', e.target.value)} placeholder="ör. RAHAT REKLAM SANAYİ TİCARET LİMİTED ŞİRKETİ" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Vergi / VKN</label><input value={cfg.vkn} onChange={(e) => setCfg('vkn', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Vergi Dairesi</label><input value={cfg.vergiDairesi} onChange={(e) => setCfg('vergiDairesi', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div className="sm:col-span-2"><label className="block text-xs text-slate-500 mb-1">Firma Adresi</label><input value={cfg.firmaAdres} onChange={(e) => setCfg('firmaAdres', e.target.value)} placeholder="Mahalle, Sokak, No, İlçe/İl" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Kurumsal E-posta</label><input value={cfg.firmaEmail} onChange={(e) => setCfg('firmaEmail', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Kurumsal Telefon</label><input value={cfg.firmaTel} onChange={(e) => setCfg('firmaTel', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">MERSİS No (ops.)</label><input value={cfg.mersis} onChange={(e) => setCfg('mersis', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            </div>
+            <p className="text-[11px] text-slate-400">Mesafeli Satış, İade/Cayma, Gizlilik ve KVKK metinleri bu bilgilerle otomatik oluşturulur ve mağaza alt menüsünde (footer) gösterilir. Aşağıdaki alanları doldurursanız ilgili metin sizin yazdığınızla değiştirilir.</p>
+          </div>
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+            <div><h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><FileText size={16} className="text-indigo-600" /> Özel Metinler (opsiyonel)</h3><p className="text-xs text-slate-400">Boş bırakırsanız standart (sanal POS uyumlu) metinler kullanılır.</p></div>
+            <div><label className="block text-xs text-slate-500 mb-1">İade & Değişim / Cayma Politikası</label><textarea rows={3} value={cfg.iade} onChange={(e) => setCfg('iade', e.target.value)} placeholder="Boş = standart metin" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            <div><label className="block text-xs text-slate-500 mb-1">Gizlilik Politikası</label><textarea rows={3} value={cfg.gizlilik} onChange={(e) => setCfg('gizlilik', e.target.value)} placeholder="Boş = standart metin" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
             <div><label className="block text-xs text-slate-500 mb-1">Kullanım Şartları</label><textarea rows={3} value={cfg.kullanim} onChange={(e) => setCfg('kullanim', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+          </div>
           </div>
           )}
 

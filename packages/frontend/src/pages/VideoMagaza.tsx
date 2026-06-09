@@ -43,6 +43,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [cust, setCust] = useState({ ad: '', telefon: '', email: '', adres: '' });
   const [paytrUrl, setPaytrUrl] = useState('');
   const [done, setDone] = useState<any>(null);
+  const [legalModal, setLegalModal] = useState('');
   // İndirim kodu + sepet önizleme (kampanya/kupon otomatik)
   const [codeInput, setCodeInput] = useState('');
   const [discountCode, setDiscountCode] = useState('');
@@ -247,6 +248,18 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
     );
   };
 
+  // Kurumsal / yasal bilgiler (sanal POS için) — mağaza ayarlarından
+  const cfg: any = data.config || {};
+  const comp = {
+    magaza: data.logoText || data.name || 'Mağaza',
+    unvan: cfg.firmaUnvan || data.logoText || data.name || '',
+    vkn: cfg.vkn || '', vd: cfg.vergiDairesi || '', mersis: cfg.mersis || '',
+    adres: cfg.firmaAdres || cfg.adres || '',
+    email: cfg.firmaEmail || cfg.email || '',
+    tel: cfg.firmaTel || cfg.telefon || cfg.whatsapp || '',
+  };
+  const legalDocs = legalContent(comp, cfg);
+
   return (
     <div className="min-h-screen bg-slate-100">
       {/* Header */}
@@ -404,8 +417,8 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
       <footer className="bg-slate-900 text-slate-300 mt-6">
         <div className="max-w-6xl mx-auto px-4 py-8 grid sm:grid-cols-4 gap-6 text-sm">
           <div className="sm:col-span-1"><p className="font-extrabold text-white text-lg mb-2">{data.logoText || data.name}</p><p className="text-slate-400 text-xs leading-relaxed">Güvenli alışverişin adresi. Tüm ödemeler 256-bit SSL ile şifrelenir.</p></div>
-          <div><p className="font-semibold text-white mb-2">Kurumsal</p><ul className="space-y-1.5 text-slate-400 text-xs"><li><a href="/hakkimizda">Hakkımızda</a></li><li><a href="/iletisim">İletişim</a></li></ul></div>
-          <div><p className="font-semibold text-white mb-2">Yasal</p><ul className="space-y-1.5 text-slate-400 text-xs"><li><a href="/mesafeli-satis">Mesafeli Satış Sözleşmesi</a></li><li><a href="/iade-iptal">İade ve İptal Koşulları</a></li><li><a href="/gizlilik">Gizlilik Politikası</a></li><li><a href="/kvkk">KVKK Aydınlatma Metni</a></li></ul></div>
+          <div><p className="font-semibold text-white mb-2">Kurumsal</p><ul className="space-y-1.5 text-slate-400 text-xs"><li><button onClick={() => setLegalModal('hakkimizda')} className="hover:text-white">Hakkımızda</button></li><li><button onClick={() => setLegalModal('iletisim')} className="hover:text-white">İletişim</button></li><li><button onClick={() => setLegalModal('teslimat')} className="hover:text-white">Teslimat & Kargo</button></li></ul></div>
+          <div><p className="font-semibold text-white mb-2">Yasal</p><ul className="space-y-1.5 text-slate-400 text-xs"><li><button onClick={() => setLegalModal('mesafeli')} className="hover:text-white text-left">Mesafeli Satış Sözleşmesi</button></li><li><button onClick={() => setLegalModal('iade')} className="hover:text-white text-left">İade, İptal ve Cayma Hakkı</button></li><li><button onClick={() => setLegalModal('gizlilik')} className="hover:text-white text-left">Gizlilik & Çerez Politikası</button></li><li><button onClick={() => setLegalModal('kvkk')} className="hover:text-white text-left">KVKK Aydınlatma Metni</button></li></ul></div>
           <div><p className="font-semibold text-white mb-2">Güvenli Ödeme</p>
             <div className="flex items-center gap-2 flex-wrap">
               <span className="bg-white text-slate-900 text-[11px] font-bold px-2 py-1 rounded">VISA</span>
@@ -420,8 +433,26 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
             <div key={i} className="flex items-center gap-2"><Ic size={20} className="text-indigo-400 shrink-0" /><div><p className="text-xs font-semibold text-white">{t}</p><p className="text-[10px] text-slate-400">{s}</p></div></div>
           ))}
         </div></div>
-        <div className="border-t border-white/10 text-center py-4 text-[11px] text-slate-500">© {new Date().getFullYear()} {data.logoText || data.name} · Tüm hakları saklıdır · Yazılım: WTech Yazılım A.Ş.</div>
+        <div className="border-t border-white/10 text-center py-4 text-[11px] text-slate-500 space-y-1">
+          {comp.unvan && <p className="text-slate-400">{comp.unvan}{comp.vkn ? ` · VKN: ${comp.vkn}` : ''}{comp.vd ? ` · Vergi Dairesi: ${comp.vd}` : ''}</p>}
+          {comp.adres && <p>{comp.adres}</p>}
+          <p>© {new Date().getFullYear()} {comp.magaza} · Tüm hakları saklıdır</p>
+        </div>
       </footer>
+
+      {/* Yasal / kurumsal metin modalı (storefront içinde) */}
+      {legalModal && legalDocs[legalModal] && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60" onClick={() => setLegalModal('')}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-2xl bg-white rounded-2xl max-h-[88vh] flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-slate-100 shrink-0">
+              <h3 className="font-bold text-slate-800">{legalDocs[legalModal].t}</h3>
+              <button onClick={() => setLegalModal('')} className="text-slate-400 hover:text-slate-700"><X size={20} /></button>
+            </div>
+            <div className="p-5 overflow-y-auto text-[13px] text-slate-600 leading-relaxed whitespace-pre-line">{legalDocs[legalModal].body}</div>
+            <div className="p-3 border-t border-slate-100 text-right shrink-0"><button onClick={() => setLegalModal('')} className="px-4 py-2 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-700">Kapat</button></div>
+          </div>
+        </div>
+      )}
 
       {/* Alt nav (mobil) */}
       <nav className="fixed bottom-0 left-0 right-0 sm:hidden bg-white border-t border-slate-100 px-2 py-1.5 flex items-center justify-between z-30">
@@ -566,4 +597,40 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
       </button>
     </div>
   );
+}
+
+// ───────── Sanal POS uyumlu yasal/kurumsal metinler ─────────
+function legalContent(c: any, cfg: any): Record<string, { t: string; body: string }> {
+  const unvan = c.unvan || c.magaza;
+  const satici = `${unvan}${c.adres ? `\nAdres: ${c.adres}` : ''}${c.vkn ? `\nVergi/VKN: ${c.vkn}` : ''}${c.vd ? `\nVergi Dairesi: ${c.vd}` : ''}${c.mersis ? `\nMERSİS: ${c.mersis}` : ''}${c.tel ? `\nTelefon: ${c.tel}` : ''}${c.email ? `\nE-posta: ${c.email}` : ''}`;
+  return {
+    hakkimizda: {
+      t: 'Hakkımızda',
+      body: `${unvan}, müşterilerine güvenli ve hızlı bir alışveriş deneyimi sunmak amacıyla faaliyet göstermektedir. Ürünlerimiz orijinal olup, tüm ödemeleriniz 256-bit SSL ile şifrelenerek güvence altına alınır.\n\nMağazamızda yer alan ürünler stok durumuna göre güncellenmekte, siparişleriniz en kısa sürede hazırlanıp kargoya teslim edilmektedir.\n\nKurumsal Bilgiler:\n${satici}`,
+    },
+    iletisim: {
+      t: 'İletişim',
+      body: `Bize aşağıdaki kanallardan ulaşabilirsiniz:\n\n${satici}\n\nÇalışma Saatleri: ${cfg.calismaHafta || 'Hafta içi 09:00 - 18:00'}${cfg.calismaPazar ? `\nHafta Sonu: ${cfg.calismaPazar}` : ''}\n\nSipariş, iade ve her türlü talebiniz için yukarıdaki iletişim bilgilerinden bize yazabilirsiniz.`,
+    },
+    teslimat: {
+      t: 'Teslimat & Kargo',
+      body: `Teslimat Süreci:\n• Siparişiniz, ödemenizin onaylanmasının ardından genellikle 1-3 iş günü içinde kargoya teslim edilir.\n• Kargo teslim süresi, bulunduğunuz bölgeye göre 1-4 iş günü arasında değişebilir.\n${cfg.kargoNot ? `• ${cfg.kargoNot}\n` : ''}${(Number(cfg.kargoUcret) || 0) > 0 ? `• Standart kargo ücreti: ${Number(cfg.kargoUcret).toLocaleString('tr-TR')} TL.\n` : ''}${(Number(cfg.freeShipThreshold) || 0) > 0 ? `• ${Number(cfg.freeShipThreshold).toLocaleString('tr-TR')} TL ve üzeri alışverişlerde kargo ücretsizdir.\n` : ''}\nKargo takip bilgisi, ürününüz kargoya verildiğinde tarafınıza iletilir. Teslimat sırasında paketinizi kontrol etmenizi, hasarlı paketleri teslim almamanızı öneririz.\n\nSatıcı:\n${satici}`,
+    },
+    mesafeli: {
+      t: 'Mesafeli Satış Sözleşmesi',
+      body: `MADDE 1 - TARAFLAR\nSATICI:\n${satici}\n\nALICI: İşbu sözleşme kapsamında ürün/hizmet satın alan müşteri.\n\nMADDE 2 - KONU\nİşbu sözleşmenin konusu, ALICI'nın SATICI'ya ait internet sitesi üzerinden elektronik ortamda siparişini verdiği ürünün satışı ve teslimi ile ilgili olarak 6502 sayılı Tüketicinin Korunması Hakkında Kanun ve Mesafeli Sözleşmeler Yönetmeliği hükümleri gereğince tarafların hak ve yükümlülüklerinin belirlenmesidir.\n\nMADDE 3 - SÖZLEŞME KONUSU ÜRÜN\nÜrünün cinsi, türü, miktarı, satış bedeli ve ödeme şekli sipariş sayfasında belirtildiği gibidir. Tüm fiyatlar Türk Lirası (TL) cinsinden olup KDV dahildir.\n\nMADDE 4 - GENEL HÜKÜMLER\n4.1. ALICI, ürünün temel nitelikleri, satış fiyatı ve ödeme şekli ile teslimata ilişkin ön bilgileri okuyup bilgi sahibi olduğunu ve elektronik ortamda gerekli teyidi verdiğini kabul eder.\n4.2. Sözleşme konusu ürün, yasal 30 günlük süreyi aşmamak kaydıyla ALICI'nın belirttiği adrese kargo ile teslim edilir.\n4.3. Ödemeler, anlaşmalı bankaların sanal POS altyapısı üzerinden 256-bit SSL şifreleme ile güvenli şekilde alınır. Kart bilgileri SATICI tarafından saklanmaz.\n\nMADDE 5 - CAYMA HAKKI\nALICI, ürünü teslim aldığı tarihten itibaren 14 (on dört) gün içinde herhangi bir gerekçe göstermeksizin ve cezai şart ödemeksizin cayma hakkına sahiptir. Cayma hakkının kullanımı için bu süre içinde SATICI'ya yazılı bildirimde bulunulması gerekir.\n\nMADDE 6 - UYUŞMAZLIKLAR\nİşbu sözleşmeden doğabilecek uyuşmazlıklarda, Gümrük ve Ticaret Bakanlığı'nca ilan edilen değere kadar Tüketici Hakem Heyetleri, bu değerin üzerindeki uyuşmazlıklarda Tüketici Mahkemeleri yetkilidir.`,
+    },
+    iade: {
+      t: 'İade, İptal ve Cayma Hakkı',
+      body: cfg.iade ? cfg.iade : `Cayma Hakkı:\nALICI, ürünü teslim aldığı tarihten itibaren 14 (on dört) gün içinde cayma hakkını kullanabilir. Cayma bildiriminin bu süre içinde tarafımıza ulaştırılması gerekmektedir.\n\nİade Koşulları:\n• Ürün, orijinal ambalajı, faturası ve tüm aksesuarları ile birlikte, kullanılmamış ve yeniden satılabilir durumda iade edilmelidir.\n• İade onayının ardından ürün bedeli, ödemenin yapıldığı yönteme (kredi kartı / havale) en geç 14 gün içinde iade edilir. Kredi kartı iadelerinin hesaba yansıma süresi bankanıza göre değişebilir.\n• Hijyenik nedenlerle iadesi mümkün olmayan ürünler (iç giyim vb.) ile kişiye özel üretilen ürünler cayma hakkı kapsamı dışındadır.\n\nSipariş İptali:\nKargoya verilmemiş siparişler için iptal talebinizi iletişim kanallarımızdan iletebilirsiniz. Kargoya verilmiş siparişlerde iade prosedürü uygulanır.\n\nSatıcı:\n${satici}`,
+    },
+    gizlilik: {
+      t: 'Gizlilik & Çerez Politikası',
+      body: cfg.gizlilik ? cfg.gizlilik : `${unvan} olarak kişisel verilerinizin gizliliğine önem veriyoruz.\n\n1. Toplanan Bilgiler: Sipariş ve teslimat süreçlerini yürütmek amacıyla ad-soyad, adres, telefon ve e-posta gibi bilgileriniz toplanır.\n2. Kullanım Amacı: Bilgileriniz yalnızca siparişlerinizin işlenmesi, teslimatı ve müşteri hizmetleri amacıyla kullanılır; üçüncü kişilerle pazarlama amacıyla paylaşılmaz.\n3. Ödeme Güvenliği: Kart bilgileriniz tarafımızca görülmez ve saklanmaz; ödemeler bankaların güvenli sanal POS altyapısı üzerinden 256-bit SSL ile gerçekleştirilir.\n4. Çerezler: Sitemiz, alışveriş deneyiminizi iyileştirmek ve site trafiğini analiz etmek için çerezler kullanır. Tarayıcı ayarlarınızdan çerezleri yönetebilirsiniz.\n5. Haklarınız: Verilerinizin işlenmesine ilişkin her türlü talebiniz için bizimle iletişime geçebilirsiniz.\n\nVeri Sorumlusu:\n${satici}`,
+    },
+    kvkk: {
+      t: 'KVKK Aydınlatma Metni',
+      body: `6698 sayılı Kişisel Verilerin Korunması Kanunu ("KVKK") uyarınca, veri sorumlusu sıfatıyla ${unvan} tarafından kişisel verileriniz aşağıda açıklanan kapsamda işlenmektedir.\n\n1. İşlenen Veriler: Kimlik, iletişim, adres ve sipariş/işlem bilgileri.\n2. İşleme Amaçları: Sipariş ve teslimat süreçlerinin yürütülmesi, faturalandırma, müşteri ilişkileri yönetimi ve yasal yükümlülüklerin yerine getirilmesi.\n3. Hukuki Sebep: KVKK m.5 kapsamında sözleşmenin kurulması/ifası ve meşru menfaat.\n4. Aktarım: Verileriniz, yalnızca teslimat (kargo) ve ödeme (banka/sanal POS) süreçlerinin gerektirdiği ölçüde ilgili taraflarla paylaşılır.\n5. Haklarınız (KVKK m.11): Verilerinize erişme, düzeltilmesini veya silinmesini isteme, işlenmesine itiraz etme haklarına sahipsiniz.\n\nBaşvurularınızı aşağıdaki iletişim bilgilerinden iletebilirsiniz:\n${satici}`,
+    },
+  };
 }
