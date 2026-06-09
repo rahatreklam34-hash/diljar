@@ -42,17 +42,6 @@ export const navGroups: MenuGroup[] = [
     ],
   },
   {
-    title: 'Urunler & Stok',
-    items: [
-      { to: '/depo/urunlerim', icon: Package, label: 'Urunlerim' },
-      { to: '/depo/urun-ekle', icon: PackagePlus, label: 'Urun Ekle' },
-      { to: '/depo/toplu-urun', icon: Layers, label: 'Toplu Urun Ekle' },
-      { to: '/depo/varyasyonlar', icon: Layers, label: 'Varyasyonlarim' },
-      { to: '/depo/kategoriler', icon: Tag, label: 'Urun Kategorileri' },
-      { to: '/depo/satis-kodu', icon: Hash, label: 'Satis Kodu Havuzu' },
-    ],
-  },
-  {
     title: 'Satislar',
     items: [
       { to: '/canli-yayin', icon: Radio, label: 'Canli Yayin Satis' },
@@ -75,6 +64,17 @@ export const navGroups: MenuGroup[] = [
     items: [
       { to: '/musterilerim', icon: Users, label: 'Musterilerim' },
       { to: '/destek-talepleri', icon: LifeBuoy, label: 'Destek Talepleri' },
+    ],
+  },
+  {
+    title: 'Depo Yonetimi',
+    items: [
+      { to: '/depo/urunlerim', icon: Package, label: 'Urunlerim' },
+      { to: '/depo/urun-ekle', icon: PackagePlus, label: 'Urun Ekle' },
+      { to: '/depo/toplu-urun', icon: Layers, label: 'Toplu Urun Ekle' },
+      { to: '/depo/varyasyonlar', icon: Layers, label: 'Varyasyonlarim' },
+      { to: '/depo/kategoriler', icon: Tag, label: 'Urun Kategorileri' },
+      { to: '/depo/satis-kodu', icon: Hash, label: 'Satis Kodu Havuzu' },
     ],
   },
   {
