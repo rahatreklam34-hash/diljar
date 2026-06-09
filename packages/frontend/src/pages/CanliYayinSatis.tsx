@@ -313,38 +313,93 @@ export default function CanliYayinSatis() {
   // Bu yayından alışveriş yapan tekil kişi sayısı (onaylanmış)
   const alisverisYapan = useMemo(() => new Set(orders.filter((o) => o.durum === 'onaylandi').map((o) => o.user)).size, [orders]);
 
-  // Yapay zeka tavsiyeleri (canlı veriden, kural tabanlı)
-  const aiTavsiye = useMemo(() => {
+  // Yapay zeka analizi — yayın temposu (zaman bazlı ortalama), yeni alıcı öngörüsü, stok eritme, projeksiyon
+  const aiTick = Math.floor((seconds || 0) / 30); // 30 sn'de bir yenile (satış dursa da uyarsın)
+  const aiAnaliz = useMemo(() => {
     const tips: { t: 'warn' | 'tip' | 'good'; m: string }[] = [];
-    const ona = orders.filter((o) => o.durum === 'onaylandi');
+    const ona = [...orders].filter((o) => o.durum === 'onaylandi').sort((a, b) => String(a.createdAt).localeCompare(String(b.createdAt)));
+    const now = Date.now();
+    const ms = (d: any) => new Date(d).getTime();
+    const startMs = stream?.startedAt ? ms(stream.startedAt) : (ona[0] ? ms(ona[0].createdAt) : now);
+    const elapsedMin = Math.max(1, (now - startMs) / 60000);
+    const total = ona.length;
+    const avgPerMin = total / elapsedMin;
+    const last5 = ona.filter((o) => now - ms(o.createdAt) < 300000).length;
+    const prev5 = ona.filter((o) => { const d = now - ms(o.createdAt); return d >= 300000 && d < 600000; }).length;
+    const last5Rate = last5 / 5;
+    const ortSepet = alisverisYapan ? stats.ciro / alisverisYapan : 0;
     const iptal = orders.filter((o) => o.durum === 'iptal').length;
     const iptalOran = orders.length ? Math.round((iptal / orders.length) * 100) : 0;
-    const ortSepet = alisverisYapan ? stats.ciro / alisverisYapan : 0;
-    const now = Date.now();
-    const son10 = ona.filter((o) => { const t = new Date(o.createdAt).getTime(); return !isNaN(t) && now - t < 600000; }).length;
-    const kayitsiz = new Set(ona.filter((o) => !isRegistered(o.user)).map((o) => o.user)).size;
-    if (iptalOran >= 25) tips.push({ t: 'warn', m: `İptal oranı yüksek (%${iptalOran}). Riskli/kayıtsız müşterilerden ön ödeme iste; sahte sipariş riskine dikkat et.` });
-    else if (iptalOran >= 10) tips.push({ t: 'tip', m: `İptal oranı %${iptalOran}. İptal edenleri "riskli" işaretleyip takip et.` });
-    if (kayitsiz > 0) tips.push({ t: 'warn', m: `${kayitsiz} kayıtsız kişi alışveriş yaptı. Yayında "üye ol" linkini paylaş — teslimat/iletişim sorununu önler.` });
-    if (enCokUrun.length) {
-      const [urunAd, adet] = enCokUrun[0] as [string, number];
-      const prod = products.find((p: any) => (p.ad || '') === urunAd);
-      const stok = prod?.stokAdeti;
-      if (typeof stok === 'number' && stok <= 5) tips.push({ t: 'warn', m: `En çok satan "${urunAd}" stoğu azaldı (${stok} kaldı). Şimdi öne çıkar, bitmeden tamamla.` });
-      else tips.push({ t: 'good', m: `En çok ilgi gören ürün: "${urunAd}" (${adet} satış). Tekrar göster, momentumu kullan.` });
+
+    // Tempo durumu (etiket)
+    let tempoLabel = 'Veri bekleniyor'; let tempoColor: 'warn' | 'tip' | 'good' = 'tip';
+    if (elapsedMin >= 6 && total >= 3) {
+      if (last5 === 0) { tempoLabel = 'Durgun'; tempoColor = 'warn'; }
+      else if (last5Rate < avgPerMin * 0.6) { tempoLabel = 'Yavaşlıyor'; tempoColor = 'warn'; }
+      else if (last5Rate > avgPerMin * 1.4) { tempoLabel = 'Hızlanıyor'; tempoColor = 'good'; }
+      else { tempoLabel = 'Dengeli'; tempoColor = 'tip'; }
     }
-    const kamp: any = aktifKampanyalar[0];
-    if (kamp && kamp.minTutar) tips.push({ t: 'tip', m: `Ortalama sepet ${fmt(ortSepet)}. "${fmt(kamp.minTutar)} üzeri" kampanyanı hatırlat; sepeti eşiğe taşı.` });
-    else if (ortSepet > 0) tips.push({ t: 'tip', m: `Ortalama sepet ${fmt(ortSepet)}. Kombin / "2 al 1 öde" önerisiyle sepeti büyüt.` });
-    if (ona.length >= 3) {
-      if (son10 === 0) tips.push({ t: 'warn', m: 'Son 10 dakikada yeni sipariş yok. Yeni ürün çıkar ya da kısa süreli flaş indirim başlat.' });
-      else tips.push({ t: 'good', m: `Son 10 dk ${son10} sipariş — ivme iyi. İndirimli ürünleri öne al.` });
+
+    // ── Tempo tavsiyesi (yayın başından bu yana ortalamaya göre) ──
+    if (total === 0 && elapsedMin >= 4) {
+      tips.push({ t: 'warn', m: `${Math.round(elapsedMin)} dk oldu, henüz satış yok. Açılış indirimi yap, en dikkat çeken ürünü öne al ve kampanyaları duyur.` });
+    } else if (elapsedMin >= 6 && total >= 3) {
+      if (last5 === 0) tips.push({ t: 'warn', m: `Son 5 dk'da hiç satış yok (yayın ort. ${avgPerMin.toFixed(1)}/dk). Hemen kısa süreli flaş indirim başlat ya da yeni ürün çıkar — tempoyu canlandır.` });
+      else if (last5Rate < avgPerMin * 0.6) tips.push({ t: 'warn', m: `Satış yavaşladı: son 5 dk ${last5Rate.toFixed(1)}/dk, yayın ort. ${avgPerMin.toFixed(1)}/dk. İndirim/kampanya zamanı; ilgi düşmeden hamle yap.` });
+      else if (last5Rate > avgPerMin * 1.4) tips.push({ t: 'good', m: `Tempo hızlandı: son 5 dk ${last5Rate.toFixed(1)}/dk (ort. ${avgPerMin.toFixed(1)}/dk). Talep yüksek — acele indirim yapma, stoklu çok satanı öne çıkarıp eritmeye odaklan.` });
+      else if (prev5 > 0 && last5 > prev5) tips.push({ t: 'good', m: `İvme yükseliyor (önceki 5 dk ${prev5} → son 5 dk ${last5}). İlgi gören ürünü tekrar göster, momentumu büyüt.` });
+      else tips.push({ t: 'tip', m: `Tempo dengeli (~${avgPerMin.toFixed(1)}/dk). Sepeti büyütmek için kombin / "2 al 1 öde" öner.` });
     }
-    if (saticiPerf.length && saticiPerf[0][0] !== '(belirsiz)') tips.push({ t: 'good', m: `Lider satıcı: ${saticiPerf[0][0]} (${saticiPerf[0][1].adet} satış, ${fmt(saticiPerf[0][1].ciro)}).` });
-    if (!tips.length) tips.push({ t: 'tip', m: 'Yayına yeni başladın. İlk ürünü öne çıkar, kampanyaları duyur ve "üye ol" linkini paylaş.' });
-    return tips;
+
+    // ── Yeni katılan alıcı öngörüsü ──
+    const firstByUser = new Map<string, number>();
+    ona.forEach((o) => { const t = ms(o.createdAt); if (!firstByUser.has(o.user) || t < firstByUser.get(o.user)!) firstByUser.set(o.user, t); });
+    const yeniSon10 = [...firstByUser.values()].filter((t) => now - t < 600000).length;
+    const yeniOnceki10 = [...firstByUser.values()].filter((t) => { const d = now - t; return d >= 600000 && d < 1200000; }).length;
+    if (firstByUser.size >= 2) {
+      if (yeniSon10 === 0 && elapsedMin >= 12) tips.push({ t: 'warn', m: `Son 10 dk'da yeni alıcı katılmadı; hep aynı kişiler alıyor. Yeni kitleyi çekmek için "ilk siparişe özel" teklif duyur ve "üye ol" linkini paylaş.` });
+      else if (yeniSon10 > yeniOnceki10 && yeniSon10 >= 2) tips.push({ t: 'good', m: `Yeni alıcı akışı artıyor (son 10 dk ${yeniSon10} yeni kişi, önceki 10 dk ${yeniOnceki10}). Yeni kitle sıcak — çok satanı stok varken öne çıkar.` });
+      else if (yeniSon10 > 0) tips.push({ t: 'tip', m: `Son 10 dk'da ${yeniSon10} yeni kişi ilk alışverişini yaptı. Onları elde tutmak için hızlı kazanımlı küçük bir kampanya göster.` });
+    }
+
+    // ── Stok eritme / tekleme önleme ──
+    const satilan = new Map<string, number>();
+    ona.forEach((o) => { if (o.productId) satilan.set(o.productId, (satilan.get(o.productId) || 0) + (o.adet || 1)); });
+    const azKalan = products.filter((p: any) => satilan.has(p.id) && typeof p.stokAdeti === 'number' && p.stokAdeti > 0 && p.stokAdeti <= 3).sort((a: any, b: any) => a.stokAdeti - b.stokAdeti);
+    if (azKalan.length) {
+      const p = azKalan[0];
+      tips.push({ t: 'warn', m: `"${p.ad}" son ${p.stokAdeti} adet kaldı — tekleme bırakma. "Son ${p.stokAdeti}!" baskısı ya da küçük indirimle temiz bitir.` });
+    }
+    // momentumu olup stoğu bol olan ürün -> indirimle eritme fırsatı
+    const cokSatanStoklu = products.filter((p: any) => (satilan.get(p.id) || 0) >= 2 && typeof p.stokAdeti === 'number' && p.stokAdeti >= 10);
+    if (cokSatanStoklu.length && (last5Rate < avgPerMin * 0.9)) {
+      const p = cokSatanStoklu.sort((a: any, b: any) => (satilan.get(b.id) || 0) - (satilan.get(a.id) || 0))[0];
+      tips.push({ t: 'tip', m: `"${p.ad}" ilgi görüyor ve stoğu bol (${p.stokAdeti}). Tempo düşmüşken bu üründe kısa indirim açıp stoğu erit.` });
+    }
+
+    // ── Projeksiyon ──
+    if (elapsedMin >= 8 && avgPerMin > 0) {
+      const proj30 = Math.round(avgPerMin * 30);
+      tips.push({ t: 'tip', m: `Bu tempoyla önümüzdeki 30 dk'da ~${proj30} sipariş ve ~${fmt(avgPerMin * 30 * (ortSepet || 0))} ciro öngörülüyor.` });
+    }
+
+    // ── İptal uyarısı ──
+    if (iptalOran >= 25) tips.push({ t: 'warn', m: `İptal oranı yüksek (%${iptalOran}). Riskli/kayıtsız alıcılardan ön ödeme iste; sahte sipariş riskine dikkat.` });
+
+    if (!tips.length) tips.push({ t: 'tip', m: 'Yayına yeni başladın. İlk ürünü öne çıkar, "üye ol" linkini paylaş; ilk satışlardan sonra tempo analizi burada belirir.' });
+
+    const metrik = {
+      tempoLabel, tempoColor,
+      last5Rate: last5Rate.toFixed(1),
+      avgPerMin: avgPerMin.toFixed(1),
+      yeniSon10,
+      ortSepet,
+      elapsedMin: Math.round(elapsedMin),
+    };
+    return { tips, metrik };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, products, aktifKampanyalar, alisverisYapan, stats, saticiPerf, enCokUrun]);
+  }, [orders, products, stream, aiTick, alisverisYapan, stats, aktifKampanyalar]);
+  const aiTavsiye = aiAnaliz.tips;
 
   const saticilar = useMemo(() => Array.from(new Set([...sellers, ...orders.map((o) => o.saticiAd).filter(Boolean)])), [sellers, orders]);
   const filtered = useMemo(() => {
@@ -402,40 +457,48 @@ export default function CanliYayinSatis() {
               <button onClick={scanBarcode} className="bg-slate-800 text-white px-3 rounded-lg hover:bg-slate-700 text-sm">Okut</button>
             </div>
 
-            {/* Okutulan ürün stok kartı (inline — popup değil) */}
-            {barkodModal && (
-              <div className="mt-3 border border-indigo-200 bg-indigo-50/40 rounded-xl p-3 space-y-2.5">
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-14 h-14 rounded-lg bg-white border border-slate-100 overflow-hidden shrink-0">{(barkodModal.images || [])[0] ? <img src={barkodModal.images[0]} className="w-full h-full object-cover" /> : null}</div>
-                    <div><p className="font-semibold text-slate-800 text-sm leading-tight">{barkodModal.ad}</p><p className="text-[10px] text-slate-400 font-mono">Kod: {barkodModal.salesCode || '-'} · Barkod: {barkodModal.barkod || '-'}</p></div>
-                  </div>
-                  <button onClick={() => setBarkodModal(null)} className="p-1 hover:bg-white rounded-lg"><X size={16} className="text-slate-400" /></button>
-                </div>
-                <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="bg-white rounded-lg p-2 border border-slate-100"><p className="text-[10px] text-slate-400">Güncel Stok</p><p className={`font-bold ${(barkodModal.stokAdeti || 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>{barkodModal.stokAdeti || 0} adet</p></div>
-                  <div className="bg-white rounded-lg p-2 border border-slate-100"><p className="text-[10px] text-slate-400">Satış Fiyatı</p><p className="font-bold text-slate-700">{fmt(barkodModal.satisFiyat || 0)}</p></div>
-                </div>
-                {(barkodModal.variations || []).length > 0 ? (
-                  <div>
-                    <p className="text-[10px] text-slate-400 uppercase mb-1">Varyasyon / Beden Stoğu</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {barkodModal.variations.map((v: any) => <span key={v.id} className={`text-xs px-2 py-1 rounded-lg border ${v.stok > 0 ? 'bg-white border-slate-200 text-slate-700' : 'bg-red-50 border-red-200 text-red-500 line-through'}`}>{v.deger}: <b>{v.stok}</b></span>)}
+            {/* Ürün stok kartı — sabit (her zaman görünür) */}
+            <div className="mt-3 border border-slate-200 bg-slate-50/60 rounded-xl p-3 min-h-[120px]">
+              {barkodModal ? (
+                <div className="space-y-2.5">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-14 h-14 rounded-lg bg-white border border-slate-100 overflow-hidden shrink-0">{(barkodModal.images || [])[0] ? <img src={barkodModal.images[0]} className="w-full h-full object-cover" /> : null}</div>
+                      <div className="min-w-0"><p className="font-semibold text-slate-800 text-sm leading-tight truncate">{barkodModal.ad}</p><p className="text-[10px] text-slate-400 font-mono truncate">Kod: {barkodModal.salesCode || '-'} · Barkod: {barkodModal.barkod || '-'}</p></div>
                     </div>
+                    <button onClick={() => setBarkodModal(null)} className="p-1 hover:bg-white rounded-lg shrink-0" title="Temizle"><X size={16} className="text-slate-400" /></button>
                   </div>
-                ) : <p className="text-[10px] text-slate-400">Varyasyon yok (tek stok).</p>}
-                {activeFlash(barkodModal.id) > 0 && <p className="text-xs text-green-600 font-medium">Aktif süreli indirim: {fmt(activeFlash(barkodModal.id))}</p>}
-                <div className="border-t border-indigo-100 pt-2">
-                  <p className="text-[11px] font-medium text-slate-700 mb-1.5">Süreli İndirimli Fiyat</p>
-                  <div className="flex gap-2">
-                    <input type="number" value={discForm.price} onChange={(e) => setDiscForm({ ...discForm, price: e.target.value })} placeholder="İndirimli ₺" className="flex-1 px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg" />
-                    <input type="number" value={discForm.dakika} onChange={(e) => setDiscForm({ ...discForm, dakika: e.target.value })} placeholder="dk" className="w-16 px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg" />
-                    <button onClick={setFlashDiscount} className="bg-indigo-600 text-white px-3 rounded-lg text-sm font-medium hover:bg-indigo-700 shrink-0">Başlat</button>
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="bg-white rounded-lg p-2 border border-slate-100"><p className="text-[10px] text-slate-400">Güncel Stok</p><p className={`font-bold ${(barkodModal.stokAdeti || 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>{barkodModal.stokAdeti || 0} adet</p></div>
+                    <div className="bg-white rounded-lg p-2 border border-slate-100"><p className="text-[10px] text-slate-400">Satış Fiyatı</p><p className="font-bold text-slate-700">{fmt(barkodModal.satisFiyat || 0)}</p></div>
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-1">Yalnızca bu süre içinde gelen siparişler indirimli işlenir.</p>
+                  {(barkodModal.variations || []).length > 0 ? (
+                    <div>
+                      <p className="text-[10px] text-slate-400 uppercase mb-1">Varyasyon / Beden Stoğu</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {barkodModal.variations.map((v: any) => <span key={v.id} className={`text-xs px-2 py-1 rounded-lg border ${v.stok > 0 ? 'bg-white border-slate-200 text-slate-700' : 'bg-red-50 border-red-200 text-red-500 line-through'}`}>{v.deger}: <b>{v.stok}</b></span>)}
+                      </div>
+                    </div>
+                  ) : <p className="text-[10px] text-slate-400">Varyasyon yok (tek stok).</p>}
+                  {activeFlash(barkodModal.id) > 0 && <p className="text-xs text-green-600 font-medium">Aktif süreli indirim: {fmt(activeFlash(barkodModal.id))}</p>}
+                  <div className="border-t border-slate-200 pt-2">
+                    <p className="text-[11px] font-medium text-slate-700 mb-1.5">Süreli İndirimli Fiyat</p>
+                    <div className="flex gap-2 mb-2">
+                      <input type="number" value={discForm.price} onChange={(e) => setDiscForm({ ...discForm, price: e.target.value })} placeholder="İndirimli ₺" className="flex-1 min-w-0 px-2.5 py-1.5 text-sm border border-slate-200 rounded-lg" />
+                      <input type="number" value={discForm.dakika} onChange={(e) => setDiscForm({ ...discForm, dakika: e.target.value })} placeholder="dk" className="w-14 shrink-0 px-2 py-1.5 text-sm border border-slate-200 rounded-lg" />
+                    </div>
+                    <button onClick={setFlashDiscount} className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">Süreli İndirimi Başlat</button>
+                    <p className="text-[10px] text-slate-400 mt-1">Yalnızca bu süre içinde gelen siparişler indirimli işlenir.</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              ) : (
+                <div className="flex flex-col items-center justify-center text-center py-5 text-slate-400">
+                  <Package size={22} className="mb-1.5 text-slate-300" />
+                  <p className="text-[12px] font-medium text-slate-500">Ürün Stok Kartı</p>
+                  <p className="text-[10px]">Barkod/kod okutunca ürün, stok ve varyasyonlar burada görünür.</p>
+                </div>
+              )}
+            </div>
 
             {barHistory.length > 0 && (
               <div className="mt-3 space-y-1 max-h-40 overflow-y-auto">
@@ -544,6 +607,29 @@ export default function CanliYayinSatis() {
               <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center"><Brain size={17} className="text-white" /></div>
               <div><h3 className="font-bold text-slate-800 text-sm leading-tight">Yapay Zeka Asistanı</h3><p className="text-[10px] text-slate-400">Bu yayın için canlı tavsiye & uyarılar — bir sonraki hamleni doğru oyna</p></div>
               <span className="ml-auto text-[10px] text-indigo-500 inline-flex items-center gap-1"><Sparkles size={12} /> Canlı</span>
+            </div>
+            {/* Canlı metrikler (zaman bazlı) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+              <div className={`rounded-xl px-2.5 py-2 border ${aiAnaliz.metrik.tempoColor === 'warn' ? 'bg-red-50 border-red-100' : aiAnaliz.metrik.tempoColor === 'good' ? 'bg-green-50 border-green-100' : 'bg-white border-slate-100'}`}>
+                <p className="text-[9px] text-slate-400 font-medium">Tempo</p>
+                <p className={`text-sm font-bold ${aiAnaliz.metrik.tempoColor === 'warn' ? 'text-red-600' : aiAnaliz.metrik.tempoColor === 'good' ? 'text-green-600' : 'text-slate-700'}`}>{aiAnaliz.metrik.tempoLabel}</p>
+                <p className="text-[9px] text-slate-400">{aiAnaliz.metrik.last5Rate}/dk · ort {aiAnaliz.metrik.avgPerMin}</p>
+              </div>
+              <div className="rounded-xl px-2.5 py-2 border bg-white border-slate-100">
+                <p className="text-[9px] text-slate-400 font-medium">Yeni Alıcı</p>
+                <p className="text-sm font-bold text-indigo-600">{aiAnaliz.metrik.yeniSon10}</p>
+                <p className="text-[9px] text-slate-400">son 10 dakika</p>
+              </div>
+              <div className="rounded-xl px-2.5 py-2 border bg-white border-slate-100">
+                <p className="text-[9px] text-slate-400 font-medium">Ort. Sepet</p>
+                <p className="text-sm font-bold text-slate-700">{fmt(aiAnaliz.metrik.ortSepet)}</p>
+                <p className="text-[9px] text-slate-400">kişi başı</p>
+              </div>
+              <div className="rounded-xl px-2.5 py-2 border bg-white border-slate-100">
+                <p className="text-[9px] text-slate-400 font-medium">Yayın Süresi</p>
+                <p className="text-sm font-bold text-slate-700">{aiAnaliz.metrik.elapsedMin} dk</p>
+                <p className="text-[9px] text-slate-400">başlangıçtan</p>
+              </div>
             </div>
             <div className="space-y-2">
               {aiTavsiye.map((a, i) => {
