@@ -96,7 +96,7 @@ async function loadStore(slug: string) {
   const tenant = await prisma.tenant.findUnique({ where: { id: store.tenantId }, select: { name: true } });
   let products = await prisma.product.findMany({
     where: { tenantId: store.tenantId, onlineMagaza: true, aktif: true },
-    select: { id: true, ad: true, satisFiyat: true, eskiFiyat: true, oneCikan: true, images: true, aciklama: true, marka: true, stokAdeti: true, kategoriId: true, createdAt: true, variations: { select: { ad: true, deger: true, stok: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } },
+    select: { id: true, ad: true, satisFiyat: true, eskiFiyat: true, oneCikan: true, images: true, aciklama: true, marka: true, cinsiyet: true, stokAdeti: true, kategoriId: true, createdAt: true, variations: { select: { ad: true, deger: true, stok: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } },
   });
   const order: string[] = Array.isArray(store.productOrder) ? (store.productOrder as any) : [];
   if (order.length) {
@@ -125,6 +125,7 @@ router.get('/store/:slug', asyncHandler(async (req: Request, res: Response) => {
     logoText: data.store.logoText || data.tenant?.name,
     hero: { title: data.store.heroTitle, subtitle: data.store.heroSubtitle, image: data.store.heroImage, video: data.store.heroVideo },
     slides: Array.isArray(data.store.slides) ? data.store.slides : [],
+    topMenu: Array.isArray(data.store.topMenu) ? data.store.topMenu : [],
     freeShipThreshold: data.store.freeShipThreshold || 0,
     puanOrani: data.store.puanOrani || 0,
     products: data.products,

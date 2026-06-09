@@ -68,9 +68,14 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   useEffect(() => { const uq = sp.get('q'); const uk = sp.get('kat'); if (uq) setQ(uq); if (uk) setKat(uk); /* eslint-disable-next-line */ }, []);
 
   const products: any[] = data?.products || [];
+  const topMenu: any[] = Array.isArray(data?.topMenu) ? data.topMenu : [];
+  // Menü öğesini filtre anahtarına çevir
+  const katKey = (it: any) => it.type === 'kategori' ? `kat:${it.value}` : it.type === 'cinsiyet' ? `cins:${it.value}` : it.value;
   const filtered = useMemo(() => {
     let l = products.filter((p) => !q || p.ad.toLowerCase().includes(q.toLowerCase()) || (p.marka || '').toLowerCase().includes(q.toLowerCase()));
-    if (kat === 'indirim') l = l.filter((p) => disc(p.eskiFiyat, p.satisFiyat) > 0);
+    if (kat.startsWith('kat:')) l = l.filter((p) => p.kategoriId === kat.slice(4));
+    else if (kat.startsWith('cins:')) l = l.filter((p) => (p.cinsiyet || '') === kat.slice(5));
+    else if (kat === 'indirim') l = l.filter((p) => disc(p.eskiFiyat, p.satisFiyat) > 0);
     else if (kat === 'coksatan') l = l.filter((p) => p.oneCikan);
     else if (kat === 'yeni') l = [...l].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     else if (kat === 'sonsans') l = l.filter((p) => (p.stokAdeti || 0) > 0 && (p.stokAdeti || 0) <= 5);
@@ -158,7 +163,22 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
         {/* Üst menü (web) */}
         <nav className="hidden sm:block border-t border-slate-100 bg-white">
           <div className="max-w-6xl mx-auto px-4 flex items-center gap-1">
-            {KATLAR.map((c) => (
+            {topMenu.length > 0 ? topMenu.map((m: any) => {
+              const key = katKey(m);
+              const hasChildren = Array.isArray(m.children) && m.children.length > 0;
+              return (
+                <div key={m.id} className="relative group">
+                  <button onClick={() => { setKat(key); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className={`px-3 py-2.5 text-sm font-medium border-b-2 inline-flex items-center gap-1 ${kat === key ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-600 hover:text-indigo-600'}`}>{m.label}{hasChildren && <ChevronDown size={13} />}</button>
+                  {hasChildren && (
+                    <div className="absolute left-0 top-full hidden group-hover:block bg-white border border-slate-100 rounded-xl shadow-lg py-1 min-w-[180px] z-40">
+                      {m.children.map((c: any, ci: number) => { const ck = katKey(c); return (
+                        <button key={ci} onClick={() => { setKat(ck); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 ${kat === ck ? 'text-indigo-600 font-medium' : 'text-slate-600'}`}>{c.label}</button>
+                      ); })}
+                    </div>
+                  )}
+                </div>
+              );
+            }) : KATLAR.map((c) => (
               <button key={c.k} onClick={() => { setKat(c.k); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className={`px-3 py-2.5 text-sm font-medium border-b-2 ${kat === c.k ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-600 hover:text-indigo-600'}`}>{c.t}</button>
             ))}
             <span className="ml-auto flex items-center gap-4">
@@ -203,8 +223,11 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
 
         {/* Kategori/filtre çipleri */}
         <div className="flex gap-4 overflow-x-auto py-4">
-          {KATLAR.map((c) => { const Ic: any = c.icon; return (
-            <button key={c.k} onClick={() => setKat(c.k)} className="flex flex-col items-center gap-1.5 shrink-0">
+          {(topMenu.length > 0
+            ? topMenu.flatMap((m: any) => [{ k: katKey(m), t: m.label, icon: Zap }, ...((m.children || []).map((c: any) => ({ k: katKey(c), t: c.label, icon: Zap })))])
+            : KATLAR.map((c) => ({ k: c.k, t: c.t, icon: c.icon }))
+          ).map((c: any, idx: number) => { const Ic: any = c.icon; return (
+            <button key={c.k + idx} onClick={() => setKat(c.k)} className="flex flex-col items-center gap-1.5 shrink-0">
               <span className={`w-14 h-14 rounded-full flex items-center justify-center ${kat === c.k ? 'bg-indigo-600 text-white' : 'bg-white text-slate-500 border border-slate-100'}`}><Ic size={20} /></span>
               <span className={`text-[11px] ${kat === c.k ? 'text-indigo-600 font-semibold' : 'text-slate-500'}`}>{c.t}</span>
             </button>

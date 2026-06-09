@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, X, Package, CheckCircle2, AlertTriangle, Ban, EyeOff, Download, Upload, Copy, BarChart3, List, LayoutGrid, Settings, Wallet, TrendingUp, ScanLine, Tag, RefreshCw } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, X, Package, CheckCircle2, AlertTriangle, Ban, EyeOff, Download, Upload, Copy, BarChart3, List, LayoutGrid, Settings, Wallet, TrendingUp, ScanLine, Tag, RefreshCw, Store, Globe } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
@@ -21,6 +21,7 @@ export default function Urunlerim({ autoAdd }: Props) {
   const [katFilter, setKatFilter] = useState('');
   const [markaFilter, setMarkaFilter] = useState('');
   const [stokFilter, setStokFilter] = useState('all');
+  const [magazaFilter, setMagazaFilter] = useState('all');
   const [durumFilter, setDurumFilter] = useState('all');
   const [tab, setTab] = useState('tum');
   const [view, setView] = useState<'list' | 'grid'>('list');
@@ -83,6 +84,8 @@ export default function Urunlerim({ autoAdd }: Props) {
       if (markaFilter && p.marka !== markaFilter) return false;
       if (durumFilter === 'aktif' && !p.aktif) return false;
       if (durumFilter === 'pasif' && p.aktif) return false;
+      if (magazaFilter === 'acik' && !p.onlineMagaza) return false;
+      if (magazaFilter === 'kapali' && p.onlineMagaza) return false;
       const s = p.stokAdeti || 0;
       if (stokFilter === 'var' && s <= 0) return false;
       if (stokFilter === 'azalan' && !(s > 0 && s <= 5)) return false;
@@ -94,7 +97,7 @@ export default function Urunlerim({ autoAdd }: Props) {
     else if (tab === 'encok') list = [...list].sort((a, b) => (soldAll.qty.get(b.id) || 0) - (soldAll.qty.get(a.id) || 0));
     else if (tab === 'kar') list = [...list].sort((a, b) => ((soldAll.rev.get(b.id) || 0) - (b.alisFiyat || 0) * (b.stokAdeti || 0)) - ((soldAll.rev.get(a.id) || 0) - (a.alisFiyat || 0) * (a.stokAdeti || 0)));
     return list;
-  }, [products, katFilter, markaFilter, durumFilter, stokFilter, search, tab, soldAll]);
+  }, [products, katFilter, markaFilter, durumFilter, stokFilter, magazaFilter, search, tab, soldAll]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const pageItems = filtered.slice((page - 1) * perPage, page * perPage);
@@ -105,7 +108,7 @@ export default function Urunlerim({ autoAdd }: Props) {
   const selProducts = () => products.filter((p) => sel.has(p.id));
 
   // ── Form ──
-  const empty = { ad: '', sku: '', salesCode: '', marka: '', cinsiyet: 'unisex', kategoriId: '', alisFiyat: '', satisFiyat: '', eskiFiyat: '', oneCikan: false, stokAdeti: '', aciklama: '', tedarikciAd: '', tedarikciBarkod: '', lokasyon: '', images: [] as string[] };
+  const empty = { ad: '', sku: '', salesCode: '', marka: '', cinsiyet: 'unisex', kategoriId: '', alisFiyat: '', satisFiyat: '', eskiFiyat: '', oneCikan: false, onlineMagaza: false, stokAdeti: '', aciklama: '', tedarikciAd: '', tedarikciBarkod: '', lokasyon: '', images: [] as string[] };
   const [form, setForm] = useState<any>(empty);
   const [varRows, setVarRows] = useState<any[]>([]);
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
@@ -116,7 +119,7 @@ export default function Urunlerim({ autoAdd }: Props) {
   function openNew() { setEdit(null); setForm({ ...empty }); setVarRows([]); setModalOpen(true); }
   function openEdit(p: any) {
     setEdit(p);
-    setForm({ ad: p.ad, sku: p.sku || '', salesCode: p.salesCode || '', marka: p.marka || '', cinsiyet: p.cinsiyet || 'unisex', kategoriId: p.kategoriId || '', alisFiyat: p.alisFiyat ?? '', satisFiyat: p.satisFiyat ?? '', eskiFiyat: p.eskiFiyat ?? '', oneCikan: !!p.oneCikan, stokAdeti: p.stokAdeti ?? '', aciklama: p.aciklama || '', tedarikciAd: p.tedarikciAd || '', tedarikciBarkod: p.tedarikciBarkod || '', lokasyon: p.lokasyon || '', images: p.images || [] });
+    setForm({ ad: p.ad, sku: p.sku || '', salesCode: p.salesCode || '', marka: p.marka || '', cinsiyet: p.cinsiyet || 'unisex', kategoriId: p.kategoriId || '', alisFiyat: p.alisFiyat ?? '', satisFiyat: p.satisFiyat ?? '', eskiFiyat: p.eskiFiyat ?? '', oneCikan: !!p.oneCikan, onlineMagaza: !!p.onlineMagaza, stokAdeti: p.stokAdeti ?? '', aciklama: p.aciklama || '', tedarikciAd: p.tedarikciAd || '', tedarikciBarkod: p.tedarikciBarkod || '', lokasyon: p.lokasyon || '', images: p.images || [] });
     setVarRows((p.variations || []).map((v: any) => ({ ad: v.ad, deger: v.deger, stok: String(v.stok ?? '') })));
     setModalOpen(true);
   }
@@ -129,7 +132,7 @@ export default function Urunlerim({ autoAdd }: Props) {
     const body = {
       ad: form.ad, sku: form.sku || null, salesCode: form.salesCode || null, marka: form.marka || null, cinsiyet: form.cinsiyet,
       kategoriId: form.kategoriId || null, alisFiyat: Number(form.alisFiyat) || 0, satisFiyat: Number(form.satisFiyat) || 0,
-      eskiFiyat: form.eskiFiyat ? Number(form.eskiFiyat) : null, oneCikan: !!form.oneCikan,
+      eskiFiyat: form.eskiFiyat ? Number(form.eskiFiyat) : null, oneCikan: !!form.oneCikan, onlineMagaza: !!form.onlineMagaza,
       stokAdeti: variations.length ? variations.reduce((s, v) => s + v.stok, 0) : (Number(form.stokAdeti) || 0),
       aciklama: form.aciklama || null, tedarikciAd: form.tedarikciAd || null, tedarikciBarkod: form.tedarikciBarkod || null, lokasyon: form.lokasyon, images: form.images, variations,
     };
@@ -180,6 +183,15 @@ export default function Urunlerim({ autoAdd }: Props) {
       }
       toast.success(`${list.length} ürün güncellendi`); setBulk(null); setSel(new Set()); reload();
     } catch (e) { toast.error(apiErrorMessage(e)); }
+  };
+
+  // Online mağaza yayını
+  const toggleOnline = async (p: any) => {
+    try { await api.patch(`/store/products/${p.id}`, { onlineMagaza: !p.onlineMagaza }); toast.success(!p.onlineMagaza ? 'Mağazaya açıldı' : 'Mağazadan kaldırıldı'); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
+  };
+  const runPublish = async (open: boolean) => {
+    const list = selProducts(); if (!list.length) { toast.error('Önce ürün seçin'); return; }
+    try { for (const p of list) await api.patch(`/store/products/${p.id}`, { onlineMagaza: open }); toast.success(`${list.length} ürün ${open ? 'mağazaya açıldı' : 'mağazadan kaldırıldı'}`); setSel(new Set()); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
   };
 
   const pages = useMemo(() => { const a: (number | string)[] = []; if (totalPages <= 7) { for (let i = 1; i <= totalPages; i++) a.push(i); return a; } a.push(1, 2, 3, 4, 5, '...', totalPages); return a; }, [totalPages]);
@@ -236,7 +248,8 @@ export default function Urunlerim({ autoAdd }: Props) {
             <Sel label="Marka" value={markaFilter} onChange={(v) => { setMarkaFilter(v); setPage(1); }} options={[['', 'Tümü'], ...markalar.map((m) => [m, m] as [string, string])]} />
             <Sel label="Durum" value={durumFilter} onChange={(v) => { setDurumFilter(v); setPage(1); }} options={[['all', 'Tümü'], ['aktif', 'Aktif'], ['pasif', 'Pasif']]} />
             <Sel label="Stok Durumu" value={stokFilter} onChange={(v) => { setStokFilter(v); setPage(1); }} options={[['all', 'Tümü'], ['var', 'Stokta Var'], ['azalan', 'Azalan'], ['yok', 'Stok Yok']]} />
-            <button onClick={() => { setSearch(''); setKatFilter(''); setMarkaFilter(''); setDurumFilter('all'); setStokFilter('all'); setPage(1); }} className="px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50 self-end">Temizle</button>
+            <Sel label="Mağaza" value={magazaFilter} onChange={(v) => { setMagazaFilter(v); setPage(1); }} options={[['all', 'Tümü'], ['acik', 'Mağazada'], ['kapali', 'Mağazada Değil']]} />
+            <button onClick={() => { setSearch(''); setKatFilter(''); setMarkaFilter(''); setDurumFilter('all'); setStokFilter('all'); setMagazaFilter('all'); setPage(1); }} className="px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50 self-end">Temizle</button>
             <div className="flex items-center gap-1 self-end">
               <button onClick={() => setView('list')} className={`w-9 h-9 rounded-lg border flex items-center justify-center ${view === 'list' ? 'bg-indigo-50 border-indigo-300 text-indigo-600' : 'border-slate-200 text-slate-400'}`}><List size={16} /></button>
               <button onClick={() => setView('grid')} className={`w-9 h-9 rounded-lg border flex items-center justify-center ${view === 'grid' ? 'bg-indigo-50 border-indigo-300 text-indigo-600' : 'border-slate-200 text-slate-400'}`}><LayoutGrid size={16} /></button>
@@ -247,11 +260,14 @@ export default function Urunlerim({ autoAdd }: Props) {
           {sel.size > 0 && (
             <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2.5 flex items-center gap-2 flex-wrap text-sm">
               <span className="text-indigo-700 font-medium">{sel.size} ürün seçili</span>
-              <button onClick={() => { setBulkForm({ mode: 'yuzde', val: '', kategoriId: '' }); setBulk('fiyat'); }} className="ml-auto px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs">Toplu Fiyat</button>
+              <button onClick={() => runPublish(true)} className="ml-auto px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1"><Store size={13} /> Mağazaya Aç</button>
+              <button onClick={() => runPublish(false)} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs inline-flex items-center gap-1"><EyeOff size={13} /> Mağazadan Kaldır</button>
+              <button onClick={() => { setBulkForm({ mode: 'yuzde', val: '', kategoriId: '' }); setBulk('fiyat'); }} className="px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs">Toplu Fiyat</button>
               <button onClick={() => { setBulkForm({ mode: 'set', val: '', kategoriId: '' }); setBulk('stok'); }} className="px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs">Stok Güncelle</button>
               <button onClick={() => { setBulkForm({ mode: '', val: '', kategoriId: categories[0]?.id || '' }); setBulk('kategori'); }} className="px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs">Kategori Ata</button>
               <button onClick={() => barkodYazdir(selProducts())} className="px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs">Barkod Yazdır</button>
               <button onClick={() => setSel(new Set())} className="text-indigo-500 text-xs">Temizle</button>
+              <button onClick={() => setSel(new Set(filtered.map((p) => p.id)))} className="text-indigo-600 text-xs font-medium">Tüm filtreyi seç ({filtered.length})</button>
             </div>
           )}
 
@@ -263,7 +279,7 @@ export default function Urunlerim({ autoAdd }: Props) {
                     <th className="px-3 py-3"><input type="checkbox" checked={allSelected} onChange={toggleSelAll} /></th>
                     <th className="px-3 py-3">Ürün</th><th className="px-3 py-3">Barkod</th><th className="px-3 py-3">SKU</th><th className="px-3 py-3">Satış Kodu</th>
                     <th className="px-3 py-3">Alış</th><th className="px-3 py-3">Satış</th><th className="px-3 py-3">Stok</th><th className="px-3 py-3">Maliyet</th>
-                    <th className="px-3 py-3">Yapılan Satış</th><th className="px-3 py-3">+/- Durum</th><th className="px-3 py-3">Durum</th><th className="px-3 py-3 text-right">İşlemler</th>
+                    <th className="px-3 py-3">Yapılan Satış</th><th className="px-3 py-3">+/- Durum</th><th className="px-3 py-3">Mağaza</th><th className="px-3 py-3">Durum</th><th className="px-3 py-3 text-right">İşlemler</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -282,6 +298,7 @@ export default function Urunlerim({ autoAdd }: Props) {
                         <td className="px-3 py-3 text-slate-600">{fmt(maliyet)}</td>
                         <td className="px-3 py-3 text-slate-600">{fmt(ciro)}</td>
                         <td className={`px-3 py-3 font-semibold ${fark >= 0 ? 'text-green-600' : 'text-red-500'}`}>{fark >= 0 ? '+' : ''}{fmt0(fark)}</td>
+                        <td className="px-3 py-3"><button onClick={() => toggleOnline(p)} title={p.onlineMagaza ? 'Mağazadan kaldır' : 'Mağazaya aç'} className={`inline-flex items-center gap-1 whitespace-nowrap text-xs px-2.5 py-1 rounded-full font-medium border ${p.onlineMagaza ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>{p.onlineMagaza ? <Globe size={12} /> : <Ban size={12} />}{p.onlineMagaza ? 'Mağazada' : 'Kapalı'}</button></td>
                         <td className="px-3 py-3"><span className={`inline-block whitespace-nowrap text-xs px-2.5 py-1 rounded-full font-medium ${d.c}`}>{d.t}</span></td>
                         <td className="px-3 py-3"><div className="flex items-center justify-end gap-1 whitespace-nowrap">
                           <IBtn onClick={() => openEdit(p)} icon={Pencil} title="Düzenle" />
@@ -293,7 +310,7 @@ export default function Urunlerim({ autoAdd }: Props) {
                       </tr>
                     );
                   })}
-                  {pageItems.length === 0 && <tr><td colSpan={13} className="px-4 py-16 text-center text-slate-400">Ürün bulunamadı.</td></tr>}
+                  {pageItems.length === 0 && <tr><td colSpan={14} className="px-4 py-16 text-center text-slate-400">Ürün bulunamadı.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -301,7 +318,7 @@ export default function Urunlerim({ autoAdd }: Props) {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {pageItems.map((p) => { const stok = p.stokAdeti || 0; const d = durumOf(p); return (
                 <div key={p.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                  <div className="relative aspect-square bg-slate-100"><img src={(p.images || [])[0] || ''} className="w-full h-full object-cover" /><span className={`absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full font-medium ${d.c}`}>{d.t}</span></div>
+                  <div className="relative aspect-square bg-slate-100"><img src={(p.images || [])[0] || ''} className="w-full h-full object-cover" /><span className={`absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full font-medium ${d.c}`}>{d.t}</span><button onClick={() => toggleOnline(p)} title={p.onlineMagaza ? 'Mağazadan kaldır' : 'Mağazaya aç'} className={`absolute top-2 right-2 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium border ${p.onlineMagaza ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white/90 text-slate-500 border-slate-200'}`}>{p.onlineMagaza ? <Globe size={11} /> : <Store size={11} />}{p.onlineMagaza ? 'Mağazada' : 'Aç'}</button></div>
                   <div className="p-3"><p className="font-medium text-slate-800 truncate">{p.ad}</p><p className="text-xs text-slate-400 mb-2">{p.sku || p.salesCode || '-'}</p><div className="flex items-center justify-between text-sm"><span className="font-semibold">{fmt(p.satisFiyat)}</span><span className={`text-xs font-bold ${stokColor(stok)}`}>{stok} adet</span></div>
                     <div className="flex items-center gap-1 mt-2"><IBtn onClick={() => openEdit(p)} icon={Pencil} title="Düzenle" /><IBtn onClick={() => duplicate(p)} icon={Copy} title="Kopyala" /><IBtn onClick={() => barkodYazdir([p])} icon={ScanLine} title="Barkod" /><IBtn onClick={() => del(p)} icon={Trash2} title="Sil" cls="text-red-400 border-red-100 hover:bg-red-50" /></div>
                   </div>
@@ -417,7 +434,10 @@ export default function Urunlerim({ autoAdd }: Props) {
               <Field label="Tedarikçi Satış Barkodu"><input value={form.tedarikciBarkod} onChange={(e) => set('tedarikciBarkod', e.target.value)} className={inp} /></Field>
             </div>
             <Field label="Ürün Açıklaması"><textarea rows={2} value={form.aciklama} onChange={(e) => set('aciklama', e.target.value)} className={inp} /></Field>
-            <label className="flex items-center gap-2 text-sm text-slate-600 mt-3"><input type="checkbox" checked={form.oneCikan} onChange={(e) => set('oneCikan', e.target.checked)} /> Öne çıkan ürün</label>
+            <div className="flex items-center gap-5 flex-wrap mt-3">
+              <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={form.oneCikan} onChange={(e) => set('oneCikan', e.target.checked)} /> Öne çıkan ürün</label>
+              <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={form.onlineMagaza} onChange={(e) => set('onlineMagaza', e.target.checked)} /> <Store size={15} className="text-emerald-600" /> Online mağazada yayınla</label>
+            </div>
             <div className="mt-4 border-t border-slate-100 pt-4">
               <div className="flex items-center justify-between mb-2"><label className="text-sm font-medium text-slate-700">Varyasyon Stokları</label><select onChange={(e) => { if (e.target.value) applyTemplate(e.target.value); e.target.value = ''; }} className="text-xs px-2 py-1.5 border border-slate-200 rounded-lg"><option value="">Şablondan ekle...</option>{variationTemplates.map((t: any) => <option key={t.id} value={t.id}>{t.ad}</option>)}</select></div>
               {varRows.length === 0 ? (<p className="text-xs text-slate-400">Varyasyon yoksa boş bırakın; stok yukarıdan girilir.</p>) : (
