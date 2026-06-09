@@ -21,6 +21,7 @@ import staffRoutes from './modules/staff/staff.routes';
 import storeRoutes from './modules/store/store.routes';
 import liveRoutes from './modules/store/live.routes';
 import assistantRoutes from './modules/bot/assistant.routes';
+import adsRoutes from './modules/ads/ads.routes';
 import publicRoutes from './modules/public/public.routes';
 
 export function createApp() {
@@ -56,6 +57,7 @@ export function createApp() {
   app.use('/api/v1/store/live', liveRoutes);
   app.use('/api/v1/store', storeRoutes);
   app.use('/api/v1/assistant', assistantRoutes);
+  app.use('/api/v1/ads', adsRoutes);
 
   app.use(notFound);
   app.use(errorHandler);

@@ -45,6 +45,7 @@ import Musterilerim from './pages/Musterilerim';
 import MusteriDetay from './pages/MusteriDetay';
 import CanliYayinSatis from './pages/CanliYayinSatis';
 import CanliAkis from './pages/CanliAkis';
+import ReklamYonetimi from './pages/ReklamYonetimi';
 import KasaSatis from './pages/KasaSatis';
 import SaticiPerformans from './pages/SaticiPerformans';
 import Personeller from './pages/Personeller';
@@ -123,6 +124,7 @@ function TenantApp() {
               <Route path="/musterilerim/:id" element={<MusteriDetay />} />
               <Route path="/canli-yayin" element={<CanliYayinSatis />} />
               <Route path="/canli-akis" element={<CanliAkis />} />
+              <Route path="/reklam" element={<ReklamYonetimi />} />
               <Route path="/kasa-satis" element={<KasaSatis />} />
               <Route path="/satici-performans" element={<SaticiPerformans />} />
               <Route path="/personeller" element={<Personeller />} />

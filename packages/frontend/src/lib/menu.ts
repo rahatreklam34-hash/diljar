@@ -87,6 +87,12 @@ export const navGroups: MenuGroup[] = [
     ],
   },
   {
+    title: 'Reklam Yonetimi',
+    items: [
+      { to: '/reklam', icon: Megaphone, label: 'Meta Ads Paneli' },
+    ],
+  },
+  {
     title: 'Ekip Yonetimi',
     items: [
       { to: '/personel', icon: UserCheck, label: 'Personel' },
