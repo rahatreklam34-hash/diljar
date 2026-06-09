@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Store, Save, Plus, Trash2, ArrowUp, ArrowDown, Tag, ExternalLink, GripVertical, Star, Percent, X, Menu, ChevronRight,
-  ShoppingBag, Users, TrendingUp, Eye, Package, CreditCard, Wrench, Bell, ChevronRight as ArrowR, Megaphone, PackagePlus, FileText, Pencil, SlidersHorizontal, Truck, Palette, Search, Share2, Image as ImageIcon,
+  ShoppingBag, Users, TrendingUp, Eye, Package, CreditCard, Wrench, Bell, ChevronRight as ArrowR, Megaphone, PackagePlus, FileText, Pencil, SlidersHorizontal, Truck, Palette, Search, Share2, Image as ImageIcon, BarChart3, Folder,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
@@ -23,6 +23,9 @@ const DEFAULT_CONFIG = {
   odemeHavale: true, odemeKart: true, odemeKapida: false,
   bildirimYeniSiparis: true, bildirimStok: true, bildirimYorum: true,
   iade: '', gizlilik: '', kullanim: '',
+  metaPixel: '', tiktokPixel: '', ga4: '', googleAds: '', googleAdsLabel: '', customHead: '',
+  collections: [] as { id: string; ad: string }[],
+  collectionItems: {} as Record<string, string[]>, // productId -> [collectionId]
 };
 
 const AYARLAR_NAV: { k: string; t: string; sub: string; Ic: any }[] = [
@@ -35,6 +38,7 @@ const AYARLAR_NAV: { k: string; t: string; sub: string; Ic: any }[] = [
   { k: 'iletisim', t: 'İletişim & Sosyal', sub: 'İletişim bilgileri ve sosyal medya', Ic: Share2 },
   { k: 'tema', t: 'Tema & Görünüm', sub: 'Renkler, font, para birimi ve dil', Ic: Palette },
   { k: 'seo', t: 'SEO & Arama', sub: 'SEO başlık, açıklama ve anahtar kelimeler', Ic: Search },
+  { k: 'pixel', t: 'Takip Kodları (Pixel)', sub: 'Meta, TikTok, GA4, Google Ads', Ic: BarChart3 },
   { k: 'bildirim', t: 'Bildirim Ayarları', sub: 'E-posta ve bildirim tercihleri', Ic: Bell },
   { k: 'politika', t: 'Politikalar', sub: 'İade, gizlilik ve kullanım şartları', Ic: FileText },
 ];
@@ -59,8 +63,10 @@ export default function OnlineMagaza() {
   const [uCinsiyet, setUCinsiyet] = useState('');
   const [uKategori, setUKategori] = useState('');
   const [uGorunum, setUGorunum] = useState('tumu'); // tumu | one | indirim | var:N
+  const [activeColl, setActiveColl] = useState('tumu'); // koleksiyon sekmesi
+  const [imgZoom, setImgZoom] = useState('');
   const [editModal, setEditModal] = useState<any | null>(null);
-  const [editForm, setEditForm] = useState<any>({ satisFiyat: '', eskiFiyat: '', aciklama: '', oneCikan: false });
+  const [editForm, setEditForm] = useState<any>({ satisFiyat: '', eskiFiyat: '', aciklama: '', oneCikan: false, collections: [] as string[] });
 
   useEffect(() => {
     if (storeSetting) setS({ active: storeSetting.active, slug: storeSetting.slug || '', logoText: storeSetting.logoText || '', heroTitle: storeSetting.heroTitle || '', heroSubtitle: storeSetting.heroSubtitle || '', heroImage: storeSetting.heroImage || '', heroVideo: storeSetting.heroVideo || '', bankaAd: storeSetting.bankaAd || '', iban: storeSetting.iban || '', hesapSahibi: storeSetting.hesapSahibi || '', slides: storeSetting.slides || [], productOrder: storeSetting.productOrder || [], topMenu: storeSetting.topMenu || [], freeShipThreshold: storeSetting.freeShipThreshold || 0, puanOrani: storeSetting.puanOrani || 0, config: { ...DEFAULT_CONFIG, ...(storeSetting.config || {}) } });
@@ -196,6 +202,7 @@ export default function OnlineMagaza() {
   const varCounts = [...new Set(onlineProducts.map(vStok).filter((n) => n > 0))].sort((a, b) => a - b);
   const GENDER_LBL: Record<string, string> = { kadin: 'Kadın', erkek: 'Erkek', cocuk: 'Çocuk', unisex: 'Unisex' };
   const matchU = (p: any) => {
+    if (activeColl !== 'tumu') { const m = (cfg.collectionItems || {})[p.id] || []; if (!m.includes(activeColl)) return false; }
     if (urunQ && !((p.ad || '').toLowerCase().includes(urunQ.toLowerCase()) || (p.marka || '').toLowerCase().includes(urunQ.toLowerCase()))) return false;
     if (uMarka && p.marka !== uMarka) return false;
     if (uCinsiyet && p.cinsiyet !== uCinsiyet) return false;
@@ -228,15 +235,22 @@ export default function OnlineMagaza() {
     setS((x: any) => ({ ...x, productOrder: ids }));
   };
   const globalPos = (id: string) => ordered.findIndex((p) => p.id === id) + 1;
+  // Koleksiyon (manuel başlık) yönetimi — config'e kaydedilir
+  const persistCfg = (cfgPart: any) => { const merged = { ...s.config, ...cfgPart }; setS((x: any) => ({ ...x, config: merged })); api.put('/store/settings', buildBody({ config: merged })).catch(() => {}); };
+  const addColl = () => { const ad = prompt('Başlık adı (ör. Öne Çıkanlar, Fiyatı Düşenler)'); if (!ad || !ad.trim()) return; persistCfg({ collections: [...(cfg.collections || []), { id: 'c' + Date.now(), ad: ad.trim() }] }); };
+  const renameColl = (id: string) => { const c = (cfg.collections || []).find((x: any) => x.id === id); const ad = prompt('Başlık adı', c?.ad || ''); if (ad == null) return; persistCfg({ collections: (cfg.collections || []).map((x: any) => x.id === id ? { ...x, ad: ad.trim() || x.ad } : x) }); };
+  const delColl = (id: string) => { if (!confirm('Bu başlık silinsin mi?')) return; const items = { ...(cfg.collectionItems || {}) }; Object.keys(items).forEach((pid) => { items[pid] = (items[pid] || []).filter((x: string) => x !== id); }); persistCfg({ collections: (cfg.collections || []).filter((x: any) => x.id !== id), collectionItems: items }); if (activeColl === id) setActiveColl('tumu'); };
   // Ürün düzenleme modalı
-  const openEdit = (p: any) => { setEditForm({ satisFiyat: String(p.satisFiyat ?? ''), eskiFiyat: String(p.eskiFiyat ?? ''), aciklama: p.aciklama || '', oneCikan: !!p.oneCikan }); setEditModal(p); };
+  const openEdit = (p: any) => { setEditForm({ satisFiyat: String(p.satisFiyat ?? ''), eskiFiyat: String(p.eskiFiyat ?? ''), aciklama: p.aciklama || '', oneCikan: !!p.oneCikan, collections: (cfg.collectionItems || {})[p.id] || [] }); setEditModal(p); };
   const saveEdit = async () => {
     if (!editModal) return;
     const yeni = Number(editForm.satisFiyat) || 0;
     const eski = editForm.eskiFiyat ? Number(editForm.eskiFiyat) : 0;
     if (yeni <= 0) { toast.error('Geçerli satış fiyatı girin'); return; }
     const body = { satisFiyat: yeni, eskiFiyat: eski > yeni ? eski : null, aciklama: editForm.aciklama || null, oneCikan: !!editForm.oneCikan };
-    try { await api.patch(`/store/products/${editModal.id}`, body); toast.success('Ürün güncellendi'); setEditModal(null); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
+    const newItems = { ...(cfg.collectionItems || {}), [editModal.id]: editForm.collections };
+    const merged = { ...s.config, collectionItems: newItems };
+    try { await api.patch(`/store/products/${editModal.id}`, body); await api.put('/store/settings', buildBody({ config: merged })); setS((x: any) => ({ ...x, config: merged })); toast.success('Ürün güncellendi'); setEditModal(null); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
   };
 
   const TABS: [typeof tab, string, number | null][] = [
@@ -579,6 +593,21 @@ export default function OnlineMagaza() {
           </div>
           )}
 
+          {/* ── Takip Kodları (Pixel) ── */}
+          {aTab === 'pixel' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+            <div><h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><BarChart3 size={16} className="text-indigo-600" /> Takip Kodları (Pixel)</h3><p className="text-xs text-slate-400">Pazarlama ve dönüşüm takibi için reklam piksellerinizi ekleyin. Kodlar mağaza sayfanıza otomatik yüklenir.</p></div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <div><label className="block text-xs text-slate-500 mb-1">Meta (Facebook) Pixel ID</label><input value={cfg.metaPixel} onChange={(e) => setCfg('metaPixel', e.target.value)} placeholder="ör. 123456789012345" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">TikTok Pixel ID</label><input value={cfg.tiktokPixel} onChange={(e) => setCfg('tiktokPixel', e.target.value)} placeholder="ör. CXXXXXXXXXXXXXXXXX" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Google Analytics 4 (Measurement ID)</label><input value={cfg.ga4} onChange={(e) => setCfg('ga4', e.target.value)} placeholder="G-XXXXXXXXXX" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Google Ads Conversion ID</label><input value={cfg.googleAds} onChange={(e) => setCfg('googleAds', e.target.value)} placeholder="AW-XXXXXXXXXX" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Google Ads Conversion Label (ops.)</label><input value={cfg.googleAdsLabel} onChange={(e) => setCfg('googleAdsLabel', e.target.value)} placeholder="ör. AbC-D_efG..." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            </div>
+            <div><label className="block text-xs text-slate-500 mb-1">Özel Kod (head'e eklenir — gelişmiş)</label><textarea rows={4} value={cfg.customHead} onChange={(e) => setCfg('customHead', e.target.value)} placeholder="<!-- Ek script / doğrulama meta etiketleri -->" className="w-full px-3 py-2 text-xs font-mono border border-slate-200 rounded-lg" /><p className="text-[10px] text-slate-400 mt-1">Yalnızca güvendiğiniz kaynaklardan kod ekleyin. ID'leri girmeniz yeterli; standart pixel/GA snippet'leri otomatik kurulur.</p></div>
+          </div>
+          )}
+
           {/* ── Bildirim Ayarları ── */}
           {aTab === 'bildirim' && (
           <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
@@ -615,6 +644,19 @@ export default function OnlineMagaza() {
             <button onClick={() => nav('/depo/urunlerim')} className="inline-flex items-center gap-1.5 px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50"><Package size={15} /> Tüm Ürünleri Yönet</button>
           </div>
 
+          {/* Koleksiyon başlıkları — ürünlerin üstünde sekmeler */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <button onClick={() => setActiveColl('tumu')} className={`px-3 py-1.5 text-xs font-medium rounded-full border ${activeColl === 'tumu' ? 'bg-slate-800 text-white border-slate-800' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}>Tümü</button>
+            {(cfg.collections || []).map((c: any) => (
+              <span key={c.id} className={`inline-flex items-center rounded-full border ${activeColl === c.id ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'}`}>
+                <button onClick={() => setActiveColl(c.id)} className="pl-3 pr-1.5 py-1.5 text-xs font-medium inline-flex items-center gap-1"><Folder size={12} /> {c.ad}</button>
+                {activeColl === c.id && (<><button onClick={() => renameColl(c.id)} title="Yeniden adlandır" className="px-1 hover:opacity-70"><Pencil size={11} /></button><button onClick={() => delColl(c.id)} title="Sil" className="pr-2 pl-0.5 hover:opacity-70"><X size={12} /></button></>)}
+              </span>
+            ))}
+            <button onClick={addColl} className="px-3 py-1.5 text-xs font-medium rounded-full border border-dashed border-indigo-300 text-indigo-600 hover:bg-indigo-50 inline-flex items-center gap-1"><Plus size={13} /> Başlık Ekle</button>
+          </div>
+          {activeColl !== 'tumu' && <p className="text-[11px] text-slate-400 -mt-2">Bu başlığa ürün eklemek için ürünün <b>Düzenle</b> (kalem) butonundan "Koleksiyonlar" alanını kullanın.</p>}
+
           {uFilters && (
             <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
               <div className="flex items-center justify-between"><h4 className="text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5"><SlidersHorizontal size={14} className="text-indigo-600" /> Detaylı Filtreler</h4><button onClick={() => { setUMarka(''); setUCinsiyet(''); setUKategori(''); setUGorunum('tumu'); }} className="text-xs text-slate-400 hover:text-red-500">Temizle</button></div>
@@ -638,31 +680,31 @@ export default function OnlineMagaza() {
           </div>
 
           {uOrdered.length === 0 ? <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">{onlineProducts.length === 0 ? 'Mağazada ürün yok. Ürünlerim\'de bir ürünün "Mağaza" rozetini açın.' : 'Bu filtreye uygun ürün yok.'}</div> : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5">{uOrdered.map((p) => {
+            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 xl:grid-cols-7 gap-2">{uOrdered.map((p) => {
               const ind = (p.eskiFiyat && p.eskiFiyat > p.satisFiyat) ? Math.round(((p.eskiFiyat - p.satisFiyat) / p.eskiFiyat) * 100) : 0;
               const bedenler = (p.variations || []).filter((v: any) => (v.stok || 0) > 0);
+              const img = (p.images || [])[0] || '';
               return (
-                <div key={p.id} draggable onDragStart={() => setDragId(p.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropU(p.id)} className={`bg-white rounded-xl border overflow-hidden flex flex-col transition-shadow ${dragId === p.id ? 'border-indigo-400 shadow-lg opacity-60' : 'border-slate-200 hover:border-slate-300'}`}>
+                <div key={p.id} draggable onDragStart={() => setDragId(p.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropU(p.id)} className={`bg-white rounded-lg border overflow-hidden flex flex-col transition-shadow ${dragId === p.id ? 'border-indigo-400 shadow-lg opacity-60' : 'border-slate-200 hover:border-slate-300'}`}>
                   <div className="relative aspect-square bg-slate-100">
-                    <img src={(p.images || [])[0] || ''} className="w-full h-full object-cover" />
-                    <span className="absolute top-1 left-1 bg-black/55 text-white rounded-md p-0.5 cursor-grab"><GripVertical size={12} /></span>
-                    {ind > 0 && <span className="absolute top-1 right-1 bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">%{ind}</span>}
-                    {p.oneCikan && <span className="absolute bottom-1 left-1 bg-amber-400 text-white w-5 h-5 rounded-full flex items-center justify-center"><Star size={10} className="fill-white" /></span>}
+                    <button onClick={() => img && setImgZoom(img)} className="w-full h-full cursor-zoom-in" title="Büyüt">{img ? <img src={img} className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center text-slate-300"><Package size={18} /></span>}</button>
+                    <span className="absolute top-0.5 left-0.5 bg-black/55 text-white rounded p-0.5 cursor-grab"><GripVertical size={10} /></span>
+                    {ind > 0 && <span className="absolute top-0.5 right-0.5 bg-rose-500 text-white text-[8px] font-bold px-1 py-0.5 rounded-full">%{ind}</span>}
+                    {p.oneCikan && <span className="absolute bottom-0.5 left-0.5 bg-amber-400 text-white w-4 h-4 rounded-full flex items-center justify-center"><Star size={9} className="fill-white" /></span>}
                   </div>
-                  <div className="p-2 flex flex-col flex-1">
-                    <div className="flex items-center gap-1 mb-1">
-                      <span className="text-[9px] text-slate-400 shrink-0">Sıra</span>
-                      <input type="number" min={1} defaultValue={globalPos(p.id)} key={globalPos(p.id)} onBlur={(e) => { const v = Number(e.target.value); if (v && v !== globalPos(p.id)) setPosition(p.id, v); }} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className="w-10 px-1 py-0.5 text-[11px] text-center border border-slate-200 rounded" title="Genel vitrin sırası" />
+                  <div className="p-1.5 flex flex-col flex-1">
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <span className="text-[8px] text-slate-400 shrink-0">Sıra</span>
+                      <input type="number" min={1} defaultValue={globalPos(p.id)} key={globalPos(p.id)} onBlur={(e) => { const v = Number(e.target.value); if (v && v !== globalPos(p.id)) setPosition(p.id, v); }} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className="w-8 px-0.5 py-0.5 text-[10px] text-center border border-slate-200 rounded" title="Genel vitrin sırası" />
+                      {(cfg.collectionItems?.[p.id]?.length || 0) > 0 && <span className="ml-auto text-[8px] text-indigo-500 inline-flex items-center gap-0.5" title="Koleksiyonlarda"><Folder size={9} />{cfg.collectionItems[p.id].length}</span>}
                     </div>
-                    <p className="text-[12px] font-medium text-slate-800 leading-tight line-clamp-2">{p.ad}</p>
-                    <div className="flex items-center gap-1 mt-0.5">{ind > 0 && <span className="text-[10px] text-slate-300 line-through">{fmt(p.eskiFiyat)}</span>}<span className={`text-sm font-bold ${ind > 0 ? 'text-rose-600' : 'text-slate-800'}`}>{fmt(p.satisFiyat)}</span></div>
-                    {bedenler.length > 0 ? (
-                      <div className="flex flex-wrap gap-0.5 mt-1">{bedenler.slice(0, 5).map((v: any) => <span key={v.id || v.deger} className="text-[9px] px-1 py-0.5 rounded border border-slate-200 text-slate-500">{v.deger}<b className="text-slate-700 ml-0.5">{v.stok}</b></span>)}</div>
-                    ) : <p className="text-[9px] text-slate-300 mt-1">Tek stok: {p.stokAdeti || 0}</p>}
-                    <div className="flex items-center gap-1 mt-auto pt-2">
-                      <button onClick={() => toggleOne(p)} title="Öne çıkar" className={`flex-1 h-7 rounded-lg border flex items-center justify-center ${p.oneCikan ? 'bg-amber-50 border-amber-300 text-amber-500' : 'border-slate-200 text-slate-400 hover:text-amber-500'}`}><Star size={13} className={p.oneCikan ? 'fill-amber-400' : ''} /></button>
-                      <button onClick={() => openEdit(p)} title="Düzenle" className="flex-1 h-7 rounded-lg border border-slate-200 text-slate-400 hover:text-indigo-600 flex items-center justify-center"><Pencil size={13} /></button>
-                      <button onClick={() => removeFromStore(p)} title="Mağazadan kaldır" className="flex-1 h-7 rounded-lg border border-slate-200 text-slate-400 hover:text-red-500 flex items-center justify-center"><Trash2 size={13} /></button>
+                    <p className="text-[11px] font-medium text-slate-800 leading-tight line-clamp-2">{p.ad}</p>
+                    <div className="flex items-center gap-1 mt-0.5">{ind > 0 && <span className="text-[9px] text-slate-300 line-through">{fmt(p.eskiFiyat)}</span>}<span className={`text-xs font-bold ${ind > 0 ? 'text-rose-600' : 'text-slate-800'}`}>{fmt(p.satisFiyat)}</span></div>
+                    {bedenler.length > 0 && <div className="flex flex-wrap gap-0.5 mt-0.5">{bedenler.slice(0, 4).map((v: any) => <span key={v.id || v.deger} className="text-[8px] px-1 py-0.5 rounded border border-slate-200 text-slate-500">{v.deger}</span>)}</div>}
+                    <div className="flex items-center gap-0.5 mt-auto pt-1.5">
+                      <button onClick={() => toggleOne(p)} title="Öne çıkar" className={`flex-1 h-6 rounded-md border flex items-center justify-center ${p.oneCikan ? 'bg-amber-50 border-amber-300 text-amber-500' : 'border-slate-200 text-slate-400 hover:text-amber-500'}`}><Star size={12} className={p.oneCikan ? 'fill-amber-400' : ''} /></button>
+                      <button onClick={() => openEdit(p)} title="Düzenle" className="flex-1 h-6 rounded-md border border-slate-200 text-slate-400 hover:text-indigo-600 flex items-center justify-center"><Pencil size={12} /></button>
+                      <button onClick={() => removeFromStore(p)} title="Mağazadan kaldır" className="flex-1 h-6 rounded-md border border-slate-200 text-slate-400 hover:text-red-500 flex items-center justify-center"><Trash2 size={12} /></button>
                     </div>
                   </div>
                 </div>
@@ -745,9 +787,27 @@ export default function OnlineMagaza() {
               <div><label className="block text-xs text-slate-500 mb-1">Varyasyonlar (stok)</label><div className="flex flex-wrap gap-1">{(editModal.variations || []).map((v: any) => <span key={v.id || v.deger} className={`text-xs px-2 py-1 rounded-lg border ${(v.stok || 0) > 0 ? 'bg-white border-slate-200 text-slate-600' : 'bg-red-50 border-red-200 text-red-400 line-through'}`}>{v.deger}: <b>{v.stok}</b></span>)}</div></div>
             )}
             <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={editForm.oneCikan} onChange={(e) => setEditForm({ ...editForm, oneCikan: e.target.checked })} /> <Star size={14} className="text-amber-500" /> Öne çıkan ürün</label>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1.5 flex items-center gap-1"><Folder size={13} className="text-indigo-500" /> Koleksiyonlar (üst sekme başlıkları)</label>
+              {(cfg.collections || []).length === 0 ? <p className="text-[11px] text-slate-400">Henüz başlık yok. "Mağazadaki Ürünler" üstündeki <b>Başlık Ekle</b> ile oluşturun.</p> : (
+                <div className="flex flex-wrap gap-1.5">
+                  {(cfg.collections || []).map((c: any) => { const on = (editForm.collections || []).includes(c.id); return (
+                    <button key={c.id} onClick={() => setEditForm((f: any) => ({ ...f, collections: on ? f.collections.filter((x: string) => x !== c.id) : [...(f.collections || []), c.id] }))} className={`text-xs px-3 py-1.5 rounded-full border inline-flex items-center gap-1 ${on ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-600'}`}>{on ? '✓' : '+'} {c.ad}</button>
+                  ); })}
+                </div>
+              )}
+            </div>
             <button onClick={saveEdit} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700">Kaydet</button>
             <p className="text-[11px] text-slate-400">Stok ve varyasyon düzenlemesi için "Tüm Ürünleri Yönet" sayfasını kullanın.</p>
           </div>
+        </div>
+      )}
+
+      {/* Görsel büyütme (lightbox) */}
+      {imgZoom && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-6 bg-black/80" onClick={() => setImgZoom('')}>
+          <img src={imgZoom} className="max-w-full max-h-full rounded-xl object-contain" onClick={(e) => e.stopPropagation()} />
+          <button onClick={() => setImgZoom('')} className="absolute top-4 right-4 text-white/80 hover:text-white"><X size={28} /></button>
         </div>
       )}
 

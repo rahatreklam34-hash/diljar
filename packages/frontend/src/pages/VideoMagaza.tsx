@@ -74,6 +74,18 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const cikis = () => { localStorage.removeItem(SHOP_KEY); setShopUser(null); setHesap(null); setAcc(false); };
 
   useEffect(() => { api.get(`/public/store/${slug}`).then((r) => setData(r.data)).catch((e) => setErr(apiErrorMessage(e))); }, [slug]);
+
+  // Reklam pikselleri / takip kodları enjeksiyonu (Meta, TikTok, GA4, Google Ads)
+  useEffect(() => {
+    const c: any = data?.config; if (!c) return;
+    const add = (id: string, html: string) => { if (document.getElementById(id)) return; const s = document.createElement('script'); s.id = id; s.innerHTML = html; document.head.appendChild(s); };
+    const addExt = (id: string, src: string) => { if (document.getElementById(id)) return; const s = document.createElement('script'); s.id = id; s.async = true; s.src = src; document.head.appendChild(s); };
+    if (c.ga4) { addExt('wt-ga4-src', `https://www.googletagmanager.com/gtag/js?id=${c.ga4}`); add('wt-ga4', `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${c.ga4}');${c.googleAds ? `gtag('config','${c.googleAds}');` : ''}`); }
+    else if (c.googleAds) { addExt('wt-gads-src', `https://www.googletagmanager.com/gtag/js?id=${c.googleAds}`); add('wt-gads', `window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments);}gtag('js',new Date());gtag('config','${c.googleAds}');`); }
+    if (c.metaPixel) add('wt-meta', `!function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');fbq('init','${c.metaPixel}');fbq('track','PageView');`);
+    if (c.tiktokPixel) add('wt-tiktok', `!function(w,d,t){w.TiktokAnalyticsObject=t;var ttq=w[t]=w[t]||[];ttq.methods=["page","track","identify","instances","debug","on","off","once","ready","alias","group","enableCookie","disableCookie"];ttq.setAndDefer=function(t,e){t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}};for(var i=0;i<ttq.methods.length;i++)ttq.setAndDefer(ttq,ttq.methods[i]);ttq.instance=function(t){for(var e=ttq._i[t]||[],n=0;n<ttq.methods.length;n++)ttq.setAndDefer(e,ttq.methods[n]);return e};ttq.load=function(e,n){var i="https://analytics.tiktok.com/i18n/pixel/events.js";ttq._i=ttq._i||{};ttq._i[e]=[];ttq._i[e]._u=i;ttq._t=ttq._t||{};ttq._t[e]=+new Date;ttq._o=ttq._o||{};ttq._o[e]=n||{};var o=d.createElement("script");o.type="text/javascript";o.async=!0;o.src=i+"?sdkid="+e+"&lib="+t;var a=d.getElementsByTagName("script")[0];a.parentNode.insertBefore(o,a)};ttq.load('${c.tiktokPixel}');ttq.page()}(window,document,'ttq');`);
+    if (c.customHead && !document.getElementById('wt-customhead')) { const d = document.createElement('div'); d.id = 'wt-customhead'; d.style.display = 'none'; d.innerHTML = c.customHead; document.head.appendChild(d); }
+  }, [data?.config]);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => { const uq = sp.get('q'); const uk = sp.get('kat'); if (uq) setQ(uq); if (uk) setKat(uk); /* eslint-disable-next-line */ }, []);
 
