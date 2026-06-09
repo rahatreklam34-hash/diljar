@@ -50,12 +50,16 @@ export default function UrunDetayPublic() {
   const p = d?.urun;
   const fiyat = useMemo(() => { if (!p) return 0; let f = p.satisFiyat; if (varSel) { const v = (p.variations || []).find((x: any) => x.deger === varSel); if (v) f += v.ekFiyat || 0; } return f; }, [p, varSel]);
 
-  const sepeteEkle = async () => {
+  const sepeteEkle = () => {
     if (!p) return;
     if ((p.variations || []).length > 0 && !varSel) { alert('Lütfen beden/varyasyon seçin'); return; }
-    setBusy(true);
-    try { const r = await api.post(`/public/store/${slug}/cart-order`, { items: [{ productId: p.id, adet, varyasyon: varSel || undefined }] }); window.location.href = `/sepet/${r.data.token}?chat=1`; }
-    catch (e) { alert(apiErrorMessage(e)); setBusy(false); }
+    try {
+      const cart = JSON.parse(localStorage.getItem('wt_cart') || '{}');
+      const key = `${p.id}:${varSel || ''}`;
+      cart[key] = { productId: p.id, varyasyon: varSel || null, ad: p.ad, fiyat, img: (p.images || [])[0] || '', adet: (cart[key]?.adet || 0) + adet };
+      localStorage.setItem('wt_cart', JSON.stringify(cart));
+    } catch { /* */ }
+    nav(slug ? `/m/${slug}?cart=1` : `/?cart=1`);
   };
 
   const pickImg = (file: File) => { const reader = new FileReader(); reader.onload = () => { const im = new Image(); im.onload = () => { let { width, height } = im; const max = 900; if (width > max || height > max) { if (width > height) { height = Math.round(height * max / width); width = max; } else { width = Math.round(width * max / height); height = max; } } const c = document.createElement('canvas'); c.width = width; c.height = height; c.getContext('2d')!.drawImage(im, 0, 0, width, height); setYgorsel(c.toDataURL('image/jpeg', 0.7)); }; im.src = reader.result as string; }; reader.readAsDataURL(file); };

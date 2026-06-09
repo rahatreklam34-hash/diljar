@@ -33,7 +33,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [sizeSel, setSizeSel] = useState<Set<string>>(new Set());
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
-  const [cart, setCart] = useState<Record<string, any>>({});
+  const [cart, setCart] = useState<Record<string, any>>(() => { try { return JSON.parse(localStorage.getItem('wt_cart') || '{}'); } catch { return {}; } });
   const [cartOpen, setCartOpen] = useState(false);
   const [varModal, setVarModal] = useState<any>(null);
   const [varSel, setVarSel] = useState('');
@@ -46,6 +46,10 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [done, setDone] = useState<any>(null);
   const [legalModal, setLegalModal] = useState('');
   const [siparisDetay, setSiparisDetay] = useState<any>(null);
+  // Sepeti localStorage'a kaydet (ürün detay sayfasından eklenenler de görünsün)
+  useEffect(() => { try { localStorage.setItem('wt_cart', JSON.stringify(cart)); } catch { /* */ } }, [cart]);
+  // Ürün detayından "Sepete Ekle" sonrası sepet ekranını aç (?cart=1)
+  useEffect(() => { if (sp.get('cart') === '1') setCartOpen(true); /* eslint-disable-next-line */ }, []);
   // İndirim kodu + sepet önizleme (kampanya/kupon otomatik)
   const [codeInput, setCodeInput] = useState('');
   const [discountCode, setDiscountCode] = useState('');
