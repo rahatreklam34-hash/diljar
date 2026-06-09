@@ -246,6 +246,22 @@ router.post('/store/:slug/track', asyncHandler(async (req: Request, res: Respons
   }
   res.json({ ok: true });
 }));
+// Paylaşılabilir barkod kataloğu (süreli indirim geri sayımı dahil)
+router.get('/katalog/:slug', asyncHandler(async (req: Request, res: Response) => {
+  const store = await prisma.storeSetting.findFirst({ where: { slug: req.params.slug } });
+  if (!store) throw new ApiError(404, 'Katalog bulunamadi');
+  const items = await prisma.catalogItem.findMany({ where: { tenantId: store.tenantId }, orderBy: { updatedAt: 'desc' }, take: 200 });
+  const prods = await prisma.product.findMany({ where: { tenantId: store.tenantId, id: { in: items.map((i) => i.productId) }, aktif: true }, include: { variations: { select: { ad: true, deger: true, stok: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } } });
+  const pMap = new Map(prods.map((p) => [p.id, p]));
+  const now = Date.now();
+  const list = items.map((i) => {
+    const p: any = pMap.get(i.productId); if (!p) return null;
+    const flashAktif = !!(i.flashFiyat && i.flashBitis && new Date(i.flashBitis).getTime() > now);
+    return { id: i.id, productId: p.id, ad: p.ad, salesCode: p.salesCode, marka: p.marka, cinsiyet: p.cinsiyet, images: p.images, satisFiyat: p.satisFiyat, eskiFiyat: p.eskiFiyat, stokAdeti: p.stokAdeti, variations: p.variations, flashFiyat: flashAktif ? i.flashFiyat : null, flashBitis: flashAktif ? i.flashBitis : null };
+  }).filter(Boolean);
+  const cfg: any = store.config || {};
+  res.json({ ad: store.logoText || 'Ürün Kataloğu', logo: cfg.logo || store.heroImage || '', slug: store.slug, magazaAktif: store.active, items: list });
+}));
 // Yorum gönder
 router.post('/store/:slug/urun/:id/yorum', asyncHandler(async (req: Request, res: Response) => {
   const store = await prisma.storeSetting.findFirst({ where: { slug: req.params.slug, active: true } });

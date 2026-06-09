@@ -631,4 +631,27 @@ router.put('/payment-routing', asyncHandler(async (req: Request, res: Response) 
   res.json({ ok: true });
 }));
 
+// ───────── Barkod kataloğu ─────────
+router.post('/catalog/add', asyncHandler(async (req: Request, res: Response) => {
+  const { productId, flashFiyat, flashBitis } = req.body || {};
+  if (!productId) { res.json({ ok: false }); return; }
+  const data: any = { updatedAt: new Date() };
+  if (flashFiyat !== undefined) data.flashFiyat = flashFiyat ? Number(flashFiyat) : null;
+  if (flashBitis !== undefined) data.flashBitis = flashBitis ? new Date(flashBitis) : null;
+  await prisma.catalogItem.upsert({
+    where: { tenantId_productId: { tenantId: req.tenantId!, productId } },
+    update: data,
+    create: { tenantId: req.tenantId!, productId, flashFiyat: data.flashFiyat ?? null, flashBitis: data.flashBitis ?? null },
+  }).catch(() => null);
+  res.json({ ok: true });
+}));
+router.get('/catalog', asyncHandler(async (req: Request, res: Response) => {
+  const items = await prisma.catalogItem.findMany({ where: { tenantId: req.tenantId! }, orderBy: { updatedAt: 'desc' } });
+  res.json(items);
+}));
+router.delete('/catalog/:id', asyncHandler(async (req: Request, res: Response) => {
+  await prisma.catalogItem.deleteMany({ where: { id: req.params.id, tenantId: req.tenantId! } });
+  res.json({ ok: true });
+}));
+
 export default router;

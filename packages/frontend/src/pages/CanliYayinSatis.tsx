@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Clock, TrendingUp, Wallet, ShoppingBag, Users, BarChart3, Radio, Square, Send, X, Filter, Trash2, History, UserCircle, Plus, Search, UserPlus, Tag, Brain, AlertTriangle, Lightbulb, Sparkles, Package, Target } from 'lucide-react';
+import { Clock, TrendingUp, Wallet, ShoppingBag, Users, BarChart3, Radio, Square, Send, X, Filter, Trash2, History, UserCircle, Plus, Search, UserPlus, Tag, Brain, AlertTriangle, Lightbulb, Sparkles, Package, Target, Share2 } from 'lucide-react';
 import { Doughnut, Line } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend, Filler } from 'chart.js';
 import toast from 'react-hot-toast';
@@ -22,7 +22,7 @@ const DURUM_BADGE: Record<string, { t: string; c: string }> = {
 };
 
 export default function CanliYayinSatis() {
-  const { products, customers, categories, campaigns, reload } = useStore();
+  const { products, customers, categories, campaigns, storeSetting, reload } = useStore();
   const [stream, setStream] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
   const [text, setText] = useState('');
@@ -34,6 +34,9 @@ export default function CanliYayinSatis() {
   const [flash, setFlash] = useState<Record<string, { price: number; exp: number }>>({});
   const [barHistory, setBarHistory] = useState<any[]>([]);
   const [barHistModal, setBarHistModal] = useState(false);
+  const [scanTab, setScanTab] = useState<'barkod' | 'ara'>('barkod');
+  const [araQ, setAraQ] = useState('');
+  const [imgZoom, setImgZoom] = useState('');
   const [leftTab, setLeftTab] = useState<'manuel' | 'sohbet'>('manuel');
   const [discForm, setDiscForm] = useState({ price: '', dakika: '' });
   const [tab, setTab] = useState<'tumu' | Durum>('tumu');
@@ -200,13 +203,26 @@ export default function CanliYayinSatis() {
     toast.success(`Satıcı: ${name}`);
   };
 
+  const openProduct = (p: any) => {
+    setBarkodModal(p); setDiscForm({ price: '', dakika: '' });
+    setBarHistory((h) => [{ id: Date.now(), productId: p.id, ad: p.ad, kod: p.salesCode || '-', barkod: p.barkod || '-', stok: p.stokAdeti || 0, time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) }, ...h.filter((x) => x.productId !== p.id)].slice(0, 30));
+    api.post('/store/catalog/add', { productId: p.id }).catch(() => {});
+  };
   const openByCode = (code: string) => {
     const p = findByCode(code);
     if (!p) { toast.error('Ürün bulunamadı: ' + code); return; }
-    setBarkodModal(p); setDiscForm({ price: '', dakika: '' });
-    setBarHistory((h) => [{ id: Date.now(), ad: p.ad, kod: p.salesCode || '-', barkod: p.barkod || '-', stok: p.stokAdeti || 0, time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) }, ...h].slice(0, 20));
+    openProduct(p);
   };
   const scanBarcode = () => { if (!barkod.trim()) return; openByCode(barkod); setBarkod(''); };
+
+  // Ürün ara (ad / satış kodu / marka / beden / cinsiyet)
+  const araSonuc = useMemo(() => {
+    const q = norm(araQ); if (!q) return [];
+    return products.filter((p: any) => {
+      const hay = [p.ad, p.salesCode, p.barkod, p.marka, p.cinsiyet, ...(p.variations || []).map((v: any) => v.deger)].map((x: any) => norm(String(x || ''))).join(' ');
+      return hay.includes(q);
+    }).slice(0, 30);
+  }, [araQ, products]);
 
   // Global barkod dinleyici: alan tıklamadan/Enter beklemeden okutulan barkodu yakalar (hızlı tuş + Enter)
   useEffect(() => {
@@ -229,7 +245,9 @@ export default function CanliYayinSatis() {
     if (!barkodModal) return;
     const price = Number(discForm.price); const dk = Number(discForm.dakika);
     if (!(price > 0) || !(dk > 0)) { toast.error('Geçerli fiyat ve süre girin'); return; }
-    setFlash((f) => ({ ...f, [barkodModal.id]: { price, exp: Date.now() + dk * 60000 } }));
+    const exp = Date.now() + dk * 60000;
+    setFlash((f) => ({ ...f, [barkodModal.id]: { price, exp } }));
+    api.post('/store/catalog/add', { productId: barkodModal.id, flashFiyat: price, flashBitis: new Date(exp).toISOString() }).catch(() => {});
     toast.success(`${barkodModal.ad}: ${dk} dk boyunca ${price}₺ indirimli`);
     setBarkodModal(null);
   };
@@ -475,16 +493,47 @@ export default function CanliYayinSatis() {
       <div className="grid lg:grid-cols-[320px_1fr] gap-4">
         {/* Sol */}
         <div className="space-y-4">
-          {/* Barkod ile urun arama */}
+          {/* Barkod / Ürün Ara */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-semibold text-slate-800 flex items-center gap-2"><Filter size={16} className="text-indigo-600" /> Barkod / Kod ile Ürün</h3>
-              <button onClick={() => setBarHistModal(true)} className="text-[11px] text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded-lg inline-flex items-center gap-1"><History size={13} /> Geçmiş{barHistory.length > 0 && <span className="bg-indigo-100 text-indigo-700 px-1.5 rounded-full text-[10px]">{barHistory.length}</span>}</button>
+            <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
+              <h3 className="font-semibold text-slate-800 flex items-center gap-2"><Filter size={16} className="text-indigo-600" /> Ürün Bul</h3>
+              <div className="flex items-center gap-1">
+                {storeSetting?.slug && <button onClick={() => { navigator.clipboard?.writeText(`${location.origin}/katalog/${storeSetting.slug}`); toast.success('Katalog linki kopyalandı'); }} className="text-[11px] text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded-lg inline-flex items-center gap-1"><Share2 size={13} /> Katalog Linki</button>}
+                <button onClick={() => setBarHistModal(true)} className="text-[11px] text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded-lg inline-flex items-center gap-1"><History size={13} /> Geçmiş{barHistory.length > 0 && <span className="bg-indigo-100 text-indigo-700 px-1.5 rounded-full text-[10px]">{barHistory.length}</span>}</button>
+              </div>
             </div>
-            <div className="flex gap-2">
-              <input value={barkod} onChange={(e) => setBarkod(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && scanBarcode()} placeholder="Barkod okut veya kod yaz" className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300" autoFocus />
-              <button onClick={scanBarcode} className="bg-slate-800 text-white px-3 rounded-lg hover:bg-slate-700 text-sm">Okut</button>
+            {/* Sekmeler */}
+            <div className="flex items-center gap-1 mb-2 bg-slate-100 rounded-lg p-1">
+              <button onClick={() => setScanTab('barkod')} className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${scanTab === 'barkod' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Barkod / Kod</button>
+              <button onClick={() => setScanTab('ara')} className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${scanTab === 'ara' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Ürün Ara</button>
             </div>
+            {scanTab === 'barkod' ? (
+              <div className="flex gap-2">
+                <input value={barkod} onChange={(e) => setBarkod(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && scanBarcode()} placeholder="Barkod okut veya kod yaz" className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300" autoFocus />
+                <button onClick={scanBarcode} className="bg-slate-800 text-white px-3 rounded-lg hover:bg-slate-700 text-sm">Okut</button>
+              </div>
+            ) : (
+              <div>
+                <div className="relative">
+                  <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+                  <input value={araQ} onChange={(e) => setAraQ(e.target.value)} placeholder="Ürün adı, satış kodu, marka, beden, cinsiyet..." className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300" autoFocus />
+                </div>
+                {araQ && (
+                  <div className="mt-2 max-h-56 overflow-y-auto space-y-1 border border-slate-100 rounded-lg p-1">
+                    {araSonuc.length === 0 ? <p className="text-[11px] text-slate-400 text-center py-4">Sonuç yok.</p> : araSonuc.map((p: any) => {
+                      const fl = activeFlash(p.id); const ind = fl > 0 ? fl : (p.eskiFiyat && p.eskiFiyat > p.satisFiyat ? p.satisFiyat : 0);
+                      return (
+                        <button key={p.id} onClick={() => { openProduct(p); setAraQ(''); }} className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-indigo-50 text-left">
+                          <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0">{(p.images || [])[0] && <img src={p.images[0]} className="w-full h-full object-cover" />}</div>
+                          <div className="min-w-0 flex-1"><p className="text-xs font-medium text-slate-800 truncate">{p.ad}</p><p className="text-[10px] text-slate-400 truncate">{p.salesCode || '-'} · {p.marka || '-'} · {p.cinsiyet || ''}</p></div>
+                          <div className="text-right shrink-0"><p className="text-xs font-bold text-slate-700">{fmt(fl > 0 ? fl : p.satisFiyat)}</p><p className="text-[9px] text-slate-400">{(p.stokAdeti || 0)} adet</p>{ind > 0 && <span className="text-[8px] text-rose-500">indirimli</span>}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Ürün stok kartı — sabit (her zaman görünür) */}
             <div className="mt-3 border border-slate-200 bg-slate-50/60 rounded-xl p-3 min-h-[120px]">
@@ -492,14 +541,14 @@ export default function CanliYayinSatis() {
                 <div className="space-y-2.5">
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className="w-14 h-14 rounded-lg bg-white border border-slate-100 overflow-hidden shrink-0">{(barkodModal.images || [])[0] ? <img src={barkodModal.images[0]} className="w-full h-full object-cover" /> : null}</div>
+                      <button onClick={() => (barkodModal.images || [])[0] && setImgZoom(barkodModal.images[0])} className="w-14 h-14 rounded-lg bg-white border border-slate-100 overflow-hidden shrink-0 cursor-zoom-in" title="Büyüt">{(barkodModal.images || [])[0] ? <img src={barkodModal.images[0]} className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center text-slate-300"><Package size={18} /></span>}</button>
                       <div className="min-w-0"><p className="font-semibold text-slate-800 text-sm leading-tight truncate">{barkodModal.ad}</p><p className="text-[10px] text-slate-400 font-mono truncate">Kod: {barkodModal.salesCode || '-'} · Barkod: {barkodModal.barkod || '-'}</p></div>
                     </div>
                     <button onClick={() => setBarkodModal(null)} className="p-1 hover:bg-white rounded-lg shrink-0" title="Temizle"><X size={16} className="text-slate-400" /></button>
                   </div>
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div className="bg-white rounded-lg p-2 border border-slate-100"><p className="text-[10px] text-slate-400">Güncel Stok</p><p className={`font-bold ${(barkodModal.stokAdeti || 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>{barkodModal.stokAdeti || 0} adet</p></div>
-                    <div className="bg-white rounded-lg p-2 border border-slate-100"><p className="text-[10px] text-slate-400">Satış Fiyatı</p><p className="font-bold text-slate-700">{fmt(barkodModal.satisFiyat || 0)}</p></div>
+                    <div className="bg-white rounded-lg p-2 border border-slate-100"><p className="text-[10px] text-slate-400">Satış Fiyatı</p>{barkodModal.eskiFiyat && barkodModal.eskiFiyat > barkodModal.satisFiyat ? <p className="font-bold text-slate-700"><span className="text-[10px] text-slate-300 line-through mr-1">{fmt(barkodModal.eskiFiyat)}</span>{fmt(barkodModal.satisFiyat || 0)}</p> : <p className="font-bold text-slate-700">{fmt(barkodModal.satisFiyat || 0)}</p>}</div>
                   </div>
                   {(barkodModal.variations || []).length > 0 ? (
                     <div>
@@ -517,14 +566,14 @@ export default function CanliYayinSatis() {
                       <input type="number" value={discForm.dakika} onChange={(e) => setDiscForm({ ...discForm, dakika: e.target.value })} placeholder="dk" className="w-14 shrink-0 px-2 py-1.5 text-sm border border-slate-200 rounded-lg" />
                     </div>
                     <button onClick={setFlashDiscount} className="w-full bg-indigo-600 text-white py-2 rounded-lg text-sm font-semibold hover:bg-indigo-700">Süreli İndirimi Başlat</button>
-                    <p className="text-[10px] text-slate-400 mt-1">Yalnızca bu süre içinde gelen siparişler indirimli işlenir.</p>
+                    <p className="text-[10px] text-slate-400 mt-1">Yalnızca bu süre içinde gelen siparişler indirimli işlenir; katalogda geri sayım görünür.</p>
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center text-center py-5 text-slate-400">
                   <Package size={22} className="mb-1.5 text-slate-300" />
                   <p className="text-[12px] font-medium text-slate-500">Ürün Stok Kartı</p>
-                  <p className="text-[10px]">Barkod/kod okutunca ürün, stok ve varyasyonlar burada görünür.</p>
+                  <p className="text-[10px]">Barkod/kod okutunca veya arayınca ürün, stok ve varyasyonlar burada görünür.</p>
                 </div>
               )}
             </div>
@@ -699,25 +748,42 @@ export default function CanliYayinSatis() {
               </div>
             ) : (
               <div className="grid sm:grid-cols-2 gap-2.5">
-                {barHistory.map((b) => (
-                  <div key={b.id} className="border border-slate-200 rounded-xl p-3 bg-slate-50/60">
-                    <div className="flex items-start justify-between gap-2">
-                      <p className="font-semibold text-slate-800 text-sm leading-tight">{b.ad}</p>
-                      <span className="text-[10px] text-slate-400 shrink-0">{b.time}</span>
+                {barHistory.map((b) => {
+                  const p: any = products.find((x) => x.id === b.productId) || {};
+                  const img = (p.images || [])[0] || '';
+                  const fl = activeFlash(b.productId);
+                  const ind = fl > 0 ? fl : (p.eskiFiyat && p.eskiFiyat > p.satisFiyat ? p.satisFiyat : 0);
+                  const kalanVar = (p.variations || []).filter((v: any) => (v.stok || 0) > 0);
+                  return (
+                    <div key={b.id} className="border border-slate-200 rounded-xl p-2.5 bg-slate-50/60 flex gap-2.5">
+                      <button onClick={() => img && setImgZoom(img)} className="w-16 h-16 rounded-lg bg-white border border-slate-100 overflow-hidden shrink-0 cursor-zoom-in" title="Büyüt">{img ? <img src={img} className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center text-slate-300"><Package size={18} /></span>}</button>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-start justify-between gap-1"><p className="font-semibold text-slate-800 text-xs leading-tight line-clamp-2">{b.ad}</p><span className="text-[9px] text-slate-400 shrink-0">{b.time}</span></div>
+                        <p className="text-[9px] text-slate-400 font-mono mt-0.5 truncate">Kod: {p.salesCode || b.kod}</p>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {ind > 0 && p.eskiFiyat ? <span className="text-[9px] text-slate-300 line-through">{fmt(p.eskiFiyat)}</span> : null}
+                          <span className={`text-xs font-bold ${ind > 0 ? 'text-rose-600' : 'text-slate-700'}`}>{fmt(fl > 0 ? fl : (p.satisFiyat || 0))}</span>
+                          <span className={`text-[9px] font-bold ml-auto ${(p.stokAdeti || 0) > 0 ? 'text-green-600' : 'text-red-500'}`}>{p.stokAdeti ?? b.stok} ad</span>
+                        </div>
+                        {kalanVar.length > 0 && <div className="flex flex-wrap gap-0.5 mt-1">{kalanVar.slice(0, 6).map((v: any) => <span key={v.id || v.deger} className="text-[8px] px-1 py-0.5 rounded border border-slate-200 text-slate-500 bg-white">{v.deger}:{v.stok}</span>)}</div>}
+                      </div>
                     </div>
-                    <p className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">Kod: {b.kod} · Barkod: {b.barkod}</p>
-                    <div className="mt-2 inline-flex items-center gap-1.5 bg-white border border-slate-100 rounded-lg px-2 py-1">
-                      <span className="text-[10px] text-slate-400">Stok</span>
-                      <span className={`text-sm font-bold ${(b.stok || 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>{b.stok || 0}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
             {barHistory.length > 0 && (
               <button onClick={() => { setBarHistory([]); setBarHistModal(false); }} className="w-full text-xs text-slate-500 hover:bg-slate-50 border border-slate-200 py-2 rounded-lg">Geçmişi Temizle</button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* Görsel büyütme (lightbox) */}
+      {imgZoom && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center p-6 bg-black/80" onClick={() => setImgZoom('')}>
+          <img src={imgZoom} className="max-w-full max-h-full rounded-xl object-contain" onClick={(e) => e.stopPropagation()} />
+          <button onClick={() => setImgZoom('')} className="absolute top-4 right-4 text-white/80 hover:text-white"><X size={28} /></button>
         </div>
       )}
 

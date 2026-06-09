@@ -874,3 +874,17 @@ model StoreEvent {
 
   @@index([tenantId, createdAt])
 }
+
+// Barkod okutulan ürünlerin paylaşılabilir kataloğu (süreli indirim geri sayımı dahil)
+model CatalogItem {
+  id         String    @id @default(cuid())
+  tenantId   String
+  productId  String
+  flashFiyat Float?
+  flashBitis DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@unique([tenantId, productId])
+  @@index([tenantId, updatedAt])
+}

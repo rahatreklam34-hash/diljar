@@ -58,6 +58,7 @@ import DestekTalepleri from './pages/DestekTalepleri';
 import PublicStore from './pages/PublicStore';
 import VideoMagaza from './pages/VideoMagaza';
 import UrunDetayPublic from './pages/UrunDetayPublic';
+import KatalogPublic from './pages/KatalogPublic';
 import PublicChat from './pages/PublicChat';
 import UyeOl from './pages/UyeOl';
 import Sepet from './pages/Sepet';
@@ -179,6 +180,7 @@ export default function App() {
           <Route path="/m/:slug" element={<VideoMagaza />} />
           <Route path="/m/:slug/urun/:id" element={<UrunDetayPublic />} />
           <Route path="/urun/:id" element={<UrunDetayPublic />} />
+          <Route path="/katalog/:slug" element={<KatalogPublic />} />
           <Route path="/magaza/:slug" element={<MagazaRedirect />} />
           <Route path="/sohbet/:slug" element={<PublicChat />} />
           <Route path="/uye/:slug" element={<UyeOl />} />
