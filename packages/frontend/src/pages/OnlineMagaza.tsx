@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Store, Save, Plus, Trash2, ArrowUp, ArrowDown, Tag, ExternalLink, GripVertical, Star, Percent, X, Menu, ChevronRight,
-  ShoppingBag, Users, TrendingUp, Eye, Package, CreditCard, Wrench, Bell, ChevronRight as ArrowR, Megaphone, PackagePlus, FileText, Pencil, SlidersHorizontal,
+  ShoppingBag, Users, TrendingUp, Eye, Package, CreditCard, Wrench, Bell, ChevronRight as ArrowR, Megaphone, PackagePlus, FileText, Pencil, SlidersHorizontal, Truck, Palette, Search, Share2, Image as ImageIcon,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
@@ -13,6 +13,32 @@ const fmt = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { maximumFra
 const fmt2 = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const VALID = (o: any) => o.durum !== 'iptal' && o.durum !== 'sepet';
 
+const DEFAULT_CONFIG = {
+  aciklama: '', logo: '', featuredCats: [] as string[],
+  email: '', telefon: '', whatsapp: '', adres: '', calismaHafta: '', calismaPazar: '',
+  instagram: '', facebook: '', youtube: '', tiktok: '', twitter: '',
+  primaryColor: '#6366f1', secondaryColor: '#0ea5e9', font: 'Inter', currency: 'TRY', dil: 'tr',
+  seoTitle: '', metaDescription: '', keywords: '',
+  kargoUcret: '', kargoNot: '',
+  odemeHavale: true, odemeKart: true, odemeKapida: false,
+  bildirimYeniSiparis: true, bildirimStok: true, bildirimYorum: true,
+  iade: '', gizlilik: '', kullanim: '',
+};
+
+const AYARLAR_NAV: { k: string; t: string; sub: string; Ic: any }[] = [
+  { k: 'bilgi', t: 'Mağaza Bilgileri', sub: 'Mağaza adı, adres, logo ve açıklama', Ic: Store },
+  { k: 'banner', t: 'Banner & Slaytlar', sub: 'Hero görsel, başlık ve slaytlar', Ic: ImageIcon },
+  { k: 'menu', t: 'Üst Menü', sub: 'Mağaza üst menüsü ve kategoriler', Ic: Menu },
+  { k: 'kargo', t: 'Kargo & Teslimat', sub: 'Kargo eşiği, ücreti ve VIP puan', Ic: Truck },
+  { k: 'odeme', t: 'Ödeme Ayarları', sub: 'Banka, IBAN ve ödeme yöntemleri', Ic: CreditCard },
+  { k: 'kupon', t: 'Kupon Kodları', sub: 'İndirim kuponları', Ic: Tag },
+  { k: 'iletisim', t: 'İletişim & Sosyal', sub: 'İletişim bilgileri ve sosyal medya', Ic: Share2 },
+  { k: 'tema', t: 'Tema & Görünüm', sub: 'Renkler, font, para birimi ve dil', Ic: Palette },
+  { k: 'seo', t: 'SEO & Arama', sub: 'SEO başlık, açıklama ve anahtar kelimeler', Ic: Search },
+  { k: 'bildirim', t: 'Bildirim Ayarları', sub: 'E-posta ve bildirim tercihleri', Ic: Bell },
+  { k: 'politika', t: 'Politikalar', sub: 'İade, gizlilik ve kullanım şartları', Ic: FileText },
+];
+
 export default function OnlineMagaza() {
   const { products, categories, storeSetting, discountCodes, orders, customers, campaigns, reload } = useStore();
   const nav = useNavigate();
@@ -20,7 +46,8 @@ export default function OnlineMagaza() {
   const [period, setPeriod] = useState(7);
   const [overview, setOverview] = useState<any>(null);
 
-  const [s, setS] = useState<any>({ active: false, slug: '', logoText: '', heroTitle: '', heroSubtitle: '', heroImage: '', heroVideo: '', bankaAd: '', iban: '', hesapSahibi: '', slides: [] as any[], productOrder: [] as string[], topMenu: [] as any[], freeShipThreshold: 0, puanOrani: 0 });
+  const [s, setS] = useState<any>({ active: false, slug: '', logoText: '', heroTitle: '', heroSubtitle: '', heroImage: '', heroVideo: '', bankaAd: '', iban: '', hesapSahibi: '', slides: [] as any[], productOrder: [] as string[], topMenu: [] as any[], freeShipThreshold: 0, puanOrani: 0, config: { ...DEFAULT_CONFIG } });
+  const [aTab, setATab] = useState('bilgi');
   const [disc, setDisc] = useState({ code: '', tip: 'yuzde', deger: '' });
   const [dragId, setDragId] = useState<string | null>(null);
   const [urunQ, setUrunQ] = useState('');
@@ -36,7 +63,7 @@ export default function OnlineMagaza() {
   const [editForm, setEditForm] = useState<any>({ satisFiyat: '', eskiFiyat: '', aciklama: '', oneCikan: false });
 
   useEffect(() => {
-    if (storeSetting) setS({ active: storeSetting.active, slug: storeSetting.slug || '', logoText: storeSetting.logoText || '', heroTitle: storeSetting.heroTitle || '', heroSubtitle: storeSetting.heroSubtitle || '', heroImage: storeSetting.heroImage || '', heroVideo: storeSetting.heroVideo || '', bankaAd: storeSetting.bankaAd || '', iban: storeSetting.iban || '', hesapSahibi: storeSetting.hesapSahibi || '', slides: storeSetting.slides || [], productOrder: storeSetting.productOrder || [], topMenu: storeSetting.topMenu || [], freeShipThreshold: storeSetting.freeShipThreshold || 0, puanOrani: storeSetting.puanOrani || 0 });
+    if (storeSetting) setS({ active: storeSetting.active, slug: storeSetting.slug || '', logoText: storeSetting.logoText || '', heroTitle: storeSetting.heroTitle || '', heroSubtitle: storeSetting.heroSubtitle || '', heroImage: storeSetting.heroImage || '', heroVideo: storeSetting.heroVideo || '', bankaAd: storeSetting.bankaAd || '', iban: storeSetting.iban || '', hesapSahibi: storeSetting.hesapSahibi || '', slides: storeSetting.slides || [], productOrder: storeSetting.productOrder || [], topMenu: storeSetting.topMenu || [], freeShipThreshold: storeSetting.freeShipThreshold || 0, puanOrani: storeSetting.puanOrani || 0, config: { ...DEFAULT_CONFIG, ...(storeSetting.config || {}) } });
   }, [storeSetting]);
 
   useEffect(() => { api.get(`/store/live/overview?days=${period || 30}`).then((r) => setOverview(r.data)).catch(() => setOverview(null)); }, [period]);
@@ -139,7 +166,9 @@ export default function OnlineMagaza() {
   const setChild = (mid: string, ci: number, patch: any) => setS((x: any) => ({ ...x, topMenu: x.topMenu.map((m: any) => m.id === mid ? { ...m, children: m.children.map((c: any, idx: number) => idx === ci ? { ...c, ...patch } : c) } : m) }));
   const delChild = (mid: string, ci: number) => setS((x: any) => ({ ...x, topMenu: x.topMenu.map((m: any) => m.id === mid ? { ...m, children: m.children.filter((_: any, idx: number) => idx !== ci) } : m) }));
 
-  const buildBody = (over?: any) => ({ active: s.active, slug: s.slug || null, logoText: s.logoText || null, heroTitle: s.heroTitle || null, heroSubtitle: s.heroSubtitle || null, heroImage: s.heroImage || null, heroVideo: s.heroVideo || null, bankaAd: s.bankaAd || null, iban: s.iban || null, hesapSahibi: s.hesapSahibi || null, slides: s.slides, productOrder: s.productOrder, topMenu: s.topMenu, freeShipThreshold: Number(s.freeShipThreshold) || 0, puanOrani: Number(s.puanOrani) || 0, ...over });
+  const buildBody = (over?: any) => ({ active: s.active, slug: s.slug || null, logoText: s.logoText || null, heroTitle: s.heroTitle || null, heroSubtitle: s.heroSubtitle || null, heroImage: s.heroImage || null, heroVideo: s.heroVideo || null, bankaAd: s.bankaAd || null, iban: s.iban || null, hesapSahibi: s.hesapSahibi || null, slides: s.slides, productOrder: s.productOrder, topMenu: s.topMenu, config: s.config, freeShipThreshold: Number(s.freeShipThreshold) || 0, puanOrani: Number(s.puanOrani) || 0, ...over });
+  const setCfg = (k: string, v: any) => setS((x: any) => ({ ...x, config: { ...x.config, [k]: v } }));
+  const cfg = s.config || DEFAULT_CONFIG;
   const save = async () => { try { await api.put('/store/settings', buildBody()); toast.success('Mağaza ayarları kaydedildi'); reload(); } catch (e) { toast.error(apiErrorMessage(e)); } };
   const setActive = async (val: boolean) => { setS((x: any) => ({ ...x, active: val })); try { await api.put('/store/settings', buildBody({ active: val })); toast.success(val ? 'Mağaza yayında' : 'Mağaza bakım modunda'); reload(); } catch (e) { toast.error(apiErrorMessage(e)); } };
 
@@ -333,32 +362,100 @@ export default function OnlineMagaza() {
 
       {/* ───────── MAĞAZA AYARLARI (mevcut tüm ayarlar) ───────── */}
       {tab === 'ayarlar' && (
-        <div className="space-y-5">
-          {/* Genel */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 grid md:grid-cols-2 gap-4">
-            <div className="space-y-3">
-              <div>
-                <label className="block text-xs text-slate-500 mb-1">Mağaza Adresi (slug)</label>
-                <div className="flex items-center gap-1 text-sm"><span className="text-slate-400">/m/</span><input value={s.slug} onChange={(e) => setS({ ...s, slug: e.target.value.replace(/[^a-z0-9-]/gi, '').toLowerCase() })} placeholder="magaza-adi" className="flex-1 px-3 py-2 border border-slate-200 rounded-lg" /></div>
+        <div className="flex flex-col lg:flex-row gap-5 items-start">
+          {/* Sol alt-menü */}
+          <aside className="w-full lg:w-72 shrink-0 bg-white rounded-2xl border border-slate-200 p-2 space-y-0.5 lg:sticky lg:top-4">
+            {AYARLAR_NAV.map((n) => { const Ic = n.Ic; const on = aTab === n.k; return (
+              <button key={n.k} onClick={() => setATab(n.k)} className={`w-full flex items-start gap-2.5 text-left px-2.5 py-2 rounded-xl transition-colors ${on ? 'bg-indigo-50' : 'hover:bg-slate-50'}`}>
+                <span className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${on ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}><Ic size={16} /></span>
+                <span className="min-w-0"><span className={`block text-sm font-medium leading-tight ${on ? 'text-indigo-700' : 'text-slate-700'}`}>{n.t}</span><span className="block text-[11px] text-slate-400 leading-tight truncate">{n.sub}</span></span>
+              </button>
+            ); })}
+          </aside>
+
+          {/* Sağ içerik */}
+          <div className="flex-1 min-w-0 space-y-5">
+
+          {/* ── Mağaza Bilgileri ── */}
+          {aTab === 'bilgi' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5">
+            <h3 className="font-semibold text-slate-800 mb-1">Mağaza Bilgileri</h3>
+            <p className="text-xs text-slate-400 mb-4">Mağazanızın temel bilgilerini düzenleyin.</p>
+            <div className="grid lg:grid-cols-2 gap-5">
+              <div className="space-y-3">
+                <div><label className="block text-xs text-slate-500 mb-1">Mağaza Adı</label><div className="relative"><input maxLength={100} value={s.logoText} onChange={(e) => setS({ ...s, logoText: e.target.value })} placeholder="KENAN CANLI MEZAT" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><span className="absolute right-2 top-2 text-[10px] text-slate-300">{(s.logoText || '').length}/100</span></div></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Mağaza Adresi (slug)</label><div className="flex items-center gap-1 text-sm"><span className="text-slate-400 shrink-0">/m/</span><div className="relative flex-1"><input maxLength={50} value={s.slug} onChange={(e) => setS({ ...s, slug: e.target.value.replace(/[^a-z0-9-]/gi, '').toLowerCase() })} placeholder="magaza-adi" className="w-full px-3 py-2 border border-slate-200 rounded-lg" /><span className="absolute right-2 top-2.5 text-[10px] text-slate-300">{(s.slug || '').length}/50</span></div></div></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Mağaza Açıklaması</label><div className="relative"><textarea maxLength={500} rows={3} value={cfg.aciklama} onChange={(e) => setCfg('aciklama', e.target.value)} placeholder="İndirimli ürünler, sezon fırsatları ve özel koleksiyonlar için mağazamızı takip edin." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><span className="absolute right-2 bottom-2 text-[10px] text-slate-300">{(cfg.aciklama || '').length}/500</span></div></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Mağaza Logosu</label><ImageDropzone images={cfg.logo ? [cfg.logo] : []} onChange={(imgs) => setCfg('logo', imgs[0] || '')} max={1} /><p className="text-[10px] text-slate-400 mt-1">Önerilen boyut: 500x500px, JPG/PNG</p></div>
               </div>
-              <div><label className="block text-xs text-slate-500 mb-1">Mağaza / Logo Adı</label><input value={s.logoText} onChange={(e) => setS({ ...s, logoText: e.target.value })} placeholder="LACOS KENAN" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
-              <div><label className="block text-xs text-slate-500 mb-1">Hero Başlık</label><input value={s.heroTitle} onChange={(e) => setS({ ...s, heroTitle: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
-              <div><label className="block text-xs text-slate-500 mb-1">Hero Alt Başlık</label><input value={s.heroSubtitle} onChange={(e) => setS({ ...s, heroSubtitle: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div className="space-y-3">
+                <div><label className="block text-xs text-slate-500 mb-1">Mağaza Banner</label><ImageDropzone images={s.heroImage ? [s.heroImage] : []} onChange={(imgs) => setS({ ...s, heroImage: imgs[0] || '' })} max={1} /></div>
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1">Mağaza Kategorileri (Öne Çıkan)</label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">{(cfg.featuredCats || []).map((c: string) => (<span key={c} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-xs px-2 py-1 rounded-lg">{c}<button onClick={() => setCfg('featuredCats', cfg.featuredCats.filter((x: string) => x !== c))}><X size={12} /></button></span>))}</div>
+                  <select value="" onChange={(e) => { const v = e.target.value; if (v && !(cfg.featuredCats || []).includes(v) && (cfg.featuredCats || []).length < 8) setCfg('featuredCats', [...(cfg.featuredCats || []), v]); }} className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg">
+                    <option value="">+ Kategori ekle</option>
+                    {[...categories.map((c) => c.ad), 'İndirimli Ürünler', 'Sezon Ürünleri', 'Yeni Gelenler', 'Çok Satanlar'].filter((v, i, a) => a.indexOf(v) === i && !(cfg.featuredCats || []).includes(v)).map((v) => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                  <p className="text-[10px] text-slate-400 mt-1">Maksimum 8 kategori seçebilirsiniz.</p>
+                </div>
+                <div><label className="block text-xs text-slate-500 mb-1">Mağaza Durumu</label><select value={s.active ? '1' : '0'} onChange={(e) => setS({ ...s, active: e.target.value === '1' })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg"><option value="1">🟢 Aktif</option><option value="0">⏸ Bakım / Kapalı</option></select></div>
+              </div>
             </div>
-            <div><label className="block text-xs text-slate-500 mb-1">Hero Görseli</label><ImageDropzone images={s.heroImage ? [s.heroImage] : []} onChange={(imgs) => setS({ ...s, heroImage: imgs[0] || '' })} max={1} /></div>
           </div>
+          )}
 
-          {/* Ücretsiz Kargo & VIP Puan (sabit) */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h3 className="font-semibold text-slate-800 text-sm mb-3">Ücretsiz Kargo & VIP Puan</h3>
+          {/* ── Kargo & Teslimat ── */}
+          {aTab === 'kargo' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5">
+            <h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><Truck size={16} className="text-indigo-600" /> Kargo & Teslimat</h3>
+            <p className="text-xs text-slate-400 mb-4">Kargo seçenekleri, ücretleri ve sadakat puanı.</p>
             <div className="grid sm:grid-cols-2 gap-3">
-              <div><label className="block text-xs text-slate-500 mb-1">Ücretsiz Kargo Eşiği (TL)</label><input type="number" min={0} value={s.freeShipThreshold} onChange={(e) => setS({ ...s, freeShipThreshold: e.target.value })} placeholder="0 = kapalı" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[10px] text-slate-400 mt-1">Bu tutar üzeri sepetlerde "ücretsiz kargo" rozeti gösterilir. 0 = kapalı.</p></div>
-              <div><label className="block text-xs text-slate-500 mb-1">VIP Puan Oranı (%)</label><input type="number" min={0} max={100} step="0.5" value={s.puanOrani} onChange={(e) => setS({ ...s, puanOrani: e.target.value })} placeholder="0 = kapalı" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[10px] text-slate-400 mt-1">Sepet tutarının %'i kadar puan müşteriye gösterilir. 0 = kapalı.</p></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Standart Kargo Ücreti (TL)</label><input type="number" min={0} value={cfg.kargoUcret} onChange={(e) => setCfg('kargoUcret', e.target.value)} placeholder="0 = ücretsiz" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Ücretsiz Kargo Eşiği (TL)</label><input type="number" min={0} value={s.freeShipThreshold} onChange={(e) => setS({ ...s, freeShipThreshold: e.target.value })} placeholder="0 = kapalı" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[10px] text-slate-400 mt-1">Bu tutar üzeri sepetlerde "ücretsiz kargo" rozeti gösterilir.</p></div>
+              <div><label className="block text-xs text-slate-500 mb-1">VIP Puan Oranı (%)</label><input type="number" min={0} max={100} step="0.5" value={s.puanOrani} onChange={(e) => setS({ ...s, puanOrani: e.target.value })} placeholder="0 = kapalı" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[10px] text-slate-400 mt-1">Sepet tutarının %'i kadar puan müşteriye gösterilir.</p></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Teslimat Notu</label><input value={cfg.kargoNot} onChange={(e) => setCfg('kargoNot', e.target.value)} placeholder="ör. 1-3 iş günü içinde kargoda" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            </div>
+          </div>
+          )}
+
+          {/* ── Ödeme Ayarları ── */}
+          {aTab === 'odeme' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+            <div><h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><CreditCard size={16} className="text-indigo-600" /> Ödeme Ayarları</h3><p className="text-xs text-slate-400">Banka bilgileri ve kabul edilen ödeme yöntemleri.</p></div>
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div><label className="block text-xs text-slate-500 mb-1">Banka Adı</label><input value={s.bankaAd} onChange={(e) => setS({ ...s, bankaAd: e.target.value })} placeholder="ör. İş Bankası" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">IBAN</label><input value={s.iban} onChange={(e) => setS({ ...s, iban: e.target.value })} placeholder="TR.." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Hesap Sahibi</label><input value={s.hesapSahibi} onChange={(e) => setS({ ...s, hesapSahibi: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            </div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1.5">Kabul Edilen Ödeme Yöntemleri</label>
+              <div className="flex flex-wrap gap-2">
+                {[['odemeHavale', 'Havale / EFT'], ['odemeKart', 'Kredi Kartı'], ['odemeKapida', 'Kapıda Ödeme']].map(([k, t]) => (
+                  <label key={k} className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-sm ${cfg[k] ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'border-slate-200 text-slate-500'}`}><input type="checkbox" checked={!!cfg[k]} onChange={(e) => setCfg(k, e.target.checked)} /> {t}</label>
+                ))}
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-400">Havale/EFT seçen müşteriye asistan banka bilgilerini iletir.</p>
+          </div>
+          )}
+
+          {/* ── Banner & Slaytlar (hero) ── */}
+          {aTab === 'banner' && (
+          <div className="space-y-5">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+            <div><h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><ImageIcon size={16} className="text-indigo-600" /> Ana Banner (Hero)</h3><p className="text-xs text-slate-400">Mağaza giriş alanındaki başlık, alt başlık, görsel ve tanıtım videosu.</p></div>
+            <div className="grid lg:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <div><label className="block text-xs text-slate-500 mb-1">Hero Başlık</label><input value={s.heroTitle} onChange={(e) => setS({ ...s, heroTitle: e.target.value })} placeholder="Yeni Sezon İndirimleri" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Hero Alt Başlık</label><input value={s.heroSubtitle} onChange={(e) => setS({ ...s, heroSubtitle: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Tanıtım / Canlı Video URL'i</label><input value={s.heroVideo} onChange={(e) => setS({ ...s, heroVideo: e.target.value })} placeholder="https://.../video.mp4" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[10px] text-slate-400 mt-1">Doldurulunca ana sayfada video oynatıcı açılır.</p></div>
+              </div>
+              <div><label className="block text-xs text-slate-500 mb-1">Hero / Banner Görseli</label><ImageDropzone images={s.heroImage ? [s.heroImage] : []} onChange={(imgs) => setS({ ...s, heroImage: imgs[0] || '' })} max={1} /></div>
             </div>
           </div>
 
-          {/* Hero Slaytlari */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="bg-white rounded-2xl border border-slate-200 p-5">
             <div className="flex items-center justify-between mb-3"><h3 className="font-semibold text-slate-700">Hero Slaytları <span className="text-xs text-slate-400 font-normal">(birden fazla banner)</span></h3><button onClick={addSlide} className="inline-flex items-center gap-1 text-sm text-indigo-600"><Plus size={15} /> Slayt Ekle</button></div>
             {s.slides.length === 0 ? <p className="text-sm text-slate-400">Slayt yoksa yukarıdaki tek hero kullanılır.</p> : (
               <div className="space-y-4">{s.slides.map((sl: any, i: number) => (
@@ -370,9 +467,12 @@ export default function OnlineMagaza() {
               ))}</div>
             )}
           </div>
+          </div>
+          )}
 
-          {/* Üst Menü */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
+          {/* ── Üst Menü ── */}
+          {aTab === 'menu' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5">
             <div className="flex items-center justify-between mb-1"><h3 className="font-semibold text-slate-700 flex items-center gap-2"><Menu size={16} className="text-indigo-600" /> Üst Menü</h3><button onClick={addMenu} className="inline-flex items-center gap-1 text-sm text-indigo-600"><Plus size={15} /> Menü Ekle</button></div>
             <p className="text-xs text-slate-400 mb-3">Mağazanın üst menüsünde görünecek başlıkları oluşturun. Her başlığa kategori veya cinsiyet bazlı alt menüler ekleyebilirsiniz.</p>
             {(s.topMenu || []).length === 0 ? <p className="text-sm text-slate-400">Menü öğesi yok. Boş bırakılırsa varsayılan menü gösterilir.</p> : (
@@ -406,10 +506,13 @@ export default function OnlineMagaza() {
               ))}</div>
             )}
           </div>
+          )}
 
-          {/* İndirim kodları */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h3 className="font-semibold text-slate-700 mb-3 flex items-center gap-2"><Tag size={16} /> İndirim Kodları</h3>
+          {/* ── Kupon Kodları ── */}
+          {aTab === 'kupon' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5">
+            <h3 className="font-semibold text-slate-700 mb-1 flex items-center gap-2"><Tag size={16} className="text-indigo-600" /> Kupon Kodları</h3>
+            <p className="text-xs text-slate-400 mb-3">Müşterilerin sepette kullanabileceği indirim kodları. Aktif kodlar sepette otomatik uygulanır.</p>
             <form onSubmit={addDisc} className="flex flex-wrap gap-2 mb-4">
               <input value={disc.code} onChange={(e) => setDisc({ ...disc, code: e.target.value })} placeholder="KOD" className="px-3 py-2 text-sm border border-slate-200 rounded-lg uppercase" />
               <select value={disc.tip} onChange={(e) => setDisc({ ...disc, tip: e.target.value })} className="px-3 py-2 text-sm border border-slate-200 rounded-lg"><option value="yuzde">% Yüzde</option><option value="tutar">₺ Tutar</option></select>
@@ -419,6 +522,86 @@ export default function OnlineMagaza() {
             <div className="flex flex-wrap gap-2">{discountCodes.map((d) => (
               <span key={d.id} className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm border ${d.aktif ? 'bg-white border-indigo-200 text-indigo-700' : 'bg-slate-100 border-slate-200 text-slate-400'}`}><strong>{d.code}</strong> {d.tip === 'yuzde' ? `%${d.deger}` : fmt(d.deger)}<button onClick={() => toggleDisc(d)} className="text-[10px] underline">{d.aktif ? 'Pasifleştir' : 'Aktifleştir'}</button><button onClick={() => delDisc(d.id)} className="text-slate-400 hover:text-red-500"><Trash2 size={13} /></button></span>
             ))}{discountCodes.length === 0 && <p className="text-sm text-slate-400">Henüz indirim kodu yok.</p>}</div>
+          </div>
+          )}
+
+          {/* ── İletişim & Sosyal ── */}
+          {aTab === 'iletisim' && (
+          <div className="grid lg:grid-cols-2 gap-5">
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+              <div><h3 className="font-semibold text-slate-800 mb-1">İletişim Bilgileri</h3><p className="text-xs text-slate-400">Müşterilerinizin size ulaşabileceği bilgiler.</p></div>
+              <div className="grid sm:grid-cols-2 gap-3">
+                <div><label className="block text-xs text-slate-500 mb-1">E-posta</label><input value={cfg.email} onChange={(e) => setCfg('email', e.target.value)} placeholder="info@magaza.com" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Telefon</label><input value={cfg.telefon} onChange={(e) => setCfg('telefon', e.target.value)} placeholder="+90 5xx xxx xx xx" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">WhatsApp</label><input value={cfg.whatsapp} onChange={(e) => setCfg('whatsapp', e.target.value)} placeholder="+90 5xx xxx xx xx" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Çalışma (Hafta içi)</label><input value={cfg.calismaHafta} onChange={(e) => setCfg('calismaHafta', e.target.value)} placeholder="09:00 - 18:00" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              </div>
+              <div><label className="block text-xs text-slate-500 mb-1">Adres</label><textarea rows={2} value={cfg.adres} onChange={(e) => setCfg('adres', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Çalışma (Hafta sonu)</label><input value={cfg.calismaPazar} onChange={(e) => setCfg('calismaPazar', e.target.value)} placeholder="Kapalı" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+              <div><h3 className="font-semibold text-slate-800 mb-1">Sosyal Medya Hesapları</h3><p className="text-xs text-slate-400">Mağazanın sosyal medya bağlantılarını ekleyin.</p></div>
+              {[['instagram', 'Instagram', 'https://instagram.com/...'], ['facebook', 'Facebook', 'https://facebook.com/...'], ['youtube', 'YouTube', 'https://youtube.com/@...'], ['tiktok', 'TikTok', 'https://tiktok.com/@...'], ['twitter', 'Twitter / X', 'https://x.com/...']].map(([k, t, ph]) => (
+                <div key={k}><label className="block text-xs text-slate-500 mb-1">{t}</label><input value={cfg[k]} onChange={(e) => setCfg(k, e.target.value)} placeholder={ph} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              ))}
+            </div>
+          </div>
+          )}
+
+          {/* ── Tema & Görünüm ── */}
+          {aTab === 'tema' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+            <div><h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><Palette size={16} className="text-indigo-600" /> Tema & Görünüm</h3><p className="text-xs text-slate-400">Mağazanızın görünümünü kişiselleştirin.</p></div>
+            {[['primaryColor', 'Tema Rengi'], ['secondaryColor', 'İkincil Renk']].map(([k, t]) => (
+              <div key={k}>
+                <label className="block text-xs text-slate-500 mb-1.5">{t}</label>
+                <div className="flex items-center gap-2 flex-wrap">
+                  {['#6366f1', '#3b82f6', '#06b6d4', '#22c55e', '#f97316', '#ef4444', '#a855f7', '#475569'].map((c) => <button key={c} onClick={() => setCfg(k, c)} className={`w-8 h-8 rounded-full border-2 ${cfg[k] === c ? 'border-slate-800 scale-110' : 'border-white shadow'}`} style={{ background: c }} />)}
+                  <input type="color" value={cfg[k] || '#6366f1'} onChange={(e) => setCfg(k, e.target.value)} className="w-8 h-8 rounded-full border-0 cursor-pointer bg-transparent" />
+                </div>
+              </div>
+            ))}
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div><label className="block text-xs text-slate-500 mb-1">Font</label><select value={cfg.font} onChange={(e) => setCfg('font', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg">{['Inter', 'Poppins', 'Roboto', 'Montserrat', 'Nunito'].map((f) => <option key={f} value={f}>{f}</option>)}</select></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Para Birimi</label><select value={cfg.currency} onChange={(e) => setCfg('currency', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg"><option value="TRY">₺ Türk Lirası (TL)</option><option value="USD">$ Dolar (USD)</option><option value="EUR">€ Euro (EUR)</option></select></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Dil</label><select value={cfg.dil} onChange={(e) => setCfg('dil', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg"><option value="tr">Türkçe</option><option value="en">English</option></select></div>
+            </div>
+          </div>
+          )}
+
+          {/* ── SEO & Arama ── */}
+          {aTab === 'seo' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+            <div><h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><Search size={16} className="text-indigo-600" /> SEO Ayarları</h3><p className="text-xs text-slate-400">Mağazanızın arama motoru görünürlüğünü artırın.</p></div>
+            <div><label className="block text-xs text-slate-500 mb-1">SEO Başlık</label><div className="relative"><input maxLength={60} value={cfg.seoTitle} onChange={(e) => setCfg('seoTitle', e.target.value)} placeholder="Mağaza Adı | İndirimli Ürünler" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><span className="absolute right-2 top-2 text-[10px] text-slate-300">{(cfg.seoTitle || '').length}/60</span></div></div>
+            <div><label className="block text-xs text-slate-500 mb-1">Meta Açıklama</label><div className="relative"><textarea maxLength={160} rows={2} value={cfg.metaDescription} onChange={(e) => setCfg('metaDescription', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><span className="absolute right-2 bottom-2 text-[10px] text-slate-300">{(cfg.metaDescription || '').length}/160</span></div></div>
+            <div><label className="block text-xs text-slate-500 mb-1">Anahtar Kelimeler</label><input value={cfg.keywords} onChange={(e) => setCfg('keywords', e.target.value)} placeholder="indirim, sezon, fırsat" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[10px] text-slate-400 mt-1">Virgülle ayırarak birden fazla anahtar kelime ekleyebilirsiniz.</p></div>
+          </div>
+          )}
+
+          {/* ── Bildirim Ayarları ── */}
+          {aTab === 'bildirim' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+            <div><h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><Bell size={16} className="text-indigo-600" /> Bildirim Ayarları</h3><p className="text-xs text-slate-400">Hangi durumlarda bildirim almak istediğinizi seçin.</p></div>
+            {[['bildirimYeniSiparis', 'Yeni sipariş bildirimi', 'Mağazaya yeni sipariş geldiğinde bildirim al'], ['bildirimStok', 'Düşük stok uyarısı', 'Bir ürünün stoğu kritik seviyeye indiğinde uyar'], ['bildirimYorum', 'Yeni yorum bildirimi', 'Ürünlere yeni yorum yapıldığında haber ver']].map(([k, t, d]) => (
+              <label key={k} className="flex items-center justify-between gap-3 p-3 rounded-xl border border-slate-100 cursor-pointer hover:bg-slate-50">
+                <span><span className="block text-sm font-medium text-slate-700">{t}</span><span className="block text-[11px] text-slate-400">{d}</span></span>
+                <input type="checkbox" checked={!!cfg[k]} onChange={(e) => setCfg(k, e.target.checked)} className="w-4 h-4" />
+              </label>
+            ))}
+          </div>
+          )}
+
+          {/* ── Politikalar ── */}
+          {aTab === 'politika' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
+            <div><h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><FileText size={16} className="text-indigo-600" /> Politikalar</h3><p className="text-xs text-slate-400">İade, gizlilik ve kullanım şartları. Mağaza sayfasında müşterilere gösterilir.</p></div>
+            <div><label className="block text-xs text-slate-500 mb-1">İade & Değişim Politikası</label><textarea rows={3} value={cfg.iade} onChange={(e) => setCfg('iade', e.target.value)} placeholder="ör. 14 gün içinde koşulsuz iade..." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            <div><label className="block text-xs text-slate-500 mb-1">Gizlilik Politikası</label><textarea rows={3} value={cfg.gizlilik} onChange={(e) => setCfg('gizlilik', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            <div><label className="block text-xs text-slate-500 mb-1">Kullanım Şartları</label><textarea rows={3} value={cfg.kullanim} onChange={(e) => setCfg('kullanim', e.target.value)} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+          </div>
+          )}
+
           </div>
         </div>
       )}

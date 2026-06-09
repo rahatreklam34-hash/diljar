@@ -126,6 +126,7 @@ router.get('/store/:slug', asyncHandler(async (req: Request, res: Response) => {
     hero: { title: data.store.heroTitle, subtitle: data.store.heroSubtitle, image: data.store.heroImage, video: data.store.heroVideo },
     slides: Array.isArray(data.store.slides) ? data.store.slides : [],
     topMenu: Array.isArray(data.store.topMenu) ? data.store.topMenu : [],
+    config: data.store.config || {},
     freeShipThreshold: data.store.freeShipThreshold || 0,
     puanOrani: data.store.puanOrani || 0,
     products: data.products,

@@ -841,6 +841,7 @@ model StoreSetting {
   slides       Json? // [{image,title,subtitle,cta}]
   productOrder Json? // [productId, ...]
   topMenu      Json? // [{id,label,type,value,children:[{label,type,value}]}] üst menü yapısı
+  config       Json? // gelişmiş mağaza ayarları (iletişim, sosyal, tema, seo, kargo, ödeme, bildirim, politika)
   freeShipThreshold Float @default(0) // 0 = kapalı; bu tutar üzeri ücretsiz kargo
   puanOrani    Float    @default(0) // 0 = kapalı; sipariş tutarının %'i kadar puan
   createdAt    DateTime @default(now())
