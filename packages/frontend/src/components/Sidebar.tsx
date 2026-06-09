@@ -190,15 +190,14 @@ export default function Sidebar() {
             return (
               <div key={gi}>
                 {!isIconOnly && (
-                  <button onClick={() => toggleGroup(key)} className="w-full flex items-center justify-between px-2.5 pt-2 pb-1.5">
-                    <span className="flex items-center gap-2">
-                      <span className={`w-1 h-3.5 rounded-full ${t.groupBar}`} />
-                      <span className={`text-[11px] font-bold uppercase tracking-widest ${t.groupTitle}`}>{group.title}</span>
-                    </span>
-                    <ChevronUp size={15} className={t.chevron} />
+                  <button onClick={() => toggleGroup(key)} className={`relative w-full flex items-center gap-3 px-2.5 py-2.5 mb-1.5 rounded-2xl border overflow-hidden transition-all ${t.card}`}>
+                    <span className={`absolute right-0 top-0 bottom-0 w-24 ${GROUP_GLOW[gi]} blur-2xl rounded-full pointer-events-none`} />
+                    <span className={`relative flex items-center justify-center w-9 h-9 rounded-xl shrink-0 ${GROUP_GLOW[gi]}`}><GroupIcon size={18} className={GROUP_COLORS[gi]} /></span>
+                    <span className={`relative flex-1 text-left text-[12px] font-bold uppercase tracking-wide ${t.cardText}`}>{group.title}</span>
+                    <ChevronUp size={16} className={`relative shrink-0 ${t.chevron}`} />
                   </button>
                 )}
-                <div className={`rounded-2xl border ${t.section} p-1`}>
+                <div className={`ml-3 rounded-xl border ${t.section} p-1`}>
                   {visibleItems.map((item) => renderItem(item, gi))}
                 </div>
               </div>
