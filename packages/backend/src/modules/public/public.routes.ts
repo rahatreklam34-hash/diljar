@@ -289,6 +289,37 @@ router.post('/store/:slug/cart-order', asyncHandler(async (req: Request, res: Re
   res.status(201).json({ token: order.token, sohbet: store.slug });
 }));
 
+// Sepet önizleme: kampanya + kupon indirimini canlı hesapla (ödeme öncesi gösterim)
+router.post('/store/:slug/cart-preview', asyncHandler(async (req: Request, res: Response) => {
+  const store = await prisma.storeSetting.findFirst({ where: { slug: req.params.slug, active: true } });
+  if (!store) throw new ApiError(404, 'Magaza bulunamadi');
+  const tenantId = store.tenantId;
+  const { items, discountCode } = req.body || {};
+  const bos = { araToplam: 0, kampanyaIndirim: 0, kampanyalar: [], kuponIndirim: 0, kuponGecerli: false, kuponKod: null as string | null, toplam: 0, freeShipThreshold: store.freeShipThreshold || 0 };
+  if (!Array.isArray(items) || items.length === 0) return res.json(bos);
+  const prods = await prisma.product.findMany({ where: { tenantId, id: { in: items.map((x: any) => x.productId) }, aktif: true }, include: { variations: true } });
+  const pMap = new Map(prods.map((p) => [p.id, p]));
+  const orderItems: any[] = [];
+  for (const it of items) {
+    const p: any = pMap.get(it.productId); if (!p) continue;
+    const adet = Math.max(1, Number(it.adet) || 1);
+    let fiyat = p.satisFiyat;
+    if (it.varyasyon) { const v = (p.variations || []).find((x: any) => x.deger === it.varyasyon); if (v) fiyat += v.ekFiyat || 0; }
+    orderItems.push({ productId: p.id, ad: p.ad, adet, fiyat });
+  }
+  if (orderItems.length === 0) return res.json(bos);
+  const ara = orderItems.reduce((s, it) => s + it.fiyat * it.adet, 0);
+  const kamp = await campaignAdjust(prisma, tenantId, orderItems);
+  let kuponIndirim = 0; let kuponGecerli = false; let kuponKod: string | null = null;
+  if (discountCode) {
+    const d = await prisma.discountCode.findFirst({ where: { tenantId, code: String(discountCode).toUpperCase(), aktif: true } });
+    if (d) { kuponGecerli = true; kuponKod = d.code; kuponIndirim = d.tip === 'yuzde' ? (ara * d.deger) / 100 : d.deger; }
+  }
+  const indirim = Math.min(ara, (kamp.indirim || 0) + kuponIndirim);
+  const toplam = Math.max(0, ara - indirim);
+  res.json({ araToplam: ara, kampanyaIndirim: kamp.indirim || 0, kampanyalar: kamp.kampanyalar || [], kuponIndirim: Math.min(ara - (kamp.indirim || 0), kuponIndirim), kuponGecerli, kuponKod, toplam, freeShipThreshold: store.freeShipThreshold || 0 });
+}));
+
 // Siparis olustur (public)
 router.post('/store/:slug/order', asyncHandler(async (req: Request, res: Response) => {
   const data = await loadStore(req.params.slug);

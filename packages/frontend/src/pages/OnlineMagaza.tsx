@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Store, Save, Plus, Trash2, ArrowUp, ArrowDown, Tag, ExternalLink, GripVertical, Star, Percent, X, Menu, ChevronRight,
-  ShoppingBag, Users, TrendingUp, Eye, Package, CreditCard, Wrench, Bell, ChevronRight as ArrowR, Megaphone, PackagePlus, FileText,
+  ShoppingBag, Users, TrendingUp, Eye, Package, CreditCard, Wrench, Bell, ChevronRight as ArrowR, Megaphone, PackagePlus, FileText, Pencil, SlidersHorizontal,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
@@ -23,11 +23,17 @@ export default function OnlineMagaza() {
   const [s, setS] = useState<any>({ active: false, slug: '', logoText: '', heroTitle: '', heroSubtitle: '', heroImage: '', heroVideo: '', bankaAd: '', iban: '', hesapSahibi: '', slides: [] as any[], productOrder: [] as string[], topMenu: [] as any[], freeShipThreshold: 0, puanOrani: 0 });
   const [disc, setDisc] = useState({ code: '', tip: 'yuzde', deger: '' });
   const [dragId, setDragId] = useState<string | null>(null);
-  const [indModal, setIndModal] = useState<any | null>(null);
-  const [indForm, setIndForm] = useState({ eskiFiyat: '', satisFiyat: '' });
   const [urunQ, setUrunQ] = useState('');
   const [kampModal, setKampModal] = useState(false);
   const [kampForm, setKampForm] = useState<any>({ ad: '', tip: 'sepet_tutar', minAdet: '', minTutar: '', indirimTip: 'yuzde', indirimDeger: '', kapsam: 'hepsi', kategoriId: '', productId: '' });
+  // Mağazadaki ürünler — filtre & düzenleme
+  const [uFilters, setUFilters] = useState(false);
+  const [uMarka, setUMarka] = useState('');
+  const [uCinsiyet, setUCinsiyet] = useState('');
+  const [uKategori, setUKategori] = useState('');
+  const [uGorunum, setUGorunum] = useState('tumu'); // tumu | one | indirim | var:N
+  const [editModal, setEditModal] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState<any>({ satisFiyat: '', eskiFiyat: '', aciklama: '', oneCikan: false });
 
   useEffect(() => {
     if (storeSetting) setS({ active: storeSetting.active, slug: storeSetting.slug || '', logoText: storeSetting.logoText || '', heroTitle: storeSetting.heroTitle || '', heroSubtitle: storeSetting.heroSubtitle || '', heroImage: storeSetting.heroImage || '', heroVideo: storeSetting.heroVideo || '', bankaAd: storeSetting.bankaAd || '', iban: storeSetting.iban || '', hesapSahibi: storeSetting.hesapSahibi || '', slides: storeSetting.slides || [], productOrder: storeSetting.productOrder || [], topMenu: storeSetting.topMenu || [], freeShipThreshold: storeSetting.freeShipThreshold || 0, puanOrani: storeSetting.puanOrani || 0 });
@@ -122,13 +128,8 @@ export default function OnlineMagaza() {
   const delSlide = (i: number) => setS((x: any) => ({ ...x, slides: x.slides.filter((_: any, idx: number) => idx !== i) }));
 
   const ordered = [...onlineProducts].sort((a, b) => { const ia = s.productOrder.indexOf(a.id); const ib = s.productOrder.indexOf(b.id); return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib); });
-  const move = (id: string, dir: -1 | 1) => { const ids = ordered.map((p) => p.id); const i = ids.indexOf(id); const j = i + dir; if (j < 0 || j >= ids.length) return; [ids[i], ids[j]] = [ids[j], ids[i]]; setS((x: any) => ({ ...x, productOrder: ids })); };
-  const onDrop = (targetId: string) => { if (!dragId || dragId === targetId) { setDragId(null); return; } const ids = ordered.map((p) => p.id); const from = ids.indexOf(dragId); const to = ids.indexOf(targetId); if (from < 0 || to < 0) { setDragId(null); return; } ids.splice(to, 0, ids.splice(from, 1)[0]); setS((x: any) => ({ ...x, productOrder: ids })); setDragId(null); };
   const toggleOne = async (p: any) => { try { await api.patch(`/store/products/${p.id}`, { oneCikan: !p.oneCikan }); reload(); } catch (e) { toast.error(apiErrorMessage(e)); } };
   const removeFromStore = async (p: any) => { try { await api.patch(`/store/products/${p.id}`, { onlineMagaza: false }); toast.success('Mağazadan kaldırıldı'); reload(); } catch (e) { toast.error(apiErrorMessage(e)); } };
-  const openInd = (p: any) => { setIndForm({ eskiFiyat: String(p.eskiFiyat || p.satisFiyat || ''), satisFiyat: String(p.satisFiyat || '') }); setIndModal(p); };
-  const saveInd = async () => { if (!indModal) return; const eski = Number(indForm.eskiFiyat) || 0; const yeni = Number(indForm.satisFiyat) || 0; if (yeni <= 0) { toast.error('Geçerli satış fiyatı girin'); return; } try { await api.patch(`/store/products/${indModal.id}`, { eskiFiyat: eski > yeni ? eski : null, satisFiyat: yeni }); toast.success('İndirim uygulandı'); setIndModal(null); reload(); } catch (e) { toast.error(apiErrorMessage(e)); } };
-  const clearInd = async (p: any) => { try { await api.patch(`/store/products/${p.id}`, { eskiFiyat: null }); toast.success('İndirim kaldırıldı'); reload(); } catch (e) { toast.error(apiErrorMessage(e)); } };
 
   const addMenu = () => setS((x: any) => ({ ...x, topMenu: [...(x.topMenu || []), { id: 'm' + Date.now(), label: 'Yeni Menü', type: 'ozel', value: 'tumu', children: [] }] }));
   const setMenu = (id: string, patch: any) => setS((x: any) => ({ ...x, topMenu: x.topMenu.map((m: any) => m.id === id ? { ...m, ...patch } : m) }));
@@ -159,7 +160,55 @@ export default function OnlineMagaza() {
     try { await api.post('/store/campaigns', body); toast.success('Kampanya oluşturuldu'); setKampModal(false); setKampForm({ ad: '', tip: 'sepet_tutar', minAdet: '', minTutar: '', indirimTip: 'yuzde', indirimDeger: '', kapsam: 'hepsi', kategoriId: '', productId: '' }); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
   };
 
-  const urunList = onlineProducts.filter((p) => !urunQ || (p.ad || '').toLowerCase().includes(urunQ.toLowerCase()) || (p.marka || '').toLowerCase().includes(urunQ.toLowerCase()));
+  // ── Mağazadaki ürünler: filtre + sıralama + düzenleme ──
+  const vStok = (p: any) => (p.variations || []).filter((v: any) => (v.stok || 0) > 0).length;
+  const uBrands = [...new Set(onlineProducts.map((p) => p.marka).filter(Boolean))].sort() as string[];
+  const uGenders = [...new Set(onlineProducts.map((p) => p.cinsiyet).filter(Boolean))] as string[];
+  const varCounts = [...new Set(onlineProducts.map(vStok).filter((n) => n > 0))].sort((a, b) => a - b);
+  const GENDER_LBL: Record<string, string> = { kadin: 'Kadın', erkek: 'Erkek', cocuk: 'Çocuk', unisex: 'Unisex' };
+  const matchU = (p: any) => {
+    if (urunQ && !((p.ad || '').toLowerCase().includes(urunQ.toLowerCase()) || (p.marka || '').toLowerCase().includes(urunQ.toLowerCase()))) return false;
+    if (uMarka && p.marka !== uMarka) return false;
+    if (uCinsiyet && p.cinsiyet !== uCinsiyet) return false;
+    if (uKategori && p.kategoriId !== uKategori) return false;
+    if (uGorunum === 'one' && !p.oneCikan) return false;
+    if (uGorunum === 'indirim' && !(p.eskiFiyat && p.eskiFiyat > p.satisFiyat)) return false;
+    if (uGorunum.startsWith('var:') && vStok(p) !== Number(uGorunum.slice(4))) return false;
+    return true;
+  };
+  const uFilterActive = !!(urunQ || uMarka || uCinsiyet || uKategori || uGorunum !== 'tumu');
+  const uOrdered = ordered.filter(matchU);
+  // Sürükle-bırak: filtre açıkken yalnız filtreli liste içinde, global productOrder'a yazılır
+  const onDropU = (targetId: string) => {
+    if (!dragId || dragId === targetId) { setDragId(null); return; }
+    const globalIds = ordered.map((p) => p.id);
+    const filteredIds = new Set(uOrdered.map((p) => p.id));
+    const slots: number[] = []; globalIds.forEach((id, idx) => { if (filteredIds.has(id)) slots.push(idx); });
+    const curOrder = slots.map((i) => globalIds[i]);
+    const from = curOrder.indexOf(dragId); const to = curOrder.indexOf(targetId);
+    if (from < 0 || to < 0) { setDragId(null); return; }
+    curOrder.splice(to, 0, curOrder.splice(from, 1)[0]);
+    const result = [...globalIds]; slots.forEach((slotIdx, k) => { result[slotIdx] = curOrder[k]; });
+    setS((x: any) => ({ ...x, productOrder: result })); setDragId(null);
+  };
+  // Sıra numarası: genel vitrin sırasını etkiler
+  const setPosition = (id: string, pos: number) => {
+    const ids = ordered.map((p) => p.id).filter((x) => x !== id);
+    let idx = (Number(pos) || 1) - 1; if (idx < 0) idx = 0; if (idx > ids.length) idx = ids.length;
+    ids.splice(idx, 0, id);
+    setS((x: any) => ({ ...x, productOrder: ids }));
+  };
+  const globalPos = (id: string) => ordered.findIndex((p) => p.id === id) + 1;
+  // Ürün düzenleme modalı
+  const openEdit = (p: any) => { setEditForm({ satisFiyat: String(p.satisFiyat ?? ''), eskiFiyat: String(p.eskiFiyat ?? ''), aciklama: p.aciklama || '', oneCikan: !!p.oneCikan }); setEditModal(p); };
+  const saveEdit = async () => {
+    if (!editModal) return;
+    const yeni = Number(editForm.satisFiyat) || 0;
+    const eski = editForm.eskiFiyat ? Number(editForm.eskiFiyat) : 0;
+    if (yeni <= 0) { toast.error('Geçerli satış fiyatı girin'); return; }
+    const body = { satisFiyat: yeni, eskiFiyat: eski > yeni ? eski : null, aciklama: editForm.aciklama || null, oneCikan: !!editForm.oneCikan };
+    try { await api.patch(`/store/products/${editModal.id}`, body); toast.success('Ürün güncellendi'); setEditModal(null); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
+  };
 
   const TABS: [typeof tab, string, number | null][] = [
     ['genel', 'Genel Bakış', null], ['ayarlar', 'Mağaza Ayarları', null], ['urunler', 'Mağazadaki Ürünler', onlineProducts.length],
@@ -299,17 +348,10 @@ export default function OnlineMagaza() {
             <div><label className="block text-xs text-slate-500 mb-1">Hero Görseli</label><ImageDropzone images={s.heroImage ? [s.heroImage] : []} onChange={(imgs) => setS({ ...s, heroImage: imgs[0] || '' })} max={1} /></div>
           </div>
 
-          {/* Videolu satış + banka */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-3">
-            <h3 className="font-semibold text-slate-800 text-sm">Videolu Satış & Ödeme Bilgileri</h3>
-            <div><label className="block text-xs text-slate-500 mb-1">Tanıtım / Canlı Video URL'i (mp4 veya yayın bağlantısı)</label><input value={s.heroVideo} onChange={(e) => setS({ ...s, heroVideo: e.target.value })} placeholder="https://.../video.mp4" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[11px] text-slate-400 mt-1">Doldurulunca ana sayfada video oynatıcı açılır; müşteri izlerken ürün ekleyebilir.</p></div>
-            <div className="grid sm:grid-cols-3 gap-3">
-              <div><label className="block text-xs text-slate-500 mb-1">Banka Adı</label><input value={s.bankaAd} onChange={(e) => setS({ ...s, bankaAd: e.target.value })} placeholder="ör. İş Bankası" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
-              <div><label className="block text-xs text-slate-500 mb-1">IBAN</label><input value={s.iban} onChange={(e) => setS({ ...s, iban: e.target.value })} placeholder="TR.." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
-              <div><label className="block text-xs text-slate-500 mb-1">Hesap Sahibi</label><input value={s.hesapSahibi} onChange={(e) => setS({ ...s, hesapSahibi: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
-            </div>
-            <p className="text-[11px] text-slate-400">Havale/EFT seçen müşteriye asistan bu banka bilgilerini iletir.</p>
-            <div className="grid sm:grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100">
+          {/* Ücretsiz Kargo & VIP Puan (sabit) */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5">
+            <h3 className="font-semibold text-slate-800 text-sm mb-3">Ücretsiz Kargo & VIP Puan</h3>
+            <div className="grid sm:grid-cols-2 gap-3">
               <div><label className="block text-xs text-slate-500 mb-1">Ücretsiz Kargo Eşiği (TL)</label><input type="number" min={0} value={s.freeShipThreshold} onChange={(e) => setS({ ...s, freeShipThreshold: e.target.value })} placeholder="0 = kapalı" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[10px] text-slate-400 mt-1">Bu tutar üzeri sepetlerde "ücretsiz kargo" rozeti gösterilir. 0 = kapalı.</p></div>
               <div><label className="block text-xs text-slate-500 mb-1">VIP Puan Oranı (%)</label><input type="number" min={0} max={100} step="0.5" value={s.puanOrani} onChange={(e) => setS({ ...s, puanOrani: e.target.value })} placeholder="0 = kapalı" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[10px] text-slate-400 mt-1">Sepet tutarının %'i kadar puan müşteriye gösterilir. 0 = kapalı.</p></div>
             </div>
@@ -365,27 +407,6 @@ export default function OnlineMagaza() {
             )}
           </div>
 
-          {/* Vitrin düzeni */}
-          <div className="bg-white rounded-xl border border-slate-200 p-5">
-            <h3 className="font-semibold text-slate-700 mb-1">Vitrin Düzeni & Ürün Sıralaması</h3>
-            <p className="text-xs text-slate-400 mb-3">Kartı sürükleyip bırakarak sırayı belirleyin. <Star size={11} className="inline text-amber-500" /> öne çıkar, <Percent size={11} className="inline text-rose-500" /> indirime al.</p>
-            {ordered.length === 0 ? <p className="text-sm text-slate-400">Online mağazada gösterilecek ürün yok. Ürünlerim'de bir ürünün "Mağaza" rozetini açın.</p> : (
-              <div className="space-y-2">{ordered.map((p, i) => { const ind = (p.eskiFiyat && p.eskiFiyat > p.satisFiyat) ? Math.round(((p.eskiFiyat - p.satisFiyat) / p.eskiFiyat) * 100) : 0; return (
-                <div key={p.id} draggable onDragStart={() => setDragId(p.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => onDrop(p.id)} className={`flex items-center gap-3 border rounded-xl p-2 bg-white transition-shadow ${dragId === p.id ? 'border-indigo-400 shadow-md opacity-60' : 'border-slate-100 hover:border-slate-300'}`}>
-                  <GripVertical size={16} className="text-slate-300 cursor-grab shrink-0" />
-                  <span className="text-xs font-bold text-slate-400 w-5 text-center shrink-0">{i + 1}</span>
-                  <div className="relative shrink-0"><img src={(p.images || [])[0] || ''} className="w-11 h-11 rounded-lg object-cover bg-slate-100" />{ind > 0 && <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[9px] font-bold px-1 rounded-full">%{ind}</span>}</div>
-                  <div className="flex-1 min-w-0"><p className="text-sm font-medium text-slate-800 truncate">{p.ad}</p><p className="text-xs text-slate-400">{ind > 0 ? <><span className="line-through text-slate-300 mr-1">{fmt(p.eskiFiyat)}</span><span className="text-rose-600 font-semibold">{fmt(p.satisFiyat)}</span></> : fmt(p.satisFiyat)}</p></div>
-                  <button onClick={() => toggleOne(p)} title="Öne çıkar" className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${p.oneCikan ? 'bg-amber-50 border-amber-300 text-amber-500' : 'border-slate-200 text-slate-300 hover:text-amber-500'}`}><Star size={15} className={p.oneCikan ? 'fill-amber-400' : ''} /></button>
-                  <button onClick={() => openInd(p)} title="İndirime al" className="w-8 h-8 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-500 flex items-center justify-center shrink-0"><Percent size={15} /></button>
-                  {ind > 0 && <button onClick={() => clearInd(p)} title="İndirimi kaldır" className="text-[10px] text-rose-500 underline shrink-0">kaldır</button>}
-                  <button onClick={() => removeFromStore(p)} title="Mağazadan kaldır" className="w-8 h-8 rounded-lg border border-slate-200 text-slate-400 hover:text-red-500 flex items-center justify-center shrink-0"><Trash2 size={15} /></button>
-                  <div className="hidden sm:flex flex-col"><button onClick={() => move(p.id, -1)} disabled={i === 0} className="p-0.5 text-slate-300 hover:text-indigo-600 disabled:opacity-30"><ArrowUp size={13} /></button><button onClick={() => move(p.id, 1)} disabled={i === ordered.length - 1} className="p-0.5 text-slate-300 hover:text-indigo-600 disabled:opacity-30"><ArrowDown size={13} /></button></div>
-                </div>
-              ); })}</div>
-            )}
-          </div>
-
           {/* İndirim kodları */}
           <div className="bg-white rounded-xl border border-slate-200 p-5">
             <h3 className="font-semibold text-slate-700 mb-3 flex items-center gap-2"><Tag size={16} /> İndirim Kodları</h3>
@@ -405,25 +426,65 @@ export default function OnlineMagaza() {
       {/* ───────── MAĞAZADAKİ ÜRÜNLER ───────── */}
       {tab === 'urunler' && (
         <div className="space-y-4">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <input value={urunQ} onChange={(e) => setUrunQ(e.target.value)} placeholder="Mağazadaki ürünlerde ara..." className="flex-1 min-w-[200px] px-3 py-2.5 text-sm border border-slate-200 rounded-xl" />
+          <div className="flex items-center gap-2 flex-wrap">
+            <input value={urunQ} onChange={(e) => setUrunQ(e.target.value)} placeholder="Mağazadaki ürünlerde ara..." className="flex-1 min-w-[180px] px-3 py-2.5 text-sm border border-slate-200 rounded-xl" />
+            <button onClick={() => setUFilters((o) => !o)} className={`inline-flex items-center gap-1.5 px-3 py-2.5 text-sm rounded-xl border ${(uMarka || uCinsiyet || uKategori || uGorunum !== 'tumu') ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-600'}`}><SlidersHorizontal size={15} /> Filtreler{(uMarka || uCinsiyet || uKategori || uGorunum !== 'tumu') && <span className="bg-white/25 px-1.5 rounded-full text-[11px]">{(uMarka ? 1 : 0) + (uCinsiyet ? 1 : 0) + (uKategori ? 1 : 0) + (uGorunum !== 'tumu' ? 1 : 0)}</span>}</button>
             <button onClick={() => nav('/depo/urunlerim')} className="inline-flex items-center gap-1.5 px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50"><Package size={15} /> Tüm Ürünleri Yönet</button>
           </div>
-          {urunList.length === 0 ? <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">Mağazada ürün yok. Ürünlerim'de bir ürünün "Mağaza" rozetini açın.</div> : (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">{urunList.map((p) => { const ind = (p.eskiFiyat && p.eskiFiyat > p.satisFiyat) ? Math.round(((p.eskiFiyat - p.satisFiyat) / p.eskiFiyat) * 100) : 0; const st = p.stokAdeti || 0; return (
-              <div key={p.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                <div className="relative aspect-square bg-slate-100"><img src={(p.images || [])[0] || ''} className="w-full h-full object-cover" />{ind > 0 && <span className="absolute top-2 left-2 bg-rose-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">%{ind}</span>}{p.oneCikan && <span className="absolute top-2 right-2 bg-amber-400 text-white w-6 h-6 rounded-full flex items-center justify-center"><Star size={12} className="fill-white" /></span>}</div>
-                <div className="p-3">
-                  <p className="font-medium text-slate-800 truncate text-sm">{p.ad}</p>
-                  <div className="flex items-center gap-1.5 mt-0.5">{ind > 0 && <span className="text-[11px] text-slate-300 line-through">{fmt(p.eskiFiyat)}</span>}<span className="font-bold text-slate-800">{fmt(p.satisFiyat)}</span><span className={`ml-auto text-[11px] font-bold ${st === 0 ? 'text-red-500' : st <= 5 ? 'text-amber-600' : 'text-green-600'}`}>{st} adet</span></div>
-                  <div className="flex items-center gap-1 mt-2">
-                    <button onClick={() => toggleOne(p)} title="Öne çıkar" className={`flex-1 h-8 rounded-lg border flex items-center justify-center ${p.oneCikan ? 'bg-amber-50 border-amber-300 text-amber-500' : 'border-slate-200 text-slate-400 hover:text-amber-500'}`}><Star size={14} className={p.oneCikan ? 'fill-amber-400' : ''} /></button>
-                    <button onClick={() => openInd(p)} title="İndirime al" className="flex-1 h-8 rounded-lg border border-slate-200 text-slate-400 hover:text-rose-500 flex items-center justify-center"><Percent size={14} /></button>
-                    <button onClick={() => removeFromStore(p)} title="Mağazadan kaldır" className="flex-1 h-8 rounded-lg border border-slate-200 text-slate-400 hover:text-red-500 flex items-center justify-center"><Trash2 size={14} /></button>
+
+          {uFilters && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3">
+              <div className="flex items-center justify-between"><h4 className="text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5"><SlidersHorizontal size={14} className="text-indigo-600" /> Detaylı Filtreler</h4><button onClick={() => { setUMarka(''); setUCinsiyet(''); setUKategori(''); setUGorunum('tumu'); }} className="text-xs text-slate-400 hover:text-red-500">Temizle</button></div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                <div><label className="text-[11px] text-slate-400">Görünüm</label>
+                  <select value={uGorunum} onChange={(e) => setUGorunum(e.target.value)} className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg">
+                    <option value="tumu">Tümü</option><option value="one">Öne Çıkanlar</option><option value="indirim">İndirimliler</option>
+                    {varCounts.map((n) => <option key={n} value={`var:${n}`}>{n} varyasyon kalanlar</option>)}
+                  </select>
+                </div>
+                <div><label className="text-[11px] text-slate-400">Marka</label><select value={uMarka} onChange={(e) => setUMarka(e.target.value)} className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg"><option value="">Tümü</option>{uBrands.map((b) => <option key={b} value={b}>{b}</option>)}</select></div>
+                <div><label className="text-[11px] text-slate-400">Cinsiyet</label><select value={uCinsiyet} onChange={(e) => setUCinsiyet(e.target.value)} className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg"><option value="">Tümü</option>{uGenders.map((g) => <option key={g} value={g}>{GENDER_LBL[g] || g}</option>)}</select></div>
+                <div><label className="text-[11px] text-slate-400">Kategori</label><select value={uKategori} onChange={(e) => setUKategori(e.target.value)} className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg"><option value="">Tümü</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.ad}</option>)}</select></div>
+              </div>
+            </div>
+          )}
+
+          <div className={`flex items-center gap-2 text-xs rounded-xl px-3 py-2 ${uFilterActive ? 'bg-amber-50 text-amber-700 border border-amber-100' : 'bg-slate-50 text-slate-500'}`}>
+            <GripVertical size={13} className="shrink-0" />
+            {uFilterActive ? <span>Filtre açık — <b>sürükle-bırak</b> yalnız bu liste içinde sıralar. <b>Sıra no</b> ise genel vitrin sırasını değiştirir.</span> : <span>Kartı sürükleyip bırakarak veya <b>sıra no</b> girerek vitrin sırasını düzenleyin. Sıralama değişikliklerini üstteki <b>Kaydet</b> ile kalıcı yapın.</span>}
+          </div>
+
+          {uOrdered.length === 0 ? <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">{onlineProducts.length === 0 ? 'Mağazada ürün yok. Ürünlerim\'de bir ürünün "Mağaza" rozetini açın.' : 'Bu filtreye uygun ürün yok.'}</div> : (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-2.5">{uOrdered.map((p) => {
+              const ind = (p.eskiFiyat && p.eskiFiyat > p.satisFiyat) ? Math.round(((p.eskiFiyat - p.satisFiyat) / p.eskiFiyat) * 100) : 0;
+              const bedenler = (p.variations || []).filter((v: any) => (v.stok || 0) > 0);
+              return (
+                <div key={p.id} draggable onDragStart={() => setDragId(p.id)} onDragOver={(e) => e.preventDefault()} onDrop={() => onDropU(p.id)} className={`bg-white rounded-xl border overflow-hidden flex flex-col transition-shadow ${dragId === p.id ? 'border-indigo-400 shadow-lg opacity-60' : 'border-slate-200 hover:border-slate-300'}`}>
+                  <div className="relative aspect-square bg-slate-100">
+                    <img src={(p.images || [])[0] || ''} className="w-full h-full object-cover" />
+                    <span className="absolute top-1 left-1 bg-black/55 text-white rounded-md p-0.5 cursor-grab"><GripVertical size={12} /></span>
+                    {ind > 0 && <span className="absolute top-1 right-1 bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.5 rounded-full">%{ind}</span>}
+                    {p.oneCikan && <span className="absolute bottom-1 left-1 bg-amber-400 text-white w-5 h-5 rounded-full flex items-center justify-center"><Star size={10} className="fill-white" /></span>}
+                  </div>
+                  <div className="p-2 flex flex-col flex-1">
+                    <div className="flex items-center gap-1 mb-1">
+                      <span className="text-[9px] text-slate-400 shrink-0">Sıra</span>
+                      <input type="number" min={1} defaultValue={globalPos(p.id)} key={globalPos(p.id)} onBlur={(e) => { const v = Number(e.target.value); if (v && v !== globalPos(p.id)) setPosition(p.id, v); }} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className="w-10 px-1 py-0.5 text-[11px] text-center border border-slate-200 rounded" title="Genel vitrin sırası" />
+                    </div>
+                    <p className="text-[12px] font-medium text-slate-800 leading-tight line-clamp-2">{p.ad}</p>
+                    <div className="flex items-center gap-1 mt-0.5">{ind > 0 && <span className="text-[10px] text-slate-300 line-through">{fmt(p.eskiFiyat)}</span>}<span className={`text-sm font-bold ${ind > 0 ? 'text-rose-600' : 'text-slate-800'}`}>{fmt(p.satisFiyat)}</span></div>
+                    {bedenler.length > 0 ? (
+                      <div className="flex flex-wrap gap-0.5 mt-1">{bedenler.slice(0, 5).map((v: any) => <span key={v.id || v.deger} className="text-[9px] px-1 py-0.5 rounded border border-slate-200 text-slate-500">{v.deger}<b className="text-slate-700 ml-0.5">{v.stok}</b></span>)}</div>
+                    ) : <p className="text-[9px] text-slate-300 mt-1">Tek stok: {p.stokAdeti || 0}</p>}
+                    <div className="flex items-center gap-1 mt-auto pt-2">
+                      <button onClick={() => toggleOne(p)} title="Öne çıkar" className={`flex-1 h-7 rounded-lg border flex items-center justify-center ${p.oneCikan ? 'bg-amber-50 border-amber-300 text-amber-500' : 'border-slate-200 text-slate-400 hover:text-amber-500'}`}><Star size={13} className={p.oneCikan ? 'fill-amber-400' : ''} /></button>
+                      <button onClick={() => openEdit(p)} title="Düzenle" className="flex-1 h-7 rounded-lg border border-slate-200 text-slate-400 hover:text-indigo-600 flex items-center justify-center"><Pencil size={13} /></button>
+                      <button onClick={() => removeFromStore(p)} title="Mağazadan kaldır" className="flex-1 h-7 rounded-lg border border-slate-200 text-slate-400 hover:text-red-500 flex items-center justify-center"><Trash2 size={13} /></button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            ); })}</div>
+              );
+            })}</div>
           )}
         </div>
       )}
@@ -485,16 +546,24 @@ export default function OnlineMagaza() {
         </div>
       )}
 
-      {/* İndirime al modal */}
-      {indModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setIndModal(null)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-white rounded-2xl p-5 space-y-3">
-            <div className="flex items-center justify-between"><h3 className="font-semibold text-slate-800 flex items-center gap-2"><Percent size={16} className="text-rose-500" /> İndirime Al</h3><button onClick={() => setIndModal(null)}><X size={18} className="text-slate-400" /></button></div>
-            <div className="flex items-center gap-3"><img src={(indModal.images || [])[0] || ''} className="w-12 h-12 rounded-lg object-cover bg-slate-100" /><p className="text-sm font-medium text-slate-700">{indModal.ad}</p></div>
-            <div><label className="block text-xs text-slate-500 mb-1">Liste / Eski Fiyat (üstü çizili gösterilir)</label><input type="number" value={indForm.eskiFiyat} onChange={(e) => setIndForm({ ...indForm, eskiFiyat: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
-            <div><label className="block text-xs text-slate-500 mb-1">İndirimli Satış Fiyatı</label><input type="number" value={indForm.satisFiyat} onChange={(e) => setIndForm({ ...indForm, satisFiyat: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
-            {Number(indForm.eskiFiyat) > Number(indForm.satisFiyat) && Number(indForm.satisFiyat) > 0 && (<p className="text-xs text-rose-600 font-medium">İndirim: %{Math.round(((Number(indForm.eskiFiyat) - Number(indForm.satisFiyat)) / Number(indForm.eskiFiyat)) * 100)}</p>)}
-            <button onClick={saveInd} className="w-full bg-rose-600 text-white py-2.5 rounded-lg font-medium hover:bg-rose-700">İndirimi Uygula</button>
+      {/* Ürün düzenleme modalı (fiyat / eski fiyat / açıklama / öne çıkar) */}
+      {editModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setEditModal(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-white rounded-2xl p-5 space-y-3 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between"><h3 className="font-semibold text-slate-800 flex items-center gap-2"><Pencil size={16} className="text-indigo-600" /> Ürünü Düzenle</h3><button onClick={() => setEditModal(null)}><X size={18} className="text-slate-400" /></button></div>
+            <div className="flex items-center gap-3"><img src={(editModal.images || [])[0] || ''} className="w-14 h-14 rounded-lg object-cover bg-slate-100" /><div className="min-w-0"><p className="text-sm font-semibold text-slate-800 truncate">{editModal.ad}</p><p className="text-[11px] text-slate-400">{editModal.marka || ''} {editModal.barkod ? `· ${editModal.barkod}` : ''}</p></div></div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="block text-xs text-slate-500 mb-1">Mağazada Geçerli Fiyat (₺)</label><input type="number" value={editForm.satisFiyat} onChange={(e) => setEditForm({ ...editForm, satisFiyat: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Eski Fiyat Etiketi (₺)</label><input type="number" value={editForm.eskiFiyat} onChange={(e) => setEditForm({ ...editForm, eskiFiyat: e.target.value })} placeholder="boş = etiket yok" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            </div>
+            {Number(editForm.eskiFiyat) > Number(editForm.satisFiyat) && Number(editForm.satisFiyat) > 0 && (<p className="text-xs text-rose-600 font-medium">İndirim etiketi: %{Math.round(((Number(editForm.eskiFiyat) - Number(editForm.satisFiyat)) / Number(editForm.eskiFiyat)) * 100)} — ürün "indirimliler" arasında gösterilir.</p>)}
+            <div><label className="block text-xs text-slate-500 mb-1">Ürün Açıklaması</label><textarea rows={3} value={editForm.aciklama} onChange={(e) => setEditForm({ ...editForm, aciklama: e.target.value })} placeholder="Mağaza sayfasında görünecek açıklama..." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            {(editModal.variations || []).length > 0 && (
+              <div><label className="block text-xs text-slate-500 mb-1">Varyasyonlar (stok)</label><div className="flex flex-wrap gap-1">{(editModal.variations || []).map((v: any) => <span key={v.id || v.deger} className={`text-xs px-2 py-1 rounded-lg border ${(v.stok || 0) > 0 ? 'bg-white border-slate-200 text-slate-600' : 'bg-red-50 border-red-200 text-red-400 line-through'}`}>{v.deger}: <b>{v.stok}</b></span>)}</div></div>
+            )}
+            <label className="flex items-center gap-2 text-sm text-slate-600"><input type="checkbox" checked={editForm.oneCikan} onChange={(e) => setEditForm({ ...editForm, oneCikan: e.target.checked })} /> <Star size={14} className="text-amber-500" /> Öne çıkan ürün</label>
+            <button onClick={saveEdit} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700">Kaydet</button>
+            <p className="text-[11px] text-slate-400">Stok ve varyasyon düzenlemesi için "Tüm Ürünleri Yönet" sayfasını kullanın.</p>
           </div>
         </div>
       )}

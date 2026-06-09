@@ -1,6 +1,6 @@
 ﻿import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Search, Heart, ShoppingBag, Zap, Home, LayoutGrid, Radio, User, Plus, Minus, X, Star, ChevronDown, Grid2x2, List, Truck, RotateCcw, ShieldCheck, Headphones, Lock, SlidersHorizontal } from 'lucide-react';
+import { Search, Heart, ShoppingBag, Zap, Home, LayoutGrid, Radio, User, Plus, Minus, X, Star, ChevronDown, Grid2x2, List, Truck, RotateCcw, ShieldCheck, Headphones, Lock, SlidersHorizontal, Tag } from 'lucide-react';
 import api, { apiErrorMessage } from '../lib/api';
 
 const fmt = (n: number) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
@@ -43,6 +43,10 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [cust, setCust] = useState({ ad: '', telefon: '', email: '', adres: '' });
   const [paytrUrl, setPaytrUrl] = useState('');
   const [done, setDone] = useState<any>(null);
+  // İndirim kodu + sepet önizleme (kampanya/kupon otomatik)
+  const [codeInput, setCodeInput] = useState('');
+  const [discountCode, setDiscountCode] = useState('');
+  const [preview, setPreview] = useState<any>(null);
   // Üyelik / hesap
   const [shopUser, setShopUser] = useState<any>(null);
   const [acc, setAcc] = useState(false);
@@ -147,6 +151,20 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
 
   const geri = useMemo(() => { const k = 3 * 3600 - (Math.floor(now / 1000) % (3 * 3600)); return { s: Math.floor(k / 3600), dk: Math.floor((k % 3600) / 60), sn: k % 60 }; }, [now]);
 
+  // Sepet önizleme: kampanya (otomatik) + kupon indirimi canlı hesaplanır
+  const cartKey = cartItems.map((x: any) => `${x.productId}:${x.varyasyon || ''}:${x.adet}`).join('|');
+  useEffect(() => {
+    if (!slug || cartItems.length === 0) { setPreview(null); return; }
+    const body = { items: cartItems.map((x: any) => ({ productId: x.productId, adet: x.adet, varyasyon: x.varyasyon || undefined })), discountCode: discountCode || undefined };
+    const t = setTimeout(() => { api.post(`/public/store/${slug}/cart-preview`, body).then((r) => setPreview(r.data)).catch(() => setPreview(null)); }, 350);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cartKey, discountCode, slug]);
+  const kuponUygula = () => { const c = codeInput.trim().toUpperCase(); if (!c) return; setDiscountCode(c); };
+  const kuponKaldir = () => { setDiscountCode(''); setCodeInput(''); };
+  const odenecek = preview ? preview.toplam : araToplam;
+  const toplamIndirim = preview ? (preview.kampanyaIndirim + preview.kuponIndirim) : 0;
+
   const addToCart = (p: any, varyasyon?: string) => {
     const key = p.id + '|' + (varyasyon || '');
     let fiyat = p.satisFiyat;
@@ -165,11 +183,11 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
     setBusy(true);
     try {
       const items = cartItems.map((x: any) => ({ productId: x.productId, adet: x.adet, varyasyon: x.varyasyon || undefined }));
-      const r = await api.post(`/public/store/${slug}/order`, { customer: cust, items });
+      const r = await api.post(`/public/store/${slug}/order`, { customer: cust, items, discountCode: discountCode || undefined });
       if (r.data.iframeUrl) { setPaytrUrl(r.data.iframeUrl); setCheckout(false); return; }
       if (r.data.paytrError) alert('Ödeme başlatılamadı: ' + r.data.paytrError + '\nSiparişiniz kaydedildi, sizinle iletişime geçilecek.');
       track('browse', null, 'order');
-      setDone(r.data); setCart({}); setCheckout(false);
+      setDone(r.data); setCart({}); setCheckout(false); setDiscountCode(''); setCodeInput(''); setPreview(null);
     } catch (e) { alert(apiErrorMessage(e)); } finally { setBusy(false); }
   };
 
@@ -428,7 +446,33 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
               ))}
             </div>
             {cartItems.length > 0 && (
-              <div className="p-4 border-t border-slate-100"><div className="flex justify-between font-bold text-slate-800 mb-3"><span>Toplam</span><span>{fmt(araToplam)}</span></div><button onClick={tamamla} disabled={busy} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50">Siparişi Tamamla</button><p className="text-[11px] text-slate-400 text-center mt-2 inline-flex items-center justify-center gap-1 w-full"><Lock size={11} /> Güvenli ödeme · 256-bit SSL</p></div>
+              <div className="p-4 border-t border-slate-100 space-y-2">
+                {/* İndirim kodu */}
+                {discountCode && preview?.kuponGecerli ? (
+                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 text-sm">
+                    <span className="text-emerald-700 font-medium inline-flex items-center gap-1"><Tag size={13} /> {preview.kuponKod} uygulandı</span>
+                    <button onClick={kuponKaldir} className="text-[11px] text-emerald-600 underline">kaldır</button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <input value={codeInput} onChange={(e) => setCodeInput(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === 'Enter' && kuponUygula()} placeholder="İndirim kodu" className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg uppercase" />
+                    <button onClick={kuponUygula} className="px-3 py-2 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-700">Uygula</button>
+                  </div>
+                )}
+                {discountCode && preview && !preview.kuponGecerli && <p className="text-[11px] text-red-500">Kod geçersiz veya pasif.</p>}
+                {/* Özet */}
+                <div className="space-y-1 text-sm">
+                  <div className="flex justify-between text-slate-500"><span>Ara Toplam</span><span>{fmt(preview ? preview.araToplam : araToplam)}</span></div>
+                  {(preview?.kampanyalar || []).map((k: any, i: number) => (
+                    <div key={i} className="flex justify-between text-emerald-600"><span className="inline-flex items-center gap-1 truncate pr-2"><Tag size={12} className="shrink-0" /> {k.ad}</span><span className="shrink-0">-{fmt(k.indirim)}</span></div>
+                  ))}
+                  {preview && preview.kuponIndirim > 0 && <div className="flex justify-between text-emerald-600"><span>Kupon ({preview.kuponKod})</span><span>-{fmt(preview.kuponIndirim)}</span></div>}
+                  {toplamIndirim > 0 && <div className="flex justify-between text-[12px] text-slate-400"><span>Toplam İndirim</span><span className="text-emerald-600 font-medium">-{fmt(toplamIndirim)}</span></div>}
+                </div>
+                <div className="flex justify-between font-bold text-slate-800 pt-1 border-t border-slate-100"><span>Toplam</span><span>{fmt(odenecek)}</span></div>
+                <button onClick={tamamla} disabled={busy} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50">Siparişi Tamamla</button>
+                <p className="text-[11px] text-slate-400 text-center inline-flex items-center justify-center gap-1 w-full"><Lock size={11} /> Güvenli ödeme · 256-bit SSL</p>
+              </div>
             )}
           </div>
         </div>
@@ -439,7 +483,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/50" onClick={() => setCheckout(false)}>
           <form onClick={(e) => e.stopPropagation()} onSubmit={odemeYap} className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5 space-y-3 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between"><h3 className="font-bold text-slate-800">Teslimat & Ödeme</h3><button type="button" onClick={() => setCheckout(false)}><X size={20} className="text-slate-400" /></button></div>
-            <div className="bg-slate-50 rounded-xl p-3 text-sm flex justify-between"><span className="text-slate-500">Ödenecek Tutar</span><span className="font-bold text-slate-900">{fmt(araToplam)}</span></div>
+            <div className="bg-slate-50 rounded-xl p-3 text-sm flex justify-between"><span className="text-slate-500">Ödenecek Tutar</span><span className="font-bold text-slate-900">{fmt(odenecek)}</span></div>
             <input required value={cust.ad} onChange={(e) => setCust({ ...cust, ad: e.target.value })} placeholder="Ad Soyad *" className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl" />
             <input required value={cust.telefon} onChange={(e) => setCust({ ...cust, telefon: e.target.value })} placeholder="Telefon *" className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl" />
             <input value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} placeholder="E-posta" className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl" />
