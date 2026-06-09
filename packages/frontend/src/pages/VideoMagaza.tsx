@@ -45,6 +45,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [paytrUrl, setPaytrUrl] = useState('');
   const [done, setDone] = useState<any>(null);
   const [legalModal, setLegalModal] = useState('');
+  const [siparisDetay, setSiparisDetay] = useState<any>(null);
   // İndirim kodu + sepet önizleme (kampanya/kupon otomatik)
   const [codeInput, setCodeInput] = useState('');
   const [discountCode, setDiscountCode] = useState('');
@@ -455,7 +456,53 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
         </div>
       )}
 
-      {/* Alt nav (mobil) */}
+      {/* Online mağaza sipariş detayı (storefront içinde) */}
+      {siparisDetay && (() => {
+        const o = siparisDetay; const dl = durumLbl(o.durum);
+        const ara = o.araToplam || ((o.toplam || 0) + (o.indirim || 0));
+        const odendi = (o.tahsilat || 0) >= (o.toplam || 0) - 0.01 && (o.toplam || 0) > 0;
+        return (
+          <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/60" onClick={() => setSiparisDetay(null)}>
+            <div onClick={(e) => e.stopPropagation()} className="w-full max-w-lg bg-white rounded-2xl max-h-[90vh] flex flex-col">
+              <div className="flex items-center justify-between p-4 border-b border-slate-100 shrink-0">
+                <div><h3 className="font-bold text-slate-800">Sipariş Detayı</h3><p className="text-[11px] text-slate-400">No: {o.orderNo ? `${o.orderYil}-${String(o.orderNo).padStart(3, '0')}` : o.id.slice(-5)} · {new Date(o.createdAt).toLocaleDateString('tr-TR')}</p></div>
+                <button onClick={() => setSiparisDetay(null)}><X size={20} className="text-slate-400" /></button>
+              </div>
+              <div className="p-4 overflow-y-auto space-y-4">
+                <div className="flex items-center justify-between gap-2"><span className={`text-xs px-2.5 py-1 rounded-full font-medium ${dl.c}`}>{dl.t}</span><span className={`text-xs px-2.5 py-1 rounded-full font-medium ${odendi ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{odendi ? 'Ödendi' : 'Ödeme Bekliyor'}</span></div>
+                {dl.step >= 0 && (
+                  <div className="flex items-center">
+                    {['Alındı', 'Hazırlanıyor', 'Kargoda', 'Teslim'].map((t, i, arr) => (
+                      <div key={t} className="flex items-center flex-1 last:flex-none">
+                        <div className="flex flex-col items-center shrink-0"><span className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${dl.step >= i + 1 ? 'bg-emerald-500 text-white' : 'bg-slate-200 text-slate-400'}`}>{dl.step >= i + 1 ? <Check size={12} /> : i + 1}</span><span className="text-[9px] text-slate-400 mt-0.5">{t}</span></div>
+                        {i < arr.length - 1 && <div className={`flex-1 h-0.5 mx-1 ${dl.step >= i + 2 ? 'bg-emerald-400' : 'bg-slate-200'}`} />}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {o.kargoTakip && <div className="bg-indigo-50 rounded-xl p-3"><p className="text-sm text-indigo-700 font-medium inline-flex items-center gap-1.5"><Truck size={14} /> {o.kargoFirmasi || 'Kargo'}</p><p className="text-xs text-slate-500 mt-0.5">Takip No: <b className="text-slate-700">{o.kargoTakip}</b></p></div>}
+                <div>
+                  <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Ürünler</p>
+                  <div className="space-y-2">{(o.items || []).map((it: any, i: number) => { const p = (data.products || []).find((x: any) => x.id === it.productId); const img = it.img || (p?.images || [])[0] || ''; return (
+                    <div key={i} className="flex items-center gap-2.5"><div className="w-11 h-11 rounded-lg bg-slate-100 overflow-hidden shrink-0">{img && <img src={img} className="w-full h-full object-cover" />}</div><div className="min-w-0 flex-1"><p className="text-[13px] font-medium text-slate-800 truncate">{it.ad}</p><p className="text-[11px] text-slate-400">{it.varyasyon ? `Beden: ${it.varyasyon} · ` : ''}Adet: {it.adet}</p></div><span className="text-sm font-semibold text-slate-800 shrink-0">{fmt((it.fiyat || 0) * (it.adet || 1))}</span></div>
+                  ); })}</div>
+                </div>
+                {o.adres && <div><p className="text-xs font-semibold text-slate-500 uppercase mb-1">Teslimat Adresi</p><p className="text-sm text-slate-600">{o.adres}</p></div>}
+                <div className="border-t border-slate-100 pt-3 space-y-1 text-sm">
+                  <div className="flex justify-between text-slate-500"><span>Ara Toplam</span><span>{fmt(ara)}</span></div>
+                  {(o.indirim || 0) > 0 && <div className="flex justify-between text-emerald-600"><span>İndirim</span><span>-{fmt(o.indirim)}</span></div>}
+                  <div className="flex justify-between text-slate-500"><span>Kargo</span><span className="text-emerald-600">Ücretsiz</span></div>
+                  <div className="flex justify-between font-bold text-slate-800 border-t border-slate-100 pt-1.5 mt-1"><span>Toplam</span><span className="text-indigo-600">{fmt(o.toplam)}</span></div>
+                </div>
+              </div>
+              <div className="p-3 border-t border-slate-100 flex items-center justify-between gap-2 shrink-0">
+                <span className="text-[11px] text-slate-400 inline-flex items-center gap-1"><ShieldCheck size={13} className="text-emerald-500" /> 256-bit SSL güvenli</span>
+                <button onClick={() => setSiparisDetay(null)} className="px-4 py-2 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-700">Kapat</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       <nav className="fixed bottom-0 left-0 right-0 sm:hidden bg-white border-t border-slate-100 px-2 py-1.5 flex items-center justify-between z-30">
         <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex flex-col items-center gap-0.5 text-indigo-600 flex-1"><Home size={20} /><span className="text-[10px]">Ana Sayfa</span></button>
         <button onClick={() => document.getElementById('urunler')?.scrollIntoView()} className="flex flex-col items-center gap-0.5 text-slate-400 flex-1"><LayoutGrid size={20} /><span className="text-[10px]">Kataloglar</span></button>
@@ -642,10 +689,10 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
                 <div className="space-y-2 max-h-72 overflow-y-auto">
                   {(hesap?.siparisler || []).length === 0 && <p className="text-sm text-slate-400">Henüz siparişiniz yok.</p>}
                   {(hesap?.siparisler || []).map((o: any) => (
-                    <div key={o.id} className="border border-slate-100 rounded-xl p-3 flex items-center justify-between">
-                      <div><p className="text-sm font-medium text-slate-800">{o.orderNo ? `${o.orderYil}-${String(o.orderNo).padStart(3, '0')}` : '#' + o.id.slice(-5)}</p><p className="text-[11px] text-slate-400">{new Date(o.createdAt).toLocaleDateString('tr-TR')} · {(o.items || []).length} ürün · {o.durum}</p>{o.kargoTakip && <p className="text-[11px] text-indigo-600">Kargo: {o.kargoFirmasi} · {o.kargoTakip}</p>}</div>
-                      <div className="text-right"><p className="font-bold text-slate-900">{fmt(o.toplam)}</p>{o.token && <a href={`/sepet/${o.token}`} className="text-[11px] text-indigo-600">Detay</a>}</div>
-                    </div>
+                    <button key={o.id} onClick={() => setSiparisDetay(o)} className="w-full text-left border border-slate-100 rounded-xl p-3 flex items-center justify-between hover:border-indigo-300 hover:bg-indigo-50/30 transition-colors">
+                      <div><p className="text-sm font-medium text-slate-800">{o.orderNo ? `${o.orderYil}-${String(o.orderNo).padStart(3, '0')}` : '#' + o.id.slice(-5)}</p><p className="text-[11px] text-slate-400">{new Date(o.createdAt).toLocaleDateString('tr-TR')} · {(o.items || []).length} ürün · {durumLbl(o.durum).t}</p>{o.kargoTakip && <p className="text-[11px] text-indigo-600">Kargo: {o.kargoFirmasi} · {o.kargoTakip}</p>}</div>
+                      <div className="text-right"><p className="font-bold text-slate-900">{fmt(o.toplam)}</p><span className="text-[11px] text-indigo-600">Detay →</span></div>
+                    </button>
                   ))}
                 </div>
                 <button onClick={cikis} className="w-full border border-slate-200 text-slate-600 py-2.5 rounded-xl font-medium hover:bg-slate-50">Çıkış Yap</button>
@@ -677,6 +724,19 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
 }
 
 // ───────── Sanal POS uyumlu yasal/kurumsal metinler ─────────
+function durumLbl(d: string): { t: string; c: string; step: number } {
+  const m: Record<string, { t: string; c: string; step: number }> = {
+    sepet: { t: 'Sepet', c: 'bg-slate-100 text-slate-600', step: 0 },
+    yeni: { t: 'Sipariş Alındı', c: 'bg-sky-100 text-sky-700', step: 1 },
+    onaylandi: { t: 'Onaylandı', c: 'bg-sky-100 text-sky-700', step: 1 },
+    hazirlaniyor: { t: 'Hazırlanıyor', c: 'bg-amber-100 text-amber-700', step: 2 },
+    kargoda: { t: 'Kargoda', c: 'bg-indigo-100 text-indigo-700', step: 3 },
+    tamamlandi: { t: 'Teslim Edildi', c: 'bg-green-100 text-green-700', step: 4 },
+    iptal: { t: 'İptal Edildi', c: 'bg-red-100 text-red-600', step: -1 },
+  };
+  return m[d] || { t: d || 'Sipariş Alındı', c: 'bg-slate-100 text-slate-600', step: 1 };
+}
+
 function legalContent(c: any, cfg: any): Record<string, { t: string; body: string }> {
   const unvan = c.unvan || c.magaza;
   const satici = `${unvan}${c.adres ? `\nAdres: ${c.adres}` : ''}${c.vkn ? `\nVergi/VKN: ${c.vkn}` : ''}${c.vd ? `\nVergi Dairesi: ${c.vd}` : ''}${c.mersis ? `\nMERSİS: ${c.mersis}` : ''}${c.tel ? `\nTelefon: ${c.tel}` : ''}${c.email ? `\nE-posta: ${c.email}` : ''}`;

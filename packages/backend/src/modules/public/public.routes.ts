@@ -196,7 +196,7 @@ router.get('/store/:slug/hesabim', asyncHandler(async (req: Request, res: Respon
   const orders = await prisma.storeOrder.findMany({ where: { tenantId: store.tenantId, customerId: cid, durum: { not: 'sepet' } }, orderBy: { createdAt: 'desc' }, take: 50 });
   res.json({
     musteri: { id: c.id, ad: c.ad, telefon: c.telefon, instagram: c.instagram, email: c.email, adres: c.adres, bakiye: c.bakiye, indirimYuzde: c.indirimYuzde, musteriNo: c.musteriNo },
-    siparisler: orders.map((o) => ({ id: o.id, token: o.token, orderNo: o.orderNo, orderYil: o.orderYil, durum: o.durum, toplam: o.toplam, kargoTakip: o.kargoTakip, kargoFirmasi: o.kargoFirmasi, createdAt: o.createdAt, items: o.items })),
+    siparisler: orders.map((o) => ({ id: o.id, token: o.token, orderNo: o.orderNo, orderYil: o.orderYil, durum: o.durum, kanal: o.kanal, toplam: o.toplam, araToplam: o.araToplam, indirim: o.indirim, tahsilat: o.tahsilat, adres: o.adres, kargoTakip: o.kargoTakip, kargoFirmasi: o.kargoFirmasi, createdAt: o.createdAt, items: o.items })),
   });
 }));
 
