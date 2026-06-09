@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Store, Save, Plus, Trash2, ArrowUp, ArrowDown, Tag, ExternalLink, GripVertical, Star, Percent, X, Menu, ChevronRight,
-  ShoppingBag, Users, TrendingUp, Eye, Package, CreditCard, Wrench, Bell, ChevronRight as ArrowR, Megaphone, PackagePlus, FileText, Pencil, SlidersHorizontal, Truck, Palette, Search, Share2, Image as ImageIcon, BarChart3, Folder,
+  ShoppingBag, Users, TrendingUp, Eye, Package, CreditCard, Wrench, Bell, ChevronRight as ArrowR, Megaphone, PackagePlus, FileText, Pencil, SlidersHorizontal, Truck, Palette, Search, Share2, Image as ImageIcon, BarChart3, Folder, Sparkles, LayoutGrid,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
@@ -33,6 +33,8 @@ const AYARLAR_NAV: { k: string; t: string; sub: string; Ic: any }[] = [
   { k: 'bilgi', t: 'Mağaza Bilgileri', sub: 'Mağaza adı, adres, logo ve açıklama', Ic: Store },
   { k: 'banner', t: 'Banner & Slaytlar', sub: 'Hero görsel, başlık ve slaytlar', Ic: ImageIcon },
   { k: 'menu', t: 'Üst Menü', sub: 'Mağaza üst menüsü ve kategoriler', Ic: Menu },
+  { k: 'story', t: 'Hikayeler (Story)', sub: 'Ana sayfa hikaye daireleri ve bağlantıları', Ic: Sparkles },
+  { k: 'widget', t: 'Vitrin Widget’ları', sub: 'Renkli tanıtım kartları ve link yönlendirme', Ic: LayoutGrid },
   { k: 'kargo', t: 'Kargo & Teslimat', sub: 'Kargo eşiği, ücreti ve VIP puan', Ic: Truck },
   { k: 'odeme', t: 'Ödeme Ayarları', sub: 'Banka, IBAN ve ödeme yöntemleri', Ic: CreditCard },
   { k: 'kupon', t: 'Kupon Kodları', sub: 'İndirim kuponları', Ic: Tag },
@@ -51,7 +53,7 @@ export default function OnlineMagaza() {
   const [period, setPeriod] = useState(7);
   const [overview, setOverview] = useState<any>(null);
 
-  const [s, setS] = useState<any>({ active: false, slug: '', logoText: '', heroTitle: '', heroSubtitle: '', heroImage: '', heroVideo: '', bankaAd: '', iban: '', hesapSahibi: '', slides: [] as any[], productOrder: [] as string[], topMenu: [] as any[], freeShipThreshold: 0, puanOrani: 0, config: { ...DEFAULT_CONFIG } });
+  const [s, setS] = useState<any>({ active: false, slug: '', logoText: '', heroTitle: '', heroSubtitle: '', heroImage: '', heroVideo: '', bankaAd: '', iban: '', hesapSahibi: '', slides: [] as any[], stories: [] as any[], widgets: [] as any[], productOrder: [] as string[], topMenu: [] as any[], freeShipThreshold: 0, puanOrani: 0, config: { ...DEFAULT_CONFIG } });
   const [aTab, setATab] = useState('bilgi');
   const [paytr, setPaytr] = useState<any>({ merchant_id: '', merchant_key: '', merchant_salt: '', mode: 'TEST', enabled: false });
   useEffect(() => { api.get('/store/paytr').then((r) => setPaytr((p: any) => ({ ...p, ...r.data }))).catch(() => {}); }, []);
@@ -73,7 +75,7 @@ export default function OnlineMagaza() {
   const [editForm, setEditForm] = useState<any>({ satisFiyat: '', eskiFiyat: '', aciklama: '', oneCikan: false, collections: [] as string[] });
 
   useEffect(() => {
-    if (storeSetting) setS({ active: storeSetting.active, slug: storeSetting.slug || '', logoText: storeSetting.logoText || '', heroTitle: storeSetting.heroTitle || '', heroSubtitle: storeSetting.heroSubtitle || '', heroImage: storeSetting.heroImage || '', heroVideo: storeSetting.heroVideo || '', bankaAd: storeSetting.bankaAd || '', iban: storeSetting.iban || '', hesapSahibi: storeSetting.hesapSahibi || '', slides: storeSetting.slides || [], productOrder: storeSetting.productOrder || [], topMenu: storeSetting.topMenu || [], freeShipThreshold: storeSetting.freeShipThreshold || 0, puanOrani: storeSetting.puanOrani || 0, config: { ...DEFAULT_CONFIG, ...(storeSetting.config || {}) } });
+    if (storeSetting) setS({ active: storeSetting.active, slug: storeSetting.slug || '', logoText: storeSetting.logoText || '', heroTitle: storeSetting.heroTitle || '', heroSubtitle: storeSetting.heroSubtitle || '', heroImage: storeSetting.heroImage || '', heroVideo: storeSetting.heroVideo || '', bankaAd: storeSetting.bankaAd || '', iban: storeSetting.iban || '', hesapSahibi: storeSetting.hesapSahibi || '', slides: storeSetting.slides || [], stories: storeSetting.stories || [], widgets: storeSetting.widgets || [], productOrder: storeSetting.productOrder || [], topMenu: storeSetting.topMenu || [], freeShipThreshold: storeSetting.freeShipThreshold || 0, puanOrani: storeSetting.puanOrani || 0, config: { ...DEFAULT_CONFIG, ...(storeSetting.config || {}) } });
   }, [storeSetting]);
 
   useEffect(() => { api.get(`/store/live/overview?days=${period || 30}`).then((r) => setOverview(r.data)).catch(() => setOverview(null)); }, [period]);
@@ -176,7 +178,21 @@ export default function OnlineMagaza() {
   const setChild = (mid: string, ci: number, patch: any) => setS((x: any) => ({ ...x, topMenu: x.topMenu.map((m: any) => m.id === mid ? { ...m, children: m.children.map((c: any, idx: number) => idx === ci ? { ...c, ...patch } : c) } : m) }));
   const delChild = (mid: string, ci: number) => setS((x: any) => ({ ...x, topMenu: x.topMenu.map((m: any) => m.id === mid ? { ...m, children: m.children.filter((_: any, idx: number) => idx !== ci) } : m) }));
 
-  const buildBody = (over?: any) => ({ active: s.active, slug: s.slug || null, logoText: s.logoText || null, heroTitle: s.heroTitle || null, heroSubtitle: s.heroSubtitle || null, heroImage: s.heroImage || null, heroVideo: s.heroVideo || null, bankaAd: s.bankaAd || null, iban: s.iban || null, hesapSahibi: s.hesapSahibi || null, slides: s.slides, productOrder: s.productOrder, topMenu: s.topMenu, config: s.config, freeShipThreshold: Number(s.freeShipThreshold) || 0, puanOrani: Number(s.puanOrani) || 0, ...over });
+  // ── Story yönetimi ──
+  const addStory = () => setS((x: any) => ({ ...x, stories: [...(x.stories || []), { id: 'st' + Date.now(), image: '', title: 'Yeni Hikaye', link: { type: 'filtre', value: 'yeni' } }] }));
+  const setStory = (id: string, patch: any) => setS((x: any) => ({ ...x, stories: (x.stories || []).map((it: any) => it.id === id ? { ...it, ...patch } : it) }));
+  const delStory = (id: string) => setS((x: any) => ({ ...x, stories: (x.stories || []).filter((it: any) => it.id !== id) }));
+  const moveStory = (id: string, dir: -1 | 1) => setS((x: any) => { const arr = [...(x.stories || [])]; const i = arr.findIndex((it: any) => it.id === id); const j = i + dir; if (j < 0 || j >= arr.length) return x; [arr[i], arr[j]] = [arr[j], arr[i]]; return { ...x, stories: arr }; });
+
+  // ── Vitrin widget yönetimi ──
+  const WIDGET_COLORS = ['#7c3aed', '#db2777', '#0ea5e9', '#f59e0b', '#10b981', '#ef4444', '#6366f1', '#0f172a'];
+  const addWidget = () => setS((x: any) => ({ ...x, widgets: [...(x.widgets || []), { id: 'wg' + Date.now(), title: 'Yeni Widget', subtitle: '', badge: '', image: '', color: WIDGET_COLORS[(x.widgets || []).length % WIDGET_COLORS.length], ctaLabel: 'İncele', link: { type: 'filtre', value: 'indirim' } }] }));
+  const setWidget = (id: string, patch: any) => setS((x: any) => ({ ...x, widgets: (x.widgets || []).map((it: any) => it.id === id ? { ...it, ...patch } : it) }));
+  const delWidget = (id: string) => setS((x: any) => ({ ...x, widgets: (x.widgets || []).filter((it: any) => it.id !== id) }));
+  const moveWidget = (id: string, dir: -1 | 1) => setS((x: any) => { const arr = [...(x.widgets || [])]; const i = arr.findIndex((it: any) => it.id === id); const j = i + dir; if (j < 0 || j >= arr.length) return x; [arr[i], arr[j]] = [arr[j], arr[i]]; return { ...x, widgets: arr }; });
+
+
+  const buildBody = (over?: any) => ({ active: s.active, slug: s.slug || null, logoText: s.logoText || null, heroTitle: s.heroTitle || null, heroSubtitle: s.heroSubtitle || null, heroImage: s.heroImage || null, heroVideo: s.heroVideo || null, bankaAd: s.bankaAd || null, iban: s.iban || null, hesapSahibi: s.hesapSahibi || null, slides: s.slides, stories: s.stories, widgets: s.widgets, productOrder: s.productOrder, topMenu: s.topMenu, config: s.config, freeShipThreshold: Number(s.freeShipThreshold) || 0, puanOrani: Number(s.puanOrani) || 0, ...over });
   const setCfg = (k: string, v: any) => setS((x: any) => ({ ...x, config: { ...x.config, [k]: v } }));
   const cfg = s.config || DEFAULT_CONFIG;
   const save = async () => { try { await api.put('/store/settings', buildBody()); toast.success('Mağaza ayarları kaydedildi'); reload(); } catch (e) { toast.error(apiErrorMessage(e)); } };
@@ -536,6 +552,72 @@ export default function OnlineMagaza() {
                       </div>
                     ))}
                     <button onClick={() => addChild(m.id)} className="inline-flex items-center gap-1 text-xs text-indigo-600"><Plus size={13} /> Alt Menü Ekle</button>
+                  </div>
+                </div>
+              ))}</div>
+            )}
+          </div>
+          )}
+
+          {/* ── Hikayeler (Story) ── */}
+          {aTab === 'story' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5">
+            <div className="flex items-center justify-between mb-1"><h3 className="font-semibold text-slate-700 flex items-center gap-2"><Sparkles size={16} className="text-indigo-600" /> Hikayeler (Story)</h3><button onClick={addStory} className="inline-flex items-center gap-1 text-sm text-indigo-600"><Plus size={15} /> Hikaye Ekle</button></div>
+            <p className="text-xs text-slate-400 mb-3">Ana sayfada slider altında görünen yuvarlak hikayeler. Her hikayeye görsel, başlık ve bir bağlantı tanımlayın. Müşteri hikayeye dokununca tam ekran açılır ve bağlantıya yönlenebilir.</p>
+            {(s.stories || []).length === 0 ? <p className="text-sm text-slate-400">Henüz hikaye yok. “Hikaye Ekle” ile başlayın.</p> : (
+              <div className="space-y-3">{s.stories.map((st: any, i: number) => (
+                <div key={st.id} className="grid md:grid-cols-[110px_1fr_auto] gap-3 items-start border border-slate-200 rounded-xl p-3 bg-slate-50/50">
+                  <ImageDropzone images={st.image ? [st.image] : []} onChange={(imgs) => setStory(st.id, { image: imgs[0] || '' })} max={1} />
+                  <div className="space-y-2">
+                    <input value={st.title} onChange={(e) => setStory(st.id, { title: e.target.value })} placeholder="Hikaye başlığı (Yeni Sezon)" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg font-medium" />
+                    <LinkFields value={st.link} onChange={(lk: any) => setStory(st.id, { link: lk })} categories={categories} collections={cfg.collections || []} products={products} />
+                  </div>
+                  <div className="flex md:flex-col gap-1">
+                    <button onClick={() => moveStory(st.id, -1)} disabled={i === 0} className="p-1.5 text-slate-400 hover:text-indigo-600 disabled:opacity-30"><ArrowUp size={15} /></button>
+                    <button onClick={() => moveStory(st.id, 1)} disabled={i === s.stories.length - 1} className="p-1.5 text-slate-400 hover:text-indigo-600 disabled:opacity-30"><ArrowDown size={15} /></button>
+                    <button onClick={() => delStory(st.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500"><Trash2 size={15} /></button>
+                  </div>
+                </div>
+              ))}</div>
+            )}
+          </div>
+          )}
+
+          {/* ── Vitrin Widget'ları ── */}
+          {aTab === 'widget' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5">
+            <div className="flex items-center justify-between mb-1"><h3 className="font-semibold text-slate-700 flex items-center gap-2"><LayoutGrid size={16} className="text-indigo-600" /> Vitrin Widget’ları</h3><button onClick={addWidget} className="inline-flex items-center gap-1 text-sm text-indigo-600"><Plus size={15} /> Widget Ekle</button></div>
+            <p className="text-xs text-slate-400 mb-3">Ürün listesinin üstünde görünen renkli tanıtım kartları (Günün Fırsatı, Yeni Gelenler, İndirimli Ürünler…). Her karta başlık, rozet, renk/görsel, buton metni ve bir bağlantı tanımlayın.</p>
+            {(s.widgets || []).length === 0 ? <p className="text-sm text-slate-400">Henüz widget yok. “Widget Ekle” ile başlayın.</p> : (
+              <div className="space-y-3">{s.widgets.map((w: any, i: number) => (
+                <div key={w.id} className="grid lg:grid-cols-[220px_1fr_auto] gap-3 items-start border border-slate-200 rounded-xl p-3 bg-slate-50/50">
+                  {/* Canlı önizleme */}
+                  <div className="rounded-2xl p-3 text-white relative overflow-hidden min-h-[96px] flex flex-col justify-between" style={{ background: w.image ? undefined : `linear-gradient(135deg, ${w.color || '#7c3aed'}, ${w.color || '#7c3aed'}cc)` }}>
+                    {w.image && <img src={w.image} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60" />}
+                    <div className="relative">
+                      {w.badge && <span className="inline-block text-[9px] font-bold bg-white/25 px-1.5 py-0.5 rounded-full mb-1">{w.badge}</span>}
+                      <p className="font-extrabold text-sm leading-tight drop-shadow">{w.title || 'Başlık'}</p>
+                      {w.subtitle && <p className="text-[11px] text-white/90 mt-0.5 drop-shadow">{w.subtitle}</p>}
+                    </div>
+                    <span className="relative inline-flex w-fit items-center gap-1 text-[11px] font-semibold bg-white/90 text-slate-800 px-2 py-1 rounded-full mt-2">{w.ctaLabel || 'İncele'} →</span>
+                  </div>
+                  <div className="space-y-2">
+                    <div className="flex gap-2">
+                      <input value={w.title} onChange={(e) => setWidget(w.id, { title: e.target.value })} placeholder="Başlık (Günün Fırsatı)" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg font-medium" />
+                      <input value={w.badge || ''} onChange={(e) => setWidget(w.id, { badge: e.target.value })} placeholder="Rozet (opsiyonel)" className="w-40 px-3 py-2 text-sm border border-slate-200 rounded-lg" />
+                    </div>
+                    <input value={w.subtitle || ''} onChange={(e) => setWidget(w.id, { subtitle: e.target.value })} placeholder="Alt başlık / açıklama" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
+                    <div className="flex gap-2 items-center flex-wrap">
+                      <input value={w.ctaLabel || ''} onChange={(e) => setWidget(w.id, { ctaLabel: e.target.value })} placeholder="Buton metni (İncele)" className="w-40 px-3 py-2 text-sm border border-slate-200 rounded-lg" />
+                      <div className="flex items-center gap-1">{WIDGET_COLORS.map((c) => <button key={c} onClick={() => setWidget(w.id, { color: c, image: '' })} className={`w-6 h-6 rounded-full border-2 ${w.color === c && !w.image ? 'border-slate-800' : 'border-white'}`} style={{ background: c }} />)}</div>
+                      <div className="w-32"><ImageDropzone images={w.image ? [w.image] : []} onChange={(imgs) => setWidget(w.id, { image: imgs[0] || '' })} max={1} /></div>
+                    </div>
+                    <LinkFields value={w.link} onChange={(lk: any) => setWidget(w.id, { link: lk })} categories={categories} collections={cfg.collections || []} products={products} />
+                  </div>
+                  <div className="flex lg:flex-col gap-1">
+                    <button onClick={() => moveWidget(w.id, -1)} disabled={i === 0} className="p-1.5 text-slate-400 hover:text-indigo-600 disabled:opacity-30"><ArrowUp size={15} /></button>
+                    <button onClick={() => moveWidget(w.id, 1)} disabled={i === s.widgets.length - 1} className="p-1.5 text-slate-400 hover:text-indigo-600 disabled:opacity-30"><ArrowDown size={15} /></button>
+                    <button onClick={() => delWidget(w.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-red-500"><Trash2 size={15} /></button>
                   </div>
                 </div>
               ))}</div>
@@ -963,4 +1045,31 @@ function Quick({ icon: Ic, label, onClick }: any) {
 
 function MiniStat({ label, value, cls }: { label: string; value: string; cls: string }) {
   return <div className="bg-white rounded-2xl border border-slate-200 p-4"><p className="text-[11px] text-slate-400">{label}</p><p className={`text-2xl font-bold mt-1 ${cls}`}>{value}</p></div>;
+}
+
+// Story / Widget bağlantı seçici — { type, value }
+function LinkFields({ value, onChange, categories, collections, products }: { value: any; onChange: (lk: any) => void; categories: any[]; collections: any[]; products: any[] }) {
+  const link = value || { type: 'filtre', value: 'yeni' };
+  const set = (patch: any) => onChange({ ...link, ...patch });
+  const sel = 'px-2 py-1.5 text-sm border border-slate-200 rounded-lg bg-white';
+  const defVal = (t: string) => t === 'kategori' ? (categories[0]?.id || '') : t === 'cinsiyet' ? 'kadin' : t === 'koleksiyon' ? (collections[0]?.id || '') : t === 'urun' ? (products[0]?.id || '') : t === 'url' ? '' : 'yeni';
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      <span className="text-[11px] font-semibold text-slate-400 inline-flex items-center gap-1"><ExternalLink size={12} /> Bağlantı</span>
+      <select value={link.type} onChange={(e) => set({ type: e.target.value, value: defVal(e.target.value) })} className={sel}>
+        <option value="filtre">Özel Filtre</option>
+        <option value="kategori">Kategori</option>
+        <option value="cinsiyet">Cinsiyet</option>
+        <option value="koleksiyon">Koleksiyon</option>
+        <option value="urun">Ürün</option>
+        <option value="url">Dış Bağlantı (URL)</option>
+      </select>
+      {link.type === 'filtre' && <select value={link.value} onChange={(e) => set({ value: e.target.value })} className={sel}>{[['yeni', 'Yeni Gelenler'], ['indirim', 'İndirimdekiler'], ['coksatan', 'Öne Çıkanlar'], ['sonsans', 'Son Şans'], ['tumu', 'Tümü']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>}
+      {link.type === 'kategori' && <select value={link.value} onChange={(e) => set({ value: e.target.value })} className={sel}>{categories.map((c) => <option key={c.id} value={c.id}>{c.ad}</option>)}</select>}
+      {link.type === 'cinsiyet' && <select value={link.value} onChange={(e) => set({ value: e.target.value })} className={sel}>{[['kadin', 'Kadın'], ['erkek', 'Erkek'], ['cocuk', 'Çocuk'], ['unisex', 'Unisex']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>}
+      {link.type === 'koleksiyon' && (collections.length ? <select value={link.value} onChange={(e) => set({ value: e.target.value })} className={sel}>{collections.map((c: any) => <option key={c.id} value={c.id}>{c.ad}</option>)}</select> : <span className="text-[11px] text-amber-500">Önce Vitrin sekmesinden koleksiyon ekleyin</span>)}
+      {link.type === 'urun' && <select value={link.value} onChange={(e) => set({ value: e.target.value })} className={`${sel} max-w-[220px]`}>{products.map((p: any) => <option key={p.id} value={p.id}>{p.ad}</option>)}</select>}
+      {link.type === 'url' && <input value={link.value || ''} onChange={(e) => set({ value: e.target.value })} placeholder="https://..." className="px-2 py-1.5 text-sm border border-slate-200 rounded-lg flex-1 min-w-[180px]" />}
+    </div>
+  );
 }

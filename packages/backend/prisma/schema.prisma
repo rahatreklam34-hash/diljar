@@ -839,6 +839,8 @@ model StoreSetting {
   iban         String?
   hesapSahibi  String?
   slides       Json? // [{image,title,subtitle,cta}]
+  stories      Json? // [{id,image,title,link:{type,value}}] hikaye daireleri
+  widgets      Json? // [{id,title,subtitle,badge,image,color,ctaLabel,link:{type,value}}] vitrin kartlari
   productOrder Json? // [productId, ...]
   topMenu      Json? // [{id,label,type,value,children:[{label,type,value}]}] üst menü yapısı
   config       Json? // gelişmiş mağaza ayarları (iletişim, sosyal, tema, seo, kargo, ödeme, bildirim, politika)

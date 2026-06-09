@@ -131,6 +131,8 @@ router.get('/store/:slug', asyncHandler(async (req: Request, res: Response) => {
     logoText: data.store.logoText || data.tenant?.name,
     hero: { title: data.store.heroTitle, subtitle: data.store.heroSubtitle, image: data.store.heroImage, video: data.store.heroVideo },
     slides: Array.isArray(data.store.slides) ? data.store.slides : [],
+    stories: Array.isArray(data.store.stories) ? data.store.stories : [],
+    widgets: Array.isArray(data.store.widgets) ? data.store.widgets : [],
     topMenu: Array.isArray(data.store.topMenu) ? data.store.topMenu : [],
     config: data.store.config || {},
     freeShipThreshold: data.store.freeShipThreshold || 0,

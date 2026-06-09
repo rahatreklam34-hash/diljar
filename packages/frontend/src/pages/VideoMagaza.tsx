@@ -46,6 +46,8 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [done, setDone] = useState<any>(null);
   const [legalModal, setLegalModal] = useState('');
   const [siparisDetay, setSiparisDetay] = useState<any>(null);
+  const [slideIdx, setSlideIdx] = useState(0);
+  const [storyView, setStoryView] = useState<number | null>(null);
   // Sepeti localStorage'a kaydet (ürün detay sayfasından eklenenler de görünsün)
   useEffect(() => { try { localStorage.setItem('wt_cart', JSON.stringify(cart)); } catch { /* */ } }, [cart]);
   // Ürün detayından "Sepete Ekle" sonrası sepet ekranını aç (?cart=1)
@@ -100,6 +102,9 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
 
   const products: any[] = data?.products || [];
   const topMenu: any[] = Array.isArray(data?.topMenu) ? data.topMenu : [];
+  const slides: any[] = Array.isArray(data?.slides) ? data.slides.filter((sl: any) => sl && (sl.image || sl.title)) : [];
+  const stories: any[] = Array.isArray(data?.stories) ? data.stories.filter((st: any) => st && (st.image || st.title)) : [];
+  const widgets: any[] = Array.isArray(data?.widgets) ? data.widgets.filter((w: any) => w && w.title) : [];
   // Filtre havuzları
   const GENDER_LBL: Record<string, string> = { kadin: 'Kadın', erkek: 'Erkek', cocuk: 'Çocuk', unisex: 'Unisex' };
   const allGenders = useMemo(() => [...new Set(products.map((p) => p.cinsiyet).filter(Boolean))], [products]);
@@ -110,6 +115,39 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const clearFilters = () => { setGenderSel(new Set()); setBrandSel(new Set()); setSizeSel(new Set()); setPriceMin(''); setPriceMax(''); };
   // Menü öğesini filtre anahtarına çevir
   const katKey = (it: any) => it.type === 'kategori' ? `kat:${it.value}` : it.type === 'cinsiyet' ? `cins:${it.value}` : it.value;
+
+  // Story / Widget bağlantısını çöz (mağaza içi filtre/kategori/ürün veya dış URL)
+  const goProducts = () => setTimeout(() => document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }), 60);
+  const resolveLink = (link: any) => {
+    if (!link || !link.type) { goProducts(); return; }
+    const v = link.value;
+    if (link.type === 'url') { if (v) window.open(v, '_blank', 'noopener'); return; }
+    if (link.type === 'urun') { if (v) nav(`/urun/${v}`); return; }
+    if (link.type === 'kategori') setKat(`kat:${v}`);
+    else if (link.type === 'cinsiyet') setKat(`cins:${v}`);
+    else if (link.type === 'koleksiyon') setKat('tumu');
+    else setKat(v || 'tumu'); // filtre: yeni/indirim/coksatan/sonsans/tumu
+    goProducts();
+  };
+
+  // Slider otomatik dönüş
+  useEffect(() => {
+    if (slides.length < 2) return;
+    const t = setInterval(() => setSlideIdx((i) => (i + 1) % slides.length), 4500);
+    return () => clearInterval(t);
+  }, [slides.length]);
+  useEffect(() => { if (slideIdx >= slides.length) setSlideIdx(0); }, [slides.length, slideIdx]);
+
+  // Bölümlü listeleme (Öne Çıkanlar / Fiyatı Düşenler / Yeni Gelenler / Son Şans)
+  const sections = useMemo(() => {
+    const byNew = [...products].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+    return [
+      { key: 'coksatan', title: 'Öne Çıkanlar', items: products.filter((p) => p.oneCikan).slice(0, 12) },
+      { key: 'indirim', title: 'Fiyatı Düşenler', items: products.filter((p) => disc(p.eskiFiyat, p.satisFiyat) > 0).sort((a, b) => disc(b.eskiFiyat, b.satisFiyat) - disc(a.eskiFiyat, a.satisFiyat)).slice(0, 12) },
+      { key: 'yeni', title: 'Yeni Gelenler', items: byNew.slice(0, 12) },
+      { key: 'sonsans', title: 'Son Şans', items: products.filter((p) => (p.stokAdeti || 0) > 0 && (p.stokAdeti || 0) <= 5).slice(0, 12) },
+    ].filter((s) => s.items.length > 0);
+  }, [products]);
 
   // ── Canlı ziyaretçi takibi (presence + olay) ──
   const sessionId = useMemo(() => { let s = localStorage.getItem('wt_sess'); if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('wt_sess', s); } return s; }, []);
@@ -276,30 +314,32 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
           <button onClick={() => setAcc(true)} className="hidden sm:inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-indigo-600"><User size={18} /> {shopUser ? shopUser.ad.split(' ')[0] : 'Üye Ol / Giriş'}</button>
           <button onClick={() => setCartOpen(true)} className="relative"><ShoppingBag size={22} className="text-slate-700" />{count > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] flex items-center justify-center">{count}</span>}</button>
         </div>
-        {/* Üst menü (web) */}
-        <nav className="hidden sm:block border-t border-slate-100 bg-white">
-          <div className="max-w-6xl mx-auto px-4 flex items-center gap-1">
-            {topMenu.length > 0 ? topMenu.map((m: any) => {
-              const key = katKey(m);
-              const hasChildren = Array.isArray(m.children) && m.children.length > 0;
+        {/* Üst menü (web) — modern hap tarzı */}
+        <nav className="hidden sm:block border-t border-slate-100 bg-white/80 backdrop-blur">
+          <div className="max-w-6xl mx-auto px-4 flex items-center gap-2 py-2">
+            {(topMenu.length > 0
+              ? topMenu.map((m: any) => ({ key: katKey(m), label: m.label, children: m.children || [] }))
+              : KATLAR.map((c) => ({ key: c.k, label: c.t, children: [] as any[] }))
+            ).map((m: any) => {
+              const active = kat === m.key || (m.children || []).some((c: any) => kat === katKey(c));
               return (
-                <div key={m.id} className="relative group">
-                  <button onClick={() => { setKat(key); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className={`px-3 py-2.5 text-sm font-medium border-b-2 inline-flex items-center gap-1 ${kat === key ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-600 hover:text-indigo-600'}`}>{m.label}{hasChildren && <ChevronDown size={13} />}</button>
-                  {hasChildren && (
-                    <div className="absolute left-0 top-full hidden group-hover:block bg-white border border-slate-100 rounded-xl shadow-lg py-1 min-w-[180px] z-40">
-                      {m.children.map((c: any, ci: number) => { const ck = katKey(c); return (
-                        <button key={ci} onClick={() => { setKat(ck); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className={`w-full text-left px-4 py-2 text-sm hover:bg-slate-50 ${kat === ck ? 'text-indigo-600 font-medium' : 'text-slate-600'}`}>{c.label}</button>
-                      ); })}
+                <div key={m.key} className="relative group">
+                  <button onClick={() => { setKat(m.key); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className={`px-4 py-2 text-sm font-semibold rounded-full inline-flex items-center gap-1 transition-colors ${active ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' : 'text-slate-600 hover:bg-slate-100'}`}>{m.label}{(m.children || []).length > 0 && <ChevronDown size={13} />}</button>
+                  {(m.children || []).length > 0 && (
+                    <div className="absolute left-0 top-full pt-1 hidden group-hover:block z-40">
+                      <div className="bg-white border border-slate-100 rounded-2xl shadow-xl py-1.5 min-w-[190px]">
+                        {m.children.map((c: any, ci: number) => { const ck = katKey(c); return (
+                          <button key={ci} onClick={() => { setKat(ck); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className={`w-full text-left px-4 py-2 text-sm hover:bg-indigo-50 hover:text-indigo-600 rounded-lg ${kat === ck ? 'text-indigo-600 font-medium' : 'text-slate-600'}`}>{c.label}</button>
+                        ); })}
+                      </div>
                     </div>
                   )}
                 </div>
               );
-            }) : KATLAR.map((c) => (
-              <button key={c.k} onClick={() => { setKat(c.k); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className={`px-3 py-2.5 text-sm font-medium border-b-2 ${kat === c.k ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-600 hover:text-indigo-600'}`}>{c.t}</button>
-            ))}
-            <span className="ml-auto flex items-center gap-4">
-              <button onClick={() => setAcc(true)} className="text-sm text-slate-600 hover:text-indigo-600">Hesabım</button>
-              <button onClick={() => setCartOpen(true)} className="text-sm text-slate-600 hover:text-indigo-600">Sepetim</button>
+            })}
+            <span className="ml-auto flex items-center gap-1">
+              <button onClick={() => setAcc(true)} className="text-sm font-medium text-slate-500 hover:text-indigo-600 px-3 py-1.5 rounded-full hover:bg-slate-100">Hesabım</button>
+              <button onClick={() => setCartOpen(true)} className="text-sm font-medium text-slate-500 hover:text-indigo-600 px-3 py-1.5 rounded-full hover:bg-slate-100">Sepetim</button>
             </span>
           </div>
         </nav>
@@ -313,42 +353,78 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
           <div className="flex items-center gap-2">{[['SAAT', geri.s], ['DAKİKA', geri.dk], ['SANİYE', geri.sn]].map(([l, v]: any) => <div key={l} className="bg-white/10 rounded-lg px-2.5 py-1 text-center"><p className="text-lg font-bold tabular-nums leading-none">{String(v).padStart(2, '0')}</p><p className="text-[8px] text-white/50 mt-0.5">{l}</p></div>)}</div>
         </div>
 
-        {/* Hero — mor gradyan banner */}
-        <div className="mt-3 rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-600 to-indigo-800 text-white overflow-hidden relative">
-          <div className="relative p-6 sm:p-10 flex items-center">
-            <div className="flex-1 z-10">
-              <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-white/15 px-2.5 py-1 rounded-full mb-3"><Zap size={12} className="text-amber-300" /> KAÇIRILMAYACAK FIRSATLAR</span>
-              <h1 className="text-3xl sm:text-5xl font-extrabold leading-none tracking-tight">FIRSATLAR</h1>
-              <p className="text-lg sm:text-2xl font-bold text-white/90 mt-2">Büyük İndirim Fırsatları Başladı!</p>
-              <p className="inline-flex items-center gap-1.5 text-amber-300 font-semibold mt-2"><span className="text-xl">👟</span> Spor Ayakkabı Fırsatı — Sezonun en iyi indirimleri!</p>
-              <div className="flex flex-wrap gap-2 mt-4">
-                <button onClick={() => { setQ('ayakkab'); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className="bg-amber-400 text-slate-900 font-bold px-5 py-2.5 rounded-full text-sm hover:bg-amber-300 inline-flex items-center gap-1.5">👟 Spor Ayakkabıları Gör</button>
-                <button onClick={() => { setQ(''); setKat('indirim'); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className="bg-white text-indigo-700 font-semibold px-5 py-2.5 rounded-full text-sm hover:bg-indigo-50">Tüm Fırsatlar</button>
+        {/* Hareketli Slider (slides) — yoksa varsayılan hero */}
+        {slides.length > 0 ? (
+          <div className="mt-3 rounded-3xl overflow-hidden relative h-48 sm:h-72 bg-slate-900">
+            {slides.map((sl: any, i: number) => (
+              <div key={i} className={`absolute inset-0 transition-opacity duration-700 ${i === slideIdx ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+                {sl.image && <img src={sl.image} alt="" className="absolute inset-0 w-full h-full object-cover" />}
+                <div className="absolute inset-0 bg-gradient-to-r from-slate-900/80 via-slate-900/40 to-transparent" />
+                <div className="relative h-full flex flex-col justify-center p-6 sm:p-10 max-w-lg">
+                  {sl.title && <h1 className="text-2xl sm:text-4xl font-extrabold text-white leading-tight drop-shadow">{sl.title}</h1>}
+                  {sl.subtitle && <p className="text-sm sm:text-lg text-white/90 mt-2 drop-shadow">{sl.subtitle}</p>}
+                  {sl.cta && <button onClick={() => { setKat('indirim'); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className="mt-4 w-fit bg-white text-indigo-700 font-bold px-5 py-2.5 rounded-full text-sm hover:bg-indigo-50">{sl.cta}</button>}
+                </div>
+              </div>
+            ))}
+            {slides.length > 1 && (
+              <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 z-10">
+                {slides.map((_: any, i: number) => <button key={i} onClick={() => setSlideIdx(i)} className={`h-1.5 rounded-full transition-all ${i === slideIdx ? 'w-6 bg-white' : 'w-1.5 bg-white/50'}`} />)}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="mt-3 rounded-3xl bg-gradient-to-br from-violet-600 via-indigo-600 to-indigo-800 text-white overflow-hidden relative">
+            <div className="relative p-6 sm:p-10 flex items-center">
+              <div className="flex-1 z-10">
+                <span className="inline-flex items-center gap-1.5 text-[11px] font-bold bg-white/15 px-2.5 py-1 rounded-full mb-3"><Zap size={12} className="text-amber-300" /> KAÇIRILMAYACAK FIRSATLAR</span>
+                <h1 className="text-3xl sm:text-5xl font-extrabold leading-none tracking-tight">FIRSATLAR</h1>
+                <p className="text-lg sm:text-2xl font-bold text-white/90 mt-2">Büyük İndirim Fırsatları Başladı!</p>
+                <div className="flex flex-wrap gap-2 mt-4">
+                  <button onClick={() => { setQ(''); setKat('indirim'); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className="bg-white text-indigo-700 font-semibold px-5 py-2.5 rounded-full text-sm hover:bg-indigo-50">Tüm Fırsatlar</button>
+                </div>
+              </div>
+              <div className="hidden sm:flex relative w-48 h-40 shrink-0 items-center justify-center">
+                <div className="absolute top-2 left-2 w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center text-2xl font-extrabold rotate-12">%</div>
+                <Star size={24} className="absolute top-6 right-8 text-white/70 fill-white/70" />
+                <span className="text-[110px] leading-none drop-shadow-2xl -rotate-12">🛍️</span>
               </div>
             </div>
-            {/* Dekoratif grafikler */}
-            <div className="hidden sm:flex relative w-48 h-40 shrink-0 items-center justify-center">
-              <div className="absolute top-2 left-2 w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center text-2xl font-extrabold rotate-12">%</div>
-              <div className="absolute bottom-3 right-3 w-11 h-11 rounded-full bg-amber-400/90 flex items-center justify-center"><Zap size={20} className="text-white" /></div>
-              <Star size={24} className="absolute top-6 right-8 text-white/70 fill-white/70" />
-              <Star size={14} className="absolute bottom-10 left-6 text-white/50 fill-white/50" />
-              <span className="text-[110px] leading-none drop-shadow-2xl -rotate-12">👟</span>
-            </div>
           </div>
-        </div>
+        )}
 
-        {/* Kategori/filtre çipleri */}
-        <div className="flex gap-4 overflow-x-auto py-4">
-          {(topMenu.length > 0
-            ? topMenu.flatMap((m: any) => [{ k: katKey(m), t: m.label, icon: Zap }, ...((m.children || []).map((c: any) => ({ k: katKey(c), t: c.label, icon: Zap })))])
-            : KATLAR.map((c) => ({ k: c.k, t: c.t, icon: c.icon }))
-          ).map((c: any, idx: number) => { const Ic: any = c.icon; return (
-            <button key={c.k + idx} onClick={() => setKat(c.k)} className="flex flex-col items-center gap-1.5 shrink-0">
-              <span className={`w-14 h-14 rounded-full flex items-center justify-center ${kat === c.k ? 'bg-indigo-600 text-white' : 'bg-white text-slate-500 border border-slate-100'}`}><Ic size={20} /></span>
-              <span className={`text-[11px] ${kat === c.k ? 'text-indigo-600 font-semibold' : 'text-slate-500'}`}>{c.t}</span>
-            </button>
-          ); })}
-        </div>
+        {/* Hikayeler (Story) */}
+        {stories.length > 0 && (
+          <div className="flex gap-4 overflow-x-auto py-4 wt-scroll">
+            {stories.map((st: any, i: number) => (
+              <button key={st.id || i} onClick={() => setStoryView(i)} className="flex flex-col items-center gap-1.5 shrink-0 w-[68px]">
+                <span className="w-16 h-16 rounded-full p-[2.5px] bg-gradient-to-tr from-amber-400 via-pink-500 to-indigo-600">
+                  <span className="block w-full h-full rounded-full bg-white p-[2px] overflow-hidden">
+                    {st.image ? <img src={st.image} alt="" className="w-full h-full rounded-full object-cover" /> : <span className="w-full h-full rounded-full bg-slate-100 flex items-center justify-center text-slate-400"><Zap size={20} /></span>}
+                  </span>
+                </span>
+                <span className="text-[11px] text-slate-600 text-center leading-tight line-clamp-1 w-full">{st.title}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Vitrin Widget kartları */}
+        {widgets.length > 0 && (
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-1">
+            {widgets.map((w: any) => (
+              <button key={w.id} onClick={() => resolveLink(w.link)} className="text-left rounded-2xl p-4 text-white relative overflow-hidden min-h-[120px] flex flex-col justify-between hover:brightness-105 transition" style={{ background: w.image ? undefined : `linear-gradient(135deg, ${w.color || '#7c3aed'}, ${w.color || '#7c3aed'}cc)` }}>
+                {w.image && <><img src={w.image} alt="" className="absolute inset-0 w-full h-full object-cover" /><span className="absolute inset-0 bg-black/35" /></>}
+                <div className="relative">
+                  {w.badge && <span className="inline-block text-[9px] font-bold bg-white/25 px-2 py-0.5 rounded-full mb-1.5">{w.badge}</span>}
+                  <p className="font-extrabold leading-tight drop-shadow">{w.title}</p>
+                  {w.subtitle && <p className="text-[11px] text-white/90 mt-1 drop-shadow line-clamp-2">{w.subtitle}</p>}
+                </div>
+                <span className="relative inline-flex w-fit items-center gap-1 text-[11px] font-semibold bg-white/95 text-slate-800 px-2.5 py-1 rounded-full mt-2">{w.ctaLabel || 'İncele'} →</span>
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Sırala + filtre + görünüm */}
         <div id="urunler" className="flex items-center gap-2 mb-3 flex-wrap">
@@ -406,7 +482,21 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
           </div>
         )}
 
+        {/* Bölümlü vitrin (varsayılan görünüm) */}
+        {(kat === 'tumu' && !q && activeFilterCount === 0) && sections.map((sec) => (
+          <div key={sec.key} className="mb-5">
+            <div className="flex items-center justify-between mb-2">
+              <h2 className="text-base font-bold text-slate-800">{sec.title}</h2>
+              <button onClick={() => { setKat(sec.key); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-xs font-semibold text-indigo-600 hover:underline">Tümünü Gör →</button>
+            </div>
+            <div className="flex gap-3 overflow-x-auto pb-2 wt-scroll">
+              {sec.items.map((p: any) => <div key={p.id} className="w-40 sm:w-48 shrink-0"><Card p={p} /></div>)}
+            </div>
+          </div>
+        ))}
+
         {/* Ürünler */}
+        {(kat === 'tumu' && !q && activeFilterCount === 0) && <h2 className="text-base font-bold text-slate-800 mb-2">Tüm Ürünler</h2>}
         {filtered.length === 0 ? <div className="text-center text-slate-400 py-16 bg-white rounded-2xl">Ürün bulunamadı.</div> : (
           <div className={view === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>{filtered.map((p) => <Card key={p.id} p={p} />)}</div>
         )}
@@ -418,6 +508,25 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
           <Link to={`/uye/${slug}`} className="bg-amber-500 text-white px-4 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center gap-1.5">VIP Üyeliğini İncele</Link>
         </div>
       </div>
+
+      {/* Story görüntüleyici */}
+      {storyView !== null && stories[storyView] && (
+        <div className="fixed inset-0 z-[80] bg-black flex items-center justify-center" onClick={() => setStoryView(null)}>
+          <div className="relative w-full max-w-md h-full sm:h-[92vh] sm:rounded-2xl overflow-hidden bg-slate-900" onClick={(e) => e.stopPropagation()}>
+            <div className="absolute top-2 left-2 right-2 flex gap-1 z-20">
+              {stories.map((_: any, i: number) => <span key={i} className={`h-1 flex-1 rounded-full ${i <= (storyView as number) ? 'bg-white' : 'bg-white/30'}`} />)}
+            </div>
+            <button onClick={() => setStoryView(null)} className="absolute top-4 right-3 z-20 text-white bg-black/30 rounded-full p-1.5"><X size={18} /></button>
+            {stories[storyView].image ? <img src={stories[storyView].image} alt="" className="w-full h-full object-contain" /> : <div className="w-full h-full bg-gradient-to-br from-indigo-600 to-violet-700" />}
+            <div className="absolute bottom-0 inset-x-0 p-5 bg-gradient-to-t from-black/70 to-transparent z-10">
+              <p className="text-white font-bold text-lg drop-shadow">{stories[storyView].title}</p>
+              {stories[storyView].link && <button onClick={() => { const lk = stories[storyView as number].link; setStoryView(null); resolveLink(lk); }} className="mt-2 inline-flex items-center gap-1 bg-white text-slate-900 font-semibold px-4 py-2 rounded-full text-sm">Git →</button>}
+            </div>
+            <button aria-label="onceki" onClick={() => setStoryView((v) => (v !== null && v > 0 ? v - 1 : v))} className="absolute left-0 top-10 bottom-24 w-1/4" />
+            <button aria-label="sonraki" onClick={() => setStoryView((v) => (v !== null && v < stories.length - 1 ? v + 1 : null))} className="absolute right-0 top-10 bottom-24 w-1/4" />
+          </div>
+        </div>
+      )}
 
       {/* Footer + Sanal POS bilgileri */}
       <footer className="bg-slate-900 text-slate-300 mt-6">
