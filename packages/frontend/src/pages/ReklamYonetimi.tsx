@@ -143,9 +143,9 @@ export default function ReklamYonetimi() {
   }
 
   return (
-    <div className="p-4 sm:p-6 max-w-[1400px] mx-auto">
+    <div className="space-y-5">
       {/* Başlık */}
-      <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-sm"><Megaphone size={22} /></span>
           <div>
@@ -163,7 +163,7 @@ export default function ReklamYonetimi() {
       </div>
 
       {/* Sekmeler */}
-      <div className="flex flex-wrap gap-2 mb-5">
+      <div className="flex flex-wrap gap-2">
         {MODULES.map((m) => {
           const active = tab === m.id;
           return (
