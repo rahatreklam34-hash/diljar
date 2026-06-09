@@ -846,3 +846,30 @@ model StoreSetting {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
+
+// Canlı ziyaretçi varlığı (presence) — her oturumun anlık bulunduğu ekran
+model StoreVisit {
+  id        String   @id @default(cuid())
+  tenantId  String
+  sessionId String
+  screen    String   @default("browse") // browse | category | product | cart | checkout
+  label     String? // kategori adı / ürün adı
+  device    String? // mobil | web
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, sessionId])
+  @@index([tenantId, updatedAt])
+}
+
+// Canlı akış olayları (feed) — ziyaretçi hareketleri
+model StoreEvent {
+  id        String   @id @default(cuid())
+  tenantId  String
+  sessionId String
+  type      String // view | category | product | cart_add | cart_view | checkout | order
+  label     String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId, createdAt])
+}

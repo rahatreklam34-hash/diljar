@@ -224,6 +224,27 @@ router.post('/store/:slug/urun/:id/view', asyncHandler(async (req: Request, res:
   await prisma.productView.create({ data: { tenantId: store.tenantId, productId: req.params.id, customerId: cid || null } }).catch(() => null);
   res.json({ ok: true });
 }));
+// Canlı ziyaretçi takibi (presence heartbeat + akış olayı)
+router.post('/store/:slug/track', asyncHandler(async (req: Request, res: Response) => {
+  const store = await prisma.storeSetting.findFirst({ where: { slug: req.params.slug, active: true } });
+  if (!store) return res.json({ ok: false });
+  const { sessionId, screen, label, type, device } = req.body || {};
+  if (!sessionId) return res.json({ ok: false });
+  const t = store.tenantId;
+  const sid = String(sessionId).slice(0, 60);
+  const scr = String(screen || 'browse').slice(0, 32);
+  const lbl = label ? String(label).slice(0, 120) : null;
+  const dev = device === 'mobil' || device === 'web' ? device : null;
+  await prisma.storeVisit.upsert({
+    where: { tenantId_sessionId: { tenantId: t, sessionId: sid } },
+    update: { screen: scr, label: lbl, ...(dev ? { device: dev } : {}) },
+    create: { tenantId: t, sessionId: sid, screen: scr, label: lbl, device: dev },
+  }).catch(() => null);
+  if (type) {
+    await prisma.storeEvent.create({ data: { tenantId: t, sessionId: sid, type: String(type).slice(0, 24), label: lbl } }).catch(() => null);
+  }
+  res.json({ ok: true });
+}));
 // Yorum gönder
 router.post('/store/:slug/urun/:id/yorum', asyncHandler(async (req: Request, res: Response) => {
   const store = await prisma.storeSetting.findFirst({ where: { slug: req.params.slug, active: true } });

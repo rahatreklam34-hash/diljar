@@ -258,6 +258,42 @@ export async function promoteReserved(tenantId: string, customer: { id: string; 
   }
 }
 
+// ───────── Canlı Site Akışı (ziyaretçi presence + olay feed) ─────────
+router.get('/activity', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const now = Date.now();
+  const onlineCut = new Date(now - 60 * 1000);       // son 60 sn aktif = online
+  const eventCut = new Date(now - 30 * 60 * 1000);   // son 30 dk olay feed
+  const [visits, events] = await Promise.all([
+    prisma.storeVisit.findMany({ where: { tenantId: t, updatedAt: { gte: onlineCut } }, orderBy: { updatedAt: 'desc' }, take: 500 }),
+    prisma.storeEvent.findMany({ where: { tenantId: t, createdAt: { gte: eventCut } }, orderBy: { createdAt: 'desc' }, take: 40 }),
+  ]);
+  const ekran = { browse: 0, category: 0, product: 0, cart: 0, checkout: 0 } as Record<string, number>;
+  const cihaz = { mobil: 0, web: 0 } as Record<string, number>;
+  const kategoriMap = new Map<string, number>();
+  const urunMap = new Map<string, number>();
+  for (const v of visits) {
+    ekran[v.screen] = (ekran[v.screen] || 0) + 1;
+    if (v.device === 'mobil' || v.device === 'web') cihaz[v.device]++;
+    if (v.screen === 'category' && v.label) kategoriMap.set(v.label, (kategoriMap.get(v.label) || 0) + 1);
+    if (v.screen === 'product' && v.label) urunMap.set(v.label, (urunMap.get(v.label) || 0) + 1);
+  }
+  const sortMap = (m: Map<string, number>) => [...m.entries()].map(([ad, sayi]) => ({ ad, sayi })).sort((a, b) => b.sayi - a.sayi).slice(0, 12);
+  // Son 30 dk olay sayıları (huni)
+  const huni = { view: 0, category: 0, product: 0, cart_add: 0, cart_view: 0, checkout: 0, order: 0 } as Record<string, number>;
+  for (const e of events) if (huni[e.type] !== undefined) huni[e.type]++;
+  res.json({
+    online: visits.length,
+    ekran,
+    cihaz,
+    kategoriler: sortMap(kategoriMap),
+    urunler: sortMap(urunMap),
+    huni,
+    feed: events.map((e) => ({ id: e.id, type: e.type, label: e.label, at: e.createdAt })),
+    ts: now,
+  });
+}));
+
 export default router;
 
 // 5 dk icinde musteri kaydi gelmeyen rezerve siparisleri iptal et (cron)

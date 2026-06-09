@@ -34,6 +34,19 @@ export default function UrunDetayPublic() {
   const load = () => { if (!slug) return; api.get(`/public/store/${slug}/urun/${id}`).then((r) => { setD(r.data); }).catch((e) => setErr(apiErrorMessage(e))); api.post(`/public/store/${slug}/urun/${id}/view`, {}, { headers: { ...(localStorage.getItem('shopToken_' + slug) ? { Authorization: 'Bearer ' + localStorage.getItem('shopToken_' + slug) } : {}) } }).catch(() => {}); };
   useEffect(() => { load(); window.scrollTo(0, 0); /* eslint-disable-next-line */ }, [slug, id]);
 
+  // ── Canlı ziyaretçi takibi: ürün ekranı ──
+  const sessionId = useMemo(() => { let s = localStorage.getItem('wt_sess'); if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('wt_sess', s); } return s; }, []);
+  const deviceType = useMemo(() => (typeof window !== 'undefined' && window.innerWidth < 640 ? 'mobil' : 'web'), []);
+  useEffect(() => {
+    const ad = d?.urun?.ad;
+    if (!slug || !ad) return;
+    const send = (type?: string) => api.post(`/public/store/${slug}/track`, { sessionId, screen: 'product', label: ad, type, device: deviceType }).catch(() => {});
+    send('product');
+    const t = setInterval(() => send(), 15000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, d?.urun?.ad]);
+
   const p = d?.urun;
   const fiyat = useMemo(() => { if (!p) return 0; let f = p.satisFiyat; if (varSel) { const v = (p.variations || []).find((x: any) => x.deger === varSel); if (v) f += v.ekFiyat || 0; } return f; }, [p, varSel]);
 

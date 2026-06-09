@@ -1,6 +1,6 @@
-﻿import { useEffect, useState, useMemo } from 'react';
+﻿import { useEffect, useState, useMemo, useRef } from 'react';
 import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
-import { Search, Heart, ShoppingBag, Zap, Home, LayoutGrid, Radio, User, Plus, Minus, X, Star, ChevronDown, Grid2x2, List, Truck, RotateCcw, ShieldCheck, Headphones, Lock } from 'lucide-react';
+import { Search, Heart, ShoppingBag, Zap, Home, LayoutGrid, Radio, User, Plus, Minus, X, Star, ChevronDown, Grid2x2, List, Truck, RotateCcw, ShieldCheck, Headphones, Lock, SlidersHorizontal } from 'lucide-react';
 import api, { apiErrorMessage } from '../lib/api';
 
 const fmt = (n: number) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
@@ -27,6 +27,12 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [q, setQ] = useState('');
   const [sort, setSort] = useState('yeni');
   const [view, setView] = useState<'grid' | 'list'>('grid');
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [genderSel, setGenderSel] = useState<Set<string>>(new Set());
+  const [brandSel, setBrandSel] = useState<Set<string>>(new Set());
+  const [sizeSel, setSizeSel] = useState<Set<string>>(new Set());
+  const [priceMin, setPriceMin] = useState('');
+  const [priceMax, setPriceMax] = useState('');
   const [cart, setCart] = useState<Record<string, any>>({});
   const [cartOpen, setCartOpen] = useState(false);
   const [varModal, setVarModal] = useState<any>(null);
@@ -69,8 +75,50 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
 
   const products: any[] = data?.products || [];
   const topMenu: any[] = Array.isArray(data?.topMenu) ? data.topMenu : [];
+  // Filtre havuzları
+  const GENDER_LBL: Record<string, string> = { kadin: 'Kadın', erkek: 'Erkek', cocuk: 'Çocuk', unisex: 'Unisex' };
+  const allGenders = useMemo(() => [...new Set(products.map((p) => p.cinsiyet).filter(Boolean))], [products]);
+  const allBrands = useMemo(() => [...new Set(products.map((p) => p.marka).filter(Boolean))].sort(), [products]);
+  const allSizes = useMemo(() => [...new Set(products.flatMap((p) => (p.variations || []).map((v: any) => v.deger)).filter(Boolean))], [products]);
+  const activeFilterCount = genderSel.size + brandSel.size + sizeSel.size + (priceMin ? 1 : 0) + (priceMax ? 1 : 0);
+  const toggleSet = (setter: any, val: string) => setter((s: Set<string>) => { const n = new Set(s); n.has(val) ? n.delete(val) : n.add(val); return n; });
+  const clearFilters = () => { setGenderSel(new Set()); setBrandSel(new Set()); setSizeSel(new Set()); setPriceMin(''); setPriceMax(''); };
   // Menü öğesini filtre anahtarına çevir
   const katKey = (it: any) => it.type === 'kategori' ? `kat:${it.value}` : it.type === 'cinsiyet' ? `cins:${it.value}` : it.value;
+
+  // ── Canlı ziyaretçi takibi (presence + olay) ──
+  const sessionId = useMemo(() => { let s = localStorage.getItem('wt_sess'); if (!s) { s = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('wt_sess', s); } return s; }, []);
+  const deviceType = useMemo(() => (typeof window !== 'undefined' && window.innerWidth < 640 ? 'mobil' : 'web'), []);
+  const track = (screen: string, label?: string | null, type?: string) => { if (!slug) return; api.post(`/public/store/${slug}/track`, { sessionId, screen, label: label || null, type, device: deviceType }).catch(() => {}); };
+  const OZEL_LBL: Record<string, string> = { indirim: 'İndirimdekiler', coksatan: 'Çok Satanlar', yeni: 'Yeni Fırsatlar', sonsans: 'Son Şans' };
+  const screenInfo = useMemo(() => {
+    if (checkout) return { screen: 'checkout', label: null as string | null };
+    if (cartOpen) return { screen: 'cart', label: null as string | null };
+    if (kat.startsWith('kat:')) { const c = (data?.categories || []).find((x: any) => x.id === kat.slice(4)); return { screen: 'category', label: c?.ad || 'Kategori' }; }
+    if (kat.startsWith('cins:')) return { screen: 'category', label: GENDER_LBL[kat.slice(5)] || 'Cinsiyet' };
+    if (OZEL_LBL[kat]) return { screen: 'category', label: OZEL_LBL[kat] };
+    return { screen: 'browse', label: null as string | null };
+  }, [checkout, cartOpen, kat, data]);
+  const screenRef = useRef(screenInfo);
+  const lastCatRef = useRef<string | null>(null);
+  useEffect(() => {
+    screenRef.current = screenInfo;
+    track(screenInfo.screen, screenInfo.label);
+    if (screenInfo.screen === 'category' && screenInfo.label && screenInfo.label !== lastCatRef.current) {
+      lastCatRef.current = screenInfo.label; track('category', screenInfo.label, 'category');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screenInfo]);
+  useEffect(() => {
+    if (!slug) return;
+    track('browse', null, 'view');
+    const t = setInterval(() => { const s = screenRef.current; track(s.screen, s.label); }, 15000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slug, sessionId]);
+  useEffect(() => { if (checkout) track('checkout', null, 'checkout'); /* eslint-disable-next-line */ }, [checkout]);
+  useEffect(() => { if (cartOpen) track('cart', null, 'cart_view'); /* eslint-disable-next-line */ }, [cartOpen]);
+
   const filtered = useMemo(() => {
     let l = products.filter((p) => !q || p.ad.toLowerCase().includes(q.toLowerCase()) || (p.marka || '').toLowerCase().includes(q.toLowerCase()));
     if (kat.startsWith('kat:')) l = l.filter((p) => p.kategoriId === kat.slice(4));
@@ -79,12 +127,19 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
     else if (kat === 'coksatan') l = l.filter((p) => p.oneCikan);
     else if (kat === 'yeni') l = [...l].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     else if (kat === 'sonsans') l = l.filter((p) => (p.stokAdeti || 0) > 0 && (p.stokAdeti || 0) <= 5);
+    // Detaylı filtreler
+    if (genderSel.size > 0) l = l.filter((p) => genderSel.has(p.cinsiyet));
+    if (brandSel.size > 0) l = l.filter((p) => brandSel.has(p.marka));
+    if (sizeSel.size > 0) l = l.filter((p) => (p.variations || []).some((v: any) => sizeSel.has(v.deger) && (v.stok || 0) > 0));
+    const pmin = Number(priceMin) || 0; const pmax = Number(priceMax) || 0;
+    if (pmin > 0) l = l.filter((p) => (p.satisFiyat || 0) >= pmin);
+    if (pmax > 0) l = l.filter((p) => (p.satisFiyat || 0) <= pmax);
     if (sort === 'fiyat_artan') l = [...l].sort((a, b) => a.satisFiyat - b.satisFiyat);
     else if (sort === 'fiyat_azalan') l = [...l].sort((a, b) => b.satisFiyat - a.satisFiyat);
     else if (sort === 'indirim') l = [...l].sort((a, b) => disc(b.eskiFiyat, b.satisFiyat) - disc(a.eskiFiyat, a.satisFiyat));
     else if (sort === 'yeni') l = [...l].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     return l;
-  }, [products, q, kat, sort]);
+  }, [products, q, kat, sort, genderSel, brandSel, sizeSel, priceMin, priceMax]);
 
   const cartItems = Object.values(cart);
   const count = cartItems.reduce((s: number, x: any) => s + x.adet, 0);
@@ -98,6 +153,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
     if (varyasyon) { const v = (p.variations || []).find((x: any) => x.deger === varyasyon); if (v) fiyat += v.ekFiyat || 0; }
     setCart((c) => ({ ...c, [key]: { productId: p.id, varyasyon: varyasyon || null, ad: p.ad, fiyat, img: (p.images || [])[0] || '', adet: (c[key]?.adet || 0) + 1 } }));
     setCartOpen(true);
+    track('cart', p.ad, 'cart_add');
   };
   const sepeteEkle = (p: any) => { if ((p.variations || []).length > 0) { setVarModal(p); setVarSel(''); } else addToCart(p); };
   const sub = (key: string) => setCart((c) => { const n = (c[key]?.adet || 0) - 1; const copy = { ...c }; if (n <= 0) delete copy[key]; else copy[key] = { ...copy[key], adet: n }; return copy; });
@@ -112,6 +168,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
       const r = await api.post(`/public/store/${slug}/order`, { customer: cust, items });
       if (r.data.iframeUrl) { setPaytrUrl(r.data.iframeUrl); setCheckout(false); return; }
       if (r.data.paytrError) alert('Ödeme başlatılamadı: ' + r.data.paytrError + '\nSiparişiniz kaydedildi, sizinle iletişime geçilecek.');
+      track('browse', null, 'order');
       setDone(r.data); setCart({}); setCheckout(false);
     } catch (e) { alert(apiErrorMessage(e)); } finally { setBusy(false); }
   };
@@ -130,7 +187,9 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   );
 
   const Card = ({ p }: any) => {
-    const d = disc(p.eskiFiyat, p.satisFiyat); const vp = (Number(data?.puanOrani) || 0) > 0 ? Number(data.puanOrani) : vipRate(p.satisFiyat); const varOzet = (p.variations || []).slice(0, 2).map((v: any) => v.deger).join(' • ');
+    const d = disc(p.eskiFiyat, p.satisFiyat); const vp = (Number(data?.puanOrani) || 0) > 0 ? Number(data.puanOrani) : vipRate(p.satisFiyat);
+    const bedenler = (p.variations || []).filter((v: any) => (v.stok || 0) > 0).map((v: any) => v.deger);
+    const tukenenler = (p.variations || []).filter((v: any) => (v.stok || 0) <= 0).map((v: any) => v.deger);
     return (
       <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden flex flex-col">
         <div className="relative">
@@ -140,8 +199,14 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
         </div>
         <div className="p-3 flex flex-col flex-1">
           <p onClick={() => nav(`/urun/${p.id}`)} className="text-sm font-semibold text-slate-800 leading-tight line-clamp-2 cursor-pointer hover:text-indigo-600">{p.ad}</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">{varOzet || p.marka || '\u00A0'}</p>
-          <div className="flex items-center gap-1.5 mt-1">{d > 0 && <span className="text-[11px] text-slate-400 line-through">{fmt(p.eskiFiyat)}</span>}<span className="text-base font-bold text-red-600">{fmt(p.satisFiyat)}</span></div>
+          <p className="text-[11px] text-slate-400 mt-0.5">{p.marka || '\u00A0'}</p>
+          {(bedenler.length > 0 || tukenenler.length > 0) && (
+            <div className="flex flex-wrap gap-1 mt-1.5">
+              {bedenler.slice(0, 6).map((b: string) => <span key={b} className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 bg-white">{b}</span>)}
+              {tukenenler.slice(0, 3).map((b: string) => <span key={b} className="text-[10px] px-1.5 py-0.5 rounded border border-slate-100 text-slate-300 line-through bg-slate-50">{b}</span>)}
+            </div>
+          )}
+          <div className="flex items-center gap-1.5 mt-1.5">{d > 0 && <span className="text-[11px] text-slate-400 line-through">{fmt(p.eskiFiyat)}</span>}<span className="text-base font-bold text-red-600">{fmt(p.satisFiyat)}</span></div>
           <span className="inline-flex items-center gap-1 text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mt-1.5 w-fit"><Star size={9} className="fill-indigo-600" /> %{vp} VIP Puan</span>
           <span className={`text-[11px] mt-1 flex items-center gap-1 ${(p.stokAdeti || 0) > 0 ? 'text-green-600' : 'text-red-500'}`}><span className={`w-1.5 h-1.5 rounded-full ${(p.stokAdeti || 0) > 0 ? 'bg-green-500' : 'bg-red-500'}`} /> {(p.stokAdeti || 0) > 0 ? 'Stokta var' : 'Stok yok'}</span>
           <button onClick={() => sepeteEkle(p)} disabled={(p.stokAdeti || 0) <= 0} className="w-full mt-2.5 bg-indigo-600 text-white rounded-lg py-2 text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-indigo-700 disabled:opacity-40"><ShoppingBag size={14} /> Sepete Ekle</button>
@@ -234,15 +299,61 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
           ); })}
         </div>
 
-        {/* Sırala + görünüm */}
-        <div id="urunler" className="flex items-center gap-2 mb-3">
-          <div className="relative"><select value={sort} onChange={(e) => setSort(e.target.value)} className="appearance-none bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2 text-sm"><option value="yeni">Sırala: En Yeni</option><option value="indirim">En Yüksek İndirim</option><option value="fiyat_artan">Fiyat (artan)</option><option value="fiyat_azalan">Fiyat (azalan)</option></select><ChevronDown size={14} className="absolute right-2.5 top-3 text-slate-400 pointer-events-none" /></div>
+        {/* Sırala + filtre + görünüm */}
+        <div id="urunler" className="flex items-center gap-2 mb-3 flex-wrap">
+          <button onClick={() => setFiltersOpen((o) => !o)} className={`inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl border ${activeFilterCount > 0 ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-600'}`}><SlidersHorizontal size={15} /> Filtrele{activeFilterCount > 0 && <span className="bg-white/25 px-1.5 rounded-full text-[11px]">{activeFilterCount}</span>}</button>
+          <div className="relative"><select value={sort} onChange={(e) => setSort(e.target.value)} className="appearance-none bg-white border border-slate-200 rounded-xl pl-3 pr-8 py-2 text-sm"><option value="yeni">Sırala: En Yeni</option><option value="indirim">En Yüksek İndirim</option><option value="fiyat_artan">Ucuzdan Pahalıya</option><option value="fiyat_azalan">Pahalıdan Ucuza</option></select><ChevronDown size={14} className="absolute right-2.5 top-3 text-slate-400 pointer-events-none" /></div>
           <span className="text-xs text-slate-400 ml-1">{filtered.length} ürün</span>
           <div className="ml-auto flex items-center gap-1">
             <button onClick={() => setView('grid')} className={`w-9 h-9 rounded-lg flex items-center justify-center ${view === 'grid' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-400'}`}><Grid2x2 size={16} /></button>
             <button onClick={() => setView('list')} className={`w-9 h-9 rounded-lg flex items-center justify-center ${view === 'list' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-400'}`}><List size={16} /></button>
           </div>
         </div>
+
+        {/* Filtre paneli */}
+        {filtersOpen && (
+          <div className="bg-white rounded-2xl border border-slate-100 p-4 mb-3 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="font-bold text-slate-800 text-sm inline-flex items-center gap-1.5"><SlidersHorizontal size={15} className="text-indigo-600" /> Filtreler</h3>
+              <div className="flex items-center gap-2">
+                {activeFilterCount > 0 && <button onClick={clearFilters} className="text-xs text-slate-400 hover:text-red-500">Temizle</button>}
+                <button onClick={() => setFiltersOpen(false)} className="text-slate-400 hover:text-slate-700"><X size={16} /></button>
+              </div>
+            </div>
+            {allGenders.length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Cinsiyet</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {allGenders.map((g) => <button key={g} onClick={() => toggleSet(setGenderSel, g)} className={`text-xs px-3 py-1.5 rounded-full border ${genderSel.has(g) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-600'}`}>{GENDER_LBL[g] || g}</button>)}
+                </div>
+              </div>
+            )}
+            {allSizes.length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Beden</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {allSizes.map((s) => <button key={s} onClick={() => toggleSet(setSizeSel, s)} className={`text-xs px-3 py-1.5 rounded-lg border min-w-[36px] ${sizeSel.has(s) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-600'}`}>{s}</button>)}
+                </div>
+              </div>
+            )}
+            {allBrands.length > 0 && (
+              <div>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Marka</p>
+                <div className="flex flex-wrap gap-1.5 max-h-32 overflow-y-auto">
+                  {allBrands.map((b) => <button key={b} onClick={() => toggleSet(setBrandSel, b)} className={`text-xs px-3 py-1.5 rounded-full border ${brandSel.has(b) ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-600'}`}>{b}</button>)}
+                </div>
+              </div>
+            )}
+            <div>
+              <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide mb-1.5">Fiyat Aralığı (₺)</p>
+              <div className="flex items-center gap-2">
+                <input type="number" value={priceMin} onChange={(e) => setPriceMin(e.target.value)} placeholder="En az" className="w-28 px-3 py-2 text-sm border border-slate-200 rounded-lg" />
+                <span className="text-slate-400">—</span>
+                <input type="number" value={priceMax} onChange={(e) => setPriceMax(e.target.value)} placeholder="En çok" className="w-28 px-3 py-2 text-sm border border-slate-200 rounded-lg" />
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Ürünler */}
         {filtered.length === 0 ? <div className="text-center text-slate-400 py-16 bg-white rounded-2xl">Ürün bulunamadı.</div> : (
