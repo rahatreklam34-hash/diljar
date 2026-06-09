@@ -294,6 +294,23 @@ router.get('/activity', asyncHandler(async (req: Request, res: Response) => {
   });
 }));
 
+// Dönem bazlı ziyaretçi/cihaz/incelenen analitiği (Genel Bakış)
+router.get('/overview', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const days = Math.min(365, Math.max(1, Number(req.query.days) || 7));
+  const since = new Date(Date.now() - days * 86400000);
+  const [visits, productEvents] = await Promise.all([
+    prisma.storeVisit.findMany({ where: { tenantId: t, createdAt: { gte: since } }, select: { device: true } }),
+    prisma.storeEvent.findMany({ where: { tenantId: t, type: 'product', createdAt: { gte: since } }, select: { label: true } }),
+  ]);
+  const cihaz = { mobil: 0, web: 0 } as Record<string, number>;
+  for (const v of visits) if (v.device === 'mobil' || v.device === 'web') cihaz[v.device]++;
+  const viewMap = new Map<string, number>();
+  for (const e of productEvents) if (e.label) viewMap.set(e.label, (viewMap.get(e.label) || 0) + 1);
+  const enCokIncelenen = [...viewMap.entries()].map(([ad, sayi]) => ({ ad, sayi })).sort((a, b) => b.sayi - a.sayi).slice(0, 5);
+  res.json({ ziyaretci: visits.length, cihaz, enCokIncelenen });
+}));
+
 export default router;
 
 // 5 dk icinde musteri kaydi gelmeyen rezerve siparisleri iptal et (cron)
