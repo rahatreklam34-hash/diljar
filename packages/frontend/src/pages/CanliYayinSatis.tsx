@@ -33,6 +33,8 @@ export default function CanliYayinSatis() {
   const [barkodModal, setBarkodModal] = useState<any>(null);
   const [flash, setFlash] = useState<Record<string, { price: number; exp: number }>>({});
   const [barHistory, setBarHistory] = useState<any[]>([]);
+  const [barHistModal, setBarHistModal] = useState(false);
+  const [leftTab, setLeftTab] = useState<'manuel' | 'sohbet'>('manuel');
   const [discForm, setDiscForm] = useState({ price: '', dakika: '' });
   const [tab, setTab] = useState<'tumu' | Durum>('tumu');
   const [reportOpen, setReportOpen] = useState(false);
@@ -313,6 +315,13 @@ export default function CanliYayinSatis() {
   // Bu yayından alışveriş yapan tekil kişi sayısı (onaylanmış)
   const alisverisYapan = useMemo(() => new Set(orders.filter((o) => o.durum === 'onaylandi').map((o) => o.user)).size, [orders]);
 
+  // Kâr oranı en yüksek ürünler (satış-alış marjı)
+  const enKarliUrunler = useMemo(() => (products || [])
+    .filter((p: any) => (p.satisFiyat || 0) > 0 && (p.alisFiyat || 0) > 0 && p.satisFiyat > p.alisFiyat)
+    .map((p: any) => ({ ad: p.ad, oran: ((p.satisFiyat - p.alisFiyat) / p.satisFiyat) * 100, kar: p.satisFiyat - p.alisFiyat, stok: p.stokAdeti }))
+    .sort((a, b) => b.oran - a.oran)
+    .slice(0, 6), [products]);
+
   // Yapay zeka analizi — yayın temposu (zaman bazlı ortalama), yeni alıcı öngörüsü, stok eritme, projeksiyon
   const aiTick = Math.floor((seconds || 0) / 30); // 30 sn'de bir yenile (satış dursa da uyarsın)
   const aiAnaliz = useMemo(() => {
@@ -383,6 +392,22 @@ export default function CanliYayinSatis() {
       tips.push({ t: 'tip', m: `Bu tempoyla önümüzdeki 30 dk'da ~${proj30} sipariş ve ~${fmt(avgPerMin * 30 * (ortSepet || 0))} ciro öngörülüyor.` });
     }
 
+    // ── Kârlılık uyarısı (marj düşüyor mu?) ──
+    const karli = ona.filter((o) => typeof o.alis === 'number' && o.tutar > 0);
+    let marjGenel = 0;
+    if (karli.length >= 4) {
+      const cTop = karli.reduce((s, o) => s + o.tutar, 0);
+      const kTop = karli.reduce((s, o) => s + (o.tutar - o.alis), 0);
+      marjGenel = cTop > 0 ? (kTop / cTop) * 100 : 0;
+    }
+    if (karli.length >= 6) {
+      const half = Math.floor(karli.length / 2);
+      const marj = (arr: any[]) => { const c = arr.reduce((s, o) => s + o.tutar, 0); const k = arr.reduce((s, o) => s + (o.tutar - o.alis), 0); return c > 0 ? (k / c) * 100 : 0; };
+      const ilkMarj = marj(karli.slice(0, half));
+      const sonMarj = marj(karli.slice(half));
+      if (sonMarj < ilkMarj - 8) tips.push({ t: 'warn', m: `Kârlılık düşüyor: kâr marjı %${ilkMarj.toFixed(0)} → %${sonMarj.toFixed(0)}. Düşük kârlı ürünler ağır basıyor; yüksek marjlı ürünleri öne çıkar.` });
+    }
+
     // ── İptal uyarısı ──
     if (iptalOran >= 25) tips.push({ t: 'warn', m: `İptal oranı yüksek (%${iptalOran}). Riskli/kayıtsız alıcılardan ön ödeme iste; sahte sipariş riskine dikkat.` });
 
@@ -394,6 +419,7 @@ export default function CanliYayinSatis() {
       avgPerMin: avgPerMin.toFixed(1),
       yeniSon10,
       ortSepet,
+      marjGenel,
       elapsedMin: Math.round(elapsedMin),
     };
     return { tips, metrik };
@@ -451,7 +477,10 @@ export default function CanliYayinSatis() {
         <div className="space-y-4">
           {/* Barkod ile urun arama */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4">
-            <h3 className="font-semibold text-slate-800 mb-2 flex items-center gap-2"><Filter size={16} className="text-indigo-600" /> Barkod / Kod ile Ürün</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-semibold text-slate-800 flex items-center gap-2"><Filter size={16} className="text-indigo-600" /> Barkod / Kod ile Ürün</h3>
+              <button onClick={() => setBarHistModal(true)} className="text-[11px] text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded-lg inline-flex items-center gap-1"><History size={13} /> Geçmiş{barHistory.length > 0 && <span className="bg-indigo-100 text-indigo-700 px-1.5 rounded-full text-[10px]">{barHistory.length}</span>}</button>
+            </div>
             <div className="flex gap-2">
               <input value={barkod} onChange={(e) => setBarkod(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && scanBarcode()} placeholder="Barkod okut veya kod yaz" className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300" autoFocus />
               <button onClick={scanBarcode} className="bg-slate-800 text-white px-3 rounded-lg hover:bg-slate-700 text-sm">Okut</button>
@@ -499,39 +528,32 @@ export default function CanliYayinSatis() {
                 </div>
               )}
             </div>
+          </div>
 
-            {barHistory.length > 0 && (
-              <div className="mt-3 space-y-1 max-h-40 overflow-y-auto">
-                <p className="text-[10px] text-slate-400 uppercase">Okutulan Geçmiş</p>
-                {barHistory.map((b) => (
-                  <div key={b.id} className="flex items-center justify-between text-xs border-b border-slate-50 py-1">
-                    <div><span className="font-medium text-slate-700">{b.ad}</span> <span className="text-slate-400">· {b.kod}</span></div>
-                    <span className={`${b.stok > 0 ? 'text-green-600' : 'text-red-500'}`}>Stok {b.stok}</span>
+          {/* Manuel Sipariş / Sohbet — sekmeli */}
+          <div className="bg-white rounded-2xl border border-slate-200 p-4">
+            <div className="flex items-center gap-1 mb-3 bg-slate-100 rounded-lg p-1">
+              <button onClick={() => setLeftTab('manuel')} className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${leftTab === 'manuel' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Manuel Sipariş</button>
+              <button onClick={() => setLeftTab('sohbet')} className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${leftTab === 'sohbet' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Sohbet Akışı <span className="text-slate-400">{orders.length}</span></button>
+            </div>
+            {leftTab === 'manuel' ? (
+              <>
+                <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} placeholder={'kullanıcı satışkodu beden\nahmet SK1024 XL\nmehmet SK0712 M'} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300" />
+                <p className="text-[10px] text-slate-400 mt-1">Satış kodu depodaki ürünle, beden varyasyonla eşleşir; stok varsa onaylanır.</p>
+                <button onClick={parse} disabled={busy || !stream} className="w-full mt-2 inline-flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50"><Send size={16} /> {busy ? 'İşleniyor...' : 'Siparişleri Ayrıştır & Al'}</button>
+                {!stream && <p className="text-[10px] text-red-500 mt-1">Yayın kapalı. Önce "Yeni Yayın" başlatın.</p>}
+              </>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto">
+                {orders.slice(0, 30).map((o) => (
+                  <div key={o.id} className="flex items-center justify-between text-xs border-b border-slate-50 pb-1">
+                    <div><span className="font-medium text-slate-700">{o.user}</span> <span className="text-slate-400">{o.kod} {o.beden}</span></div>
+                    <span className="text-slate-300">{hhmm(o.createdAt)}</span>
                   </div>
                 ))}
+                {orders.length === 0 && <p className="text-slate-400 text-xs">Henüz sipariş yok.</p>}
               </div>
             )}
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 p-4">
-            <h3 className="font-semibold text-slate-800 mb-2">Manuel Yorumdan Sipariş</h3>
-            <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6} placeholder={'kullanıcı satışkodu beden\nahmet SK1024 XL\nmehmet SK0712 M'} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300" />
-            <p className="text-[10px] text-slate-400 mt-1">Satış kodu depodaki ürünle, beden varyasyonla eşleşir; stok varsa onaylanır.</p>
-            <button onClick={parse} disabled={busy || !stream} className="w-full mt-2 inline-flex items-center justify-center gap-2 bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50"><Send size={16} /> {busy ? 'İşleniyor...' : 'Siparişleri Ayrıştır & Al'}</button>
-            {!stream && <p className="text-[10px] text-red-500 mt-1">Yayın kapalı. Önce "Yeni Yayın" başlatın.</p>}
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 p-4">
-            <h3 className="font-semibold text-slate-800 mb-2">Canlı Sohbet Akışı <span className="text-xs text-slate-400">{orders.length}</span></h3>
-            <div className="space-y-2 max-h-60 overflow-y-auto">
-              {orders.slice(0, 30).map((o) => (
-                <div key={o.id} className="flex items-center justify-between text-xs border-b border-slate-50 pb-1">
-                  <div><span className="font-medium text-slate-700">{o.user}</span> <span className="text-slate-400">{o.kod} {o.beden}</span></div>
-                  <span className="text-slate-300">{hhmm(o.createdAt)}</span>
-                </div>
-              ))}
-              {orders.length === 0 && <p className="text-slate-400 text-xs">Henüz sipariş yok.</p>}
-            </div>
           </div>
         </div>
 
@@ -566,7 +588,7 @@ export default function CanliYayinSatis() {
               </span>
             </span>
           </div>
-          <div className="overflow-x-auto max-h-[42vh] overflow-y-auto">
+          <div className="overflow-x-auto max-h-[52vh] overflow-y-auto">
             <table className="w-full text-sm min-w-[920px]">
               <thead className="bg-slate-50 text-slate-500 text-left sticky top-0"><tr><th className="px-3 py-2">Kullanıcı</th><th className="px-3 py-2">Ürün</th><th className="px-3 py-2">Kod</th><th className="px-3 py-2">Beden</th><th className="px-3 py-2">Satıcı</th><th className="px-3 py-2">Tutar</th><th className="px-3 py-2">Durum</th><th className="px-3 py-2">Saat</th><th className="px-3 py-2">İşlem</th></tr></thead>
               <tbody>
@@ -609,7 +631,7 @@ export default function CanliYayinSatis() {
               <span className="ml-auto text-[10px] text-indigo-500 inline-flex items-center gap-1"><Sparkles size={12} /> Canlı</span>
             </div>
             {/* Canlı metrikler (zaman bazlı) */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
               <div className={`rounded-xl px-2.5 py-2 border ${aiAnaliz.metrik.tempoColor === 'warn' ? 'bg-red-50 border-red-100' : aiAnaliz.metrik.tempoColor === 'good' ? 'bg-green-50 border-green-100' : 'bg-white border-slate-100'}`}>
                 <p className="text-[9px] text-slate-400 font-medium">Tempo</p>
                 <p className={`text-sm font-bold ${aiAnaliz.metrik.tempoColor === 'warn' ? 'text-red-600' : aiAnaliz.metrik.tempoColor === 'good' ? 'text-green-600' : 'text-slate-700'}`}>{aiAnaliz.metrik.tempoLabel}</p>
@@ -624,6 +646,11 @@ export default function CanliYayinSatis() {
                 <p className="text-[9px] text-slate-400 font-medium">Ort. Sepet</p>
                 <p className="text-sm font-bold text-slate-700">{fmt(aiAnaliz.metrik.ortSepet)}</p>
                 <p className="text-[9px] text-slate-400">kişi başı</p>
+              </div>
+              <div className={`rounded-xl px-2.5 py-2 border ${aiAnaliz.metrik.marjGenel > 0 && aiAnaliz.metrik.marjGenel < 25 ? 'bg-red-50 border-red-100' : 'bg-white border-slate-100'}`}>
+                <p className="text-[9px] text-slate-400 font-medium">Kâr Marjı</p>
+                <p className={`text-sm font-bold ${aiAnaliz.metrik.marjGenel > 0 && aiAnaliz.metrik.marjGenel < 25 ? 'text-red-600' : 'text-green-600'}`}>{aiAnaliz.metrik.marjGenel > 0 ? `%${aiAnaliz.metrik.marjGenel.toFixed(0)}` : '-'}</p>
+                <p className="text-[9px] text-slate-400">ortalama</p>
               </div>
               <div className="rounded-xl px-2.5 py-2 border bg-white border-slate-100">
                 <p className="text-[9px] text-slate-400 font-medium">Yayın Süresi</p>
@@ -647,10 +674,10 @@ export default function CanliYayinSatis() {
                 </div>
               </div>
               <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase mb-1.5 flex items-center gap-1"><Target size={12} /> Satıcı Performansı</p>
+                <p className="text-[10px] font-semibold text-slate-400 uppercase mb-1.5 flex items-center gap-1"><TrendingUp size={12} /> En Kârlı Ürünler</p>
                 <div className="space-y-1">
-                  {saticiPerf.slice(0, 4).map(([ad, v]: any, i: number) => <div key={i} className="flex items-center justify-between text-[11px]"><span className="text-slate-600 truncate pr-2">{i + 1}. {ad}</span><span className="font-semibold text-slate-700 shrink-0">{v.adet} · {fmt(v.ciro)}</span></div>)}
-                  {saticiPerf.length === 0 && <p className="text-[11px] text-slate-400">Satıcı verisi yok.</p>}
+                  {enKarliUrunler.slice(0, 4).map((p: any, i: number) => <div key={i} className="flex items-center justify-between text-[11px]"><span className="text-slate-600 truncate pr-2">{i + 1}. {p.ad}</span><span className="font-semibold text-green-600 shrink-0">%{p.oran.toFixed(0)} · {fmt(p.kar)}</span></div>)}
+                  {enKarliUrunler.length === 0 && <p className="text-[11px] text-slate-400">Alış/satış fiyatı girili ürün yok.</p>}
                 </div>
               </div>
             </div>
@@ -659,6 +686,43 @@ export default function CanliYayinSatis() {
       </div>
 
       {/* Barkod ürün bilgisi artık barkod kutusunun altında inline gösteriliyor (popup kaldırıldı) */}
+
+      {/* Okutulan barkod geçmişi — stok kartları modalı */}
+      {barHistModal && (
+        <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50" onClick={() => setBarHistModal(false)}>
+          <div className="w-full max-w-lg bg-white rounded-2xl p-5 max-h-[85vh] overflow-y-auto space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><History size={18} className="text-indigo-600" /> Okutulan Ürünler</h3>
+              <button onClick={() => setBarHistModal(false)}><X size={20} className="text-slate-400" /></button>
+            </div>
+            {barHistory.length === 0 ? (
+              <div className="flex flex-col items-center justify-center text-center py-10 text-slate-400">
+                <Package size={26} className="mb-2 text-slate-300" />
+                <p className="text-sm">Henüz barkod/kod okutulmadı.</p>
+              </div>
+            ) : (
+              <div className="grid sm:grid-cols-2 gap-2.5">
+                {barHistory.map((b) => (
+                  <div key={b.id} className="border border-slate-200 rounded-xl p-3 bg-slate-50/60">
+                    <div className="flex items-start justify-between gap-2">
+                      <p className="font-semibold text-slate-800 text-sm leading-tight">{b.ad}</p>
+                      <span className="text-[10px] text-slate-400 shrink-0">{b.time}</span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 font-mono mt-0.5 truncate">Kod: {b.kod} · Barkod: {b.barkod}</p>
+                    <div className="mt-2 inline-flex items-center gap-1.5 bg-white border border-slate-100 rounded-lg px-2 py-1">
+                      <span className="text-[10px] text-slate-400">Stok</span>
+                      <span className={`text-sm font-bold ${(b.stok || 0) > 0 ? 'text-green-600' : 'text-red-600'}`}>{b.stok || 0}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {barHistory.length > 0 && (
+              <button onClick={() => { setBarHistory([]); setBarHistModal(false); }} className="w-full text-xs text-slate-500 hover:bg-slate-50 border border-slate-200 py-2 rounded-lg">Geçmişi Temizle</button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Hizli kayit modal */}
       {kayitModal && (
