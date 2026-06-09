@@ -5,7 +5,8 @@ import toast, { Toaster } from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
 
 const fmt = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-const FREE_SHIP = 4000;
+
+
 
 export default function Sepet() {
   const { token } = useParams();
@@ -99,9 +100,11 @@ export default function Sepet() {
 
   const items: any[] = data?.items || [];
   const adet = items.reduce((s, it) => s + (it.adet || 1), 0);
-  const puan = Math.round((data?.toplam || 0) * 0.03);
-  const ucretsizKargo = (data?.toplam || 0) >= FREE_SHIP;
-  const kalanKargo = Math.max(0, FREE_SHIP - (data?.toplam || 0));
+  const puanOrani = Number(data?.puanOrani) || 0;
+  const freeShip = Number(data?.freeShipThreshold) || 0;
+  const puan = Math.round((data?.toplam || 0) * puanOrani / 100);
+  const ucretsizKargo = freeShip > 0 && (data?.toplam || 0) >= freeShip;
+  const kalanKargo = Math.max(0, freeShip - (data?.toplam || 0));
 
   const kalan = useMemo(() => {
     if (!data?.createdAt) return null;
@@ -241,7 +244,9 @@ export default function Sepet() {
             <Zap size={18} className="text-amber-300 shrink-0" />
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold leading-tight">Hızlı Ödeme Avantajı</p>
-              <p className="text-[10px] text-white/75 leading-tight">Hemen öde, <b className="text-amber-300">%3 VIP puan</b> kazan • {puan} puan</p>
+              {puanOrani > 0
+                ? <p className="text-[10px] text-white/75 leading-tight">Hemen öde, <b className="text-amber-300">%{puanOrani} VIP puan</b> kazan • {puan} puan</p>
+                : <p className="text-[10px] text-white/75 leading-tight">Hemen ödeyerek siparişini hızlıca tamamla</p>}
             </div>
             {kalan && !kalan.bitti ? (
               <div className="flex items-center gap-1 font-bold text-sm tabular-nums bg-black/20 rounded-lg px-2 py-1 shrink-0">
@@ -250,12 +255,14 @@ export default function Sepet() {
             ) : <span className="text-[10px] text-amber-300 shrink-0">Süre doldu</span>}
           </div>
 
-          {/* Ücretsiz kargo — tek satır ince şerit */}
+          {/* Ücretsiz kargo — yalnızca eşik tanımlıysa */}
+          {freeShip > 0 && (
           <div className={`rounded-xl px-3 py-2 flex items-center gap-2 text-[12px] ${ucretsizKargo ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
             <Truck size={15} className="shrink-0" />
             <span className="flex-1 truncate">{ucretsizKargo ? 'Tebrikler, ücretsiz kargo kazandınız! 🎉' : <>Ücretsiz kargo için <b>{fmt(kalanKargo)}</b> daha ekleyin.</>}</span>
-            {!ucretsizKargo && <span className="w-16 h-1.5 bg-white rounded-full overflow-hidden shrink-0"><span className="block h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, ((data.toplam || 0) / FREE_SHIP) * 100)}%` }} /></span>}
+            {!ucretsizKargo && <span className="w-16 h-1.5 bg-white rounded-full overflow-hidden shrink-0"><span className="block h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, ((data.toplam || 0) / freeShip) * 100)}%` }} /></span>}
           </div>
+          )}
 
           {/* WEB: iki kolonlu duzen (mobilde tek kolon, sira korunur) */}
           <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-5 lg:items-start">
@@ -375,10 +382,16 @@ export default function Sepet() {
         <div className="sticky bottom-0 z-30 bg-white border-t border-slate-100 px-4 py-3 flex items-center gap-2.5">
           <div className="shrink-0"><p className="text-[10px] text-slate-400">Toplam</p><p className="text-base font-extrabold text-slate-900">{fmt(data.toplam)}</p></div>
           {odemeAktif ? (
-            <button onClick={() => window.open(data.odemeLinki, 'odeme', 'width=480,height=720')} className="flex-1 bg-green-600 text-white rounded-2xl py-2.5 font-bold hover:bg-green-700 flex flex-col items-center leading-tight">
-              <span className="text-sm inline-flex items-center gap-1.5"><CreditCard size={16} /> SEPETİ ÖDE</span>
-              <span className="text-[10px] font-medium text-white/80">{odemeKalan ? `Ödeme için kalan süre: ${odemeKalan}` : 'Güvenli ödeme'}</span>
-            </button>
+            <>
+              <button onClick={() => window.open(data.odemeLinki, 'odeme', 'width=480,height=720')} className="flex-1 bg-green-600 text-white rounded-2xl py-2.5 font-bold hover:bg-green-700 flex flex-col items-center leading-tight">
+                <span className="text-sm inline-flex items-center gap-1.5"><CreditCard size={16} /> SEPETİ ÖDE</span>
+                <span className="text-[10px] font-medium text-white/80">{odemeKalan ? `Ödeme için kalan süre: ${odemeKalan}` : 'Güvenli ödeme'}</span>
+              </button>
+              <button onClick={odemeBildir} disabled={items.length === 0} className="shrink-0 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-2xl px-3 py-2.5 font-semibold hover:bg-indigo-100 disabled:opacity-50 flex flex-col items-center leading-tight">
+                <span className="text-[12px]">{bildirildi ? 'Bildirildi ✓' : 'Havale/EFT'}</span>
+                <span className="text-[9px] font-medium text-indigo-400">Ödemeni Bildir</span>
+              </button>
+            </>
           ) : (
             <>
               <button onClick={kartlaOde} disabled={items.length === 0 || payBusy} className="flex-1 bg-green-600 text-white rounded-2xl py-2.5 font-bold hover:bg-green-700 disabled:opacity-50 flex flex-col items-center leading-tight">

@@ -125,7 +125,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   );
 
   const Card = ({ p }: any) => {
-    const d = disc(p.eskiFiyat, p.satisFiyat); const vp = vipRate(p.satisFiyat); const varOzet = (p.variations || []).slice(0, 2).map((v: any) => v.deger).join(' • ');
+    const d = disc(p.eskiFiyat, p.satisFiyat); const vp = (Number(data?.puanOrani) || 0) > 0 ? Number(data.puanOrani) : vipRate(p.satisFiyat); const varOzet = (p.variations || []).slice(0, 2).map((v: any) => v.deger).join(' • ');
     return (
       <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden flex flex-col">
         <div className="relative">
@@ -250,7 +250,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
           </div>
         </div>
         <div className="border-t border-white/10"><div className="max-w-6xl mx-auto px-4 py-4 grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {[[Truck, 'Ücretsiz Kargo', '4.000 TL üzeri'], [RotateCcw, 'Kolay İade', '14 gün içinde'], [ShieldCheck, 'Güvenli Ödeme', '256 bit SSL'], [Headphones, 'Canlı Destek', '7/24 ulaşılır']].map(([Ic, t, s]: any, i) => (
+          {[[Truck, 'Ücretsiz Kargo', (Number(data?.freeShipThreshold) || 0) > 0 ? `${Number(data.freeShipThreshold).toLocaleString('tr-TR')} TL üzeri` : 'Hızlı teslimat'], [RotateCcw, 'Kolay İade', '14 gün içinde'], [ShieldCheck, 'Güvenli Ödeme', '256 bit SSL'], [Headphones, 'Canlı Destek', '7/24 ulaşılır']].map(([Ic, t, s]: any, i) => (
             <div key={i} className="flex items-center gap-2"><Ic size={20} className="text-indigo-400 shrink-0" /><div><p className="text-xs font-semibold text-white">{t}</p><p className="text-[10px] text-slate-400">{s}</p></div></div>
           ))}
         </div></div>

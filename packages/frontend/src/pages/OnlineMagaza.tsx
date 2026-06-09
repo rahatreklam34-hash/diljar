@@ -9,11 +9,11 @@ const fmt = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { maximumFra
 
 export default function OnlineMagaza() {
   const { products, storeSetting, discountCodes, reload } = useStore();
-  const [s, setS] = useState<any>({ active: false, slug: '', logoText: '', heroTitle: '', heroSubtitle: '', heroImage: '', heroVideo: '', bankaAd: '', iban: '', hesapSahibi: '', slides: [] as any[], productOrder: [] as string[] });
+  const [s, setS] = useState<any>({ active: false, slug: '', logoText: '', heroTitle: '', heroSubtitle: '', heroImage: '', heroVideo: '', bankaAd: '', iban: '', hesapSahibi: '', slides: [] as any[], productOrder: [] as string[], freeShipThreshold: 0, puanOrani: 0 });
   const [disc, setDisc] = useState({ code: '', tip: 'yuzde', deger: '' });
 
   useEffect(() => {
-    if (storeSetting) setS({ active: storeSetting.active, slug: storeSetting.slug || '', logoText: storeSetting.logoText || '', heroTitle: storeSetting.heroTitle || '', heroSubtitle: storeSetting.heroSubtitle || '', heroImage: storeSetting.heroImage || '', heroVideo: storeSetting.heroVideo || '', bankaAd: storeSetting.bankaAd || '', iban: storeSetting.iban || '', hesapSahibi: storeSetting.hesapSahibi || '', slides: storeSetting.slides || [], productOrder: storeSetting.productOrder || [] });
+    if (storeSetting) setS({ active: storeSetting.active, slug: storeSetting.slug || '', logoText: storeSetting.logoText || '', heroTitle: storeSetting.heroTitle || '', heroSubtitle: storeSetting.heroSubtitle || '', heroImage: storeSetting.heroImage || '', heroVideo: storeSetting.heroVideo || '', bankaAd: storeSetting.bankaAd || '', iban: storeSetting.iban || '', hesapSahibi: storeSetting.hesapSahibi || '', slides: storeSetting.slides || [], productOrder: storeSetting.productOrder || [], freeShipThreshold: storeSetting.freeShipThreshold || 0, puanOrani: storeSetting.puanOrani || 0 });
   }, [storeSetting]);
 
   const addSlide = () => setS((x: any) => ({ ...x, slides: [...x.slides, { image: '', title: '', subtitle: '', cta: 'Alışverişe Başla' }] }));
@@ -35,7 +35,7 @@ export default function OnlineMagaza() {
   };
 
   const save = async () => {
-    try { await api.put('/store/settings', { active: s.active, slug: s.slug || null, logoText: s.logoText || null, heroTitle: s.heroTitle || null, heroSubtitle: s.heroSubtitle || null, heroImage: s.heroImage || null, heroVideo: s.heroVideo || null, bankaAd: s.bankaAd || null, iban: s.iban || null, hesapSahibi: s.hesapSahibi || null, slides: s.slides, productOrder: s.productOrder }); toast.success('Mağaza ayarları kaydedildi'); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
+    try { await api.put('/store/settings', { active: s.active, slug: s.slug || null, logoText: s.logoText || null, heroTitle: s.heroTitle || null, heroSubtitle: s.heroSubtitle || null, heroImage: s.heroImage || null, heroVideo: s.heroVideo || null, bankaAd: s.bankaAd || null, iban: s.iban || null, hesapSahibi: s.hesapSahibi || null, slides: s.slides, productOrder: s.productOrder, freeShipThreshold: Number(s.freeShipThreshold) || 0, puanOrani: Number(s.puanOrani) || 0 }); toast.success('Mağaza ayarları kaydedildi'); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
   };
   const addDisc = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +89,18 @@ export default function OnlineMagaza() {
           <div><label className="block text-xs text-slate-500 mb-1">Hesap Sahibi</label><input value={s.hesapSahibi} onChange={(e) => setS({ ...s, hesapSahibi: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
         </div>
         <p className="text-[11px] text-slate-400">Havale/EFT seçen müşteriye asistan bu banka bilgilerini iletir.</p>
+        <div className="grid sm:grid-cols-2 gap-3 mt-4 pt-4 border-t border-slate-100">
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">Ücretsiz Kargo Eşiği (TL)</label>
+            <input type="number" min={0} value={s.freeShipThreshold} onChange={(e) => setS({ ...s, freeShipThreshold: e.target.value })} placeholder="0 = kapalı" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
+            <p className="text-[10px] text-slate-400 mt-1">Bu tutar üzeri sepetlerde "ücretsiz kargo" rozeti gösterilir. 0 = kapalı.</p>
+          </div>
+          <div>
+            <label className="block text-xs text-slate-500 mb-1">VIP Puan Oranı (%)</label>
+            <input type="number" min={0} max={100} step="0.5" value={s.puanOrani} onChange={(e) => setS({ ...s, puanOrani: e.target.value })} placeholder="0 = kapalı" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
+            <p className="text-[10px] text-slate-400 mt-1">Sepet tutarının %'i kadar puan müşteriye gösterilir. 0 = kapalı.</p>
+          </div>
+        </div>
       </div>
 
       {/* Hero Slaytlari */}

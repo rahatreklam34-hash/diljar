@@ -125,6 +125,8 @@ router.get('/store/:slug', asyncHandler(async (req: Request, res: Response) => {
     logoText: data.store.logoText || data.tenant?.name,
     hero: { title: data.store.heroTitle, subtitle: data.store.heroSubtitle, image: data.store.heroImage, video: data.store.heroVideo },
     slides: Array.isArray(data.store.slides) ? data.store.slides : [],
+    freeShipThreshold: data.store.freeShipThreshold || 0,
+    puanOrani: data.store.puanOrani || 0,
     products: data.products,
     categories: data.categories,
   });
@@ -556,6 +558,8 @@ router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => 
     indirim: cart.indirim,
     indirimKodu: cart.indirimKodu || null,
     kargoUcreti: cart.kargoUcreti || 0,
+    freeShipThreshold: setting?.freeShipThreshold || 0,
+    puanOrani: setting?.puanOrani || 0,
     odemeLinki: cart.odemeLinki || null,
     odemeLinkiSon: cart.odemeLinkiSon || null,
     toplam: cart.toplam,
