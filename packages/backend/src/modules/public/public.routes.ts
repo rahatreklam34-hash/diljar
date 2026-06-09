@@ -98,6 +98,12 @@ async function loadStore(slug: string) {
     where: { tenantId: store.tenantId, onlineMagaza: true, aktif: true },
     select: { id: true, ad: true, satisFiyat: true, eskiFiyat: true, oneCikan: true, images: true, aciklama: true, marka: true, cinsiyet: true, stokAdeti: true, kategoriId: true, createdAt: true, variations: { select: { ad: true, deger: true, stok: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } },
   });
+  // Stok biten ürünleri mağaza vitrininden gizle (varyasyonlu ise toplam varyasyon stoğu, değilse stokAdeti)
+  products = products.filter((p) => {
+    const vars = p.variations || [];
+    const stok = vars.length > 0 ? vars.reduce((s, v) => s + (v.stok || 0), 0) : (p.stokAdeti || 0);
+    return stok > 0;
+  });
   const order: string[] = Array.isArray(store.productOrder) ? (store.productOrder as any) : [];
   if (order.length) {
     products = products.sort((a, b) => {
@@ -214,7 +220,7 @@ router.get('/store/:slug/urun/:id', asyncHandler(async (req: Request, res: Respo
     magaza: store.logoText || null,
     urun: { id: p.id, ad: p.ad, satisFiyat: p.satisFiyat, eskiFiyat: p.eskiFiyat, images: p.images, aciklama: p.aciklama, marka: p.marka, kategoriAd: kat?.ad || '', stokAdeti: p.stokAdeti, barkod: p.barkod, variations: (p.variations || []).map((v) => ({ ad: v.ad, deger: v.deger, stok: v.stok, ekFiyat: v.ekFiyat })) },
     yorumlar: reviews, puanOrt: Math.round(avg * 10) / 10, yorumSayi: reviews.length,
-    benzer: benzer.map((b) => ({ id: b.id, ad: b.ad, satisFiyat: b.satisFiyat, eskiFiyat: b.eskiFiyat, images: b.images, marka: b.marka })),
+    benzer: benzer.filter((b) => { const vs = b.variations || []; const st = vs.length > 0 ? vs.reduce((s, v) => s + (v.stok || 0), 0) : (b.stokAdeti || 0); return st > 0; }).map((b) => ({ id: b.id, ad: b.ad, satisFiyat: b.satisFiyat, eskiFiyat: b.eskiFiyat, images: b.images, marka: b.marka })),
   });
 }));
 // Ürün görüntüleme logu (davranış analizi)
