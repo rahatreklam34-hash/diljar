@@ -623,61 +623,58 @@ export default function CanliYayinSatis() {
           </div>
           </div>
 
-          {/* Yapay Zeka Asistanı — tavsiye & raporlama */}
-          <div className="bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 p-4">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center"><Brain size={17} className="text-white" /></div>
-              <div><h3 className="font-bold text-slate-800 text-sm leading-tight">Yapay Zeka Asistanı</h3><p className="text-[10px] text-slate-400">Bu yayın için canlı tavsiye & uyarılar — bir sonraki hamleni doğru oyna</p></div>
-              <span className="ml-auto text-[10px] text-indigo-500 inline-flex items-center gap-1"><Sparkles size={12} /> Canlı</span>
+          {/* Yapay Zeka Asistanı — kompakt / kuş bakışı */}
+          <div className="bg-gradient-to-br from-indigo-50 to-white rounded-2xl border border-indigo-100 p-3">
+            <div className="flex items-center gap-2 mb-2.5">
+              <div className="w-6 h-6 rounded-md bg-indigo-600 flex items-center justify-center shrink-0"><Brain size={14} className="text-white" /></div>
+              <h3 className="font-bold text-slate-800 text-[13px] leading-none">Yapay Zeka Asistanı</h3>
+              <span className="ml-auto text-[10px] text-indigo-500 inline-flex items-center gap-1"><Sparkles size={11} /> Canlı</span>
             </div>
-            {/* Canlı metrikler (zaman bazlı) */}
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-3">
-              <div className={`rounded-xl px-2.5 py-2 border ${aiAnaliz.metrik.tempoColor === 'warn' ? 'bg-red-50 border-red-100' : aiAnaliz.metrik.tempoColor === 'good' ? 'bg-green-50 border-green-100' : 'bg-white border-slate-100'}`}>
-                <p className="text-[9px] text-slate-400 font-medium">Tempo</p>
-                <p className={`text-sm font-bold ${aiAnaliz.metrik.tempoColor === 'warn' ? 'text-red-600' : aiAnaliz.metrik.tempoColor === 'good' ? 'text-green-600' : 'text-slate-700'}`}>{aiAnaliz.metrik.tempoLabel}</p>
-                <p className="text-[9px] text-slate-400">{aiAnaliz.metrik.last5Rate}/dk · ort {aiAnaliz.metrik.avgPerMin}</p>
+            {/* Canlı metrikler — tek satır kompakt şerit */}
+            <div className="grid grid-cols-5 gap-1.5 mb-2.5">
+              <div className={`rounded-lg px-2 py-1.5 border text-center ${aiAnaliz.metrik.tempoColor === 'warn' ? 'bg-red-50 border-red-100' : aiAnaliz.metrik.tempoColor === 'good' ? 'bg-green-50 border-green-100' : 'bg-white border-slate-100'}`}>
+                <p className="text-[8px] text-slate-400 font-medium uppercase tracking-wide">Tempo</p>
+                <p className={`text-[12px] font-bold leading-tight ${aiAnaliz.metrik.tempoColor === 'warn' ? 'text-red-600' : aiAnaliz.metrik.tempoColor === 'good' ? 'text-green-600' : 'text-slate-700'}`}>{aiAnaliz.metrik.tempoLabel}</p>
               </div>
-              <div className="rounded-xl px-2.5 py-2 border bg-white border-slate-100">
-                <p className="text-[9px] text-slate-400 font-medium">Yeni Alıcı</p>
-                <p className="text-sm font-bold text-indigo-600">{aiAnaliz.metrik.yeniSon10}</p>
-                <p className="text-[9px] text-slate-400">son 10 dakika</p>
+              <div className="rounded-lg px-2 py-1.5 border bg-white border-slate-100 text-center">
+                <p className="text-[8px] text-slate-400 font-medium uppercase tracking-wide">Yeni Alıcı</p>
+                <p className="text-[12px] font-bold text-indigo-600 leading-tight">{aiAnaliz.metrik.yeniSon10}</p>
               </div>
-              <div className="rounded-xl px-2.5 py-2 border bg-white border-slate-100">
-                <p className="text-[9px] text-slate-400 font-medium">Ort. Sepet</p>
-                <p className="text-sm font-bold text-slate-700">{fmt(aiAnaliz.metrik.ortSepet)}</p>
-                <p className="text-[9px] text-slate-400">kişi başı</p>
+              <div className="rounded-lg px-2 py-1.5 border bg-white border-slate-100 text-center">
+                <p className="text-[8px] text-slate-400 font-medium uppercase tracking-wide">Ort. Sepet</p>
+                <p className="text-[12px] font-bold text-slate-700 leading-tight">{fmt(aiAnaliz.metrik.ortSepet)}</p>
               </div>
-              <div className={`rounded-xl px-2.5 py-2 border ${aiAnaliz.metrik.marjGenel > 0 && aiAnaliz.metrik.marjGenel < 25 ? 'bg-red-50 border-red-100' : 'bg-white border-slate-100'}`}>
-                <p className="text-[9px] text-slate-400 font-medium">Kâr Marjı</p>
-                <p className={`text-sm font-bold ${aiAnaliz.metrik.marjGenel > 0 && aiAnaliz.metrik.marjGenel < 25 ? 'text-red-600' : 'text-green-600'}`}>{aiAnaliz.metrik.marjGenel > 0 ? `%${aiAnaliz.metrik.marjGenel.toFixed(0)}` : '-'}</p>
-                <p className="text-[9px] text-slate-400">ortalama</p>
+              <div className={`rounded-lg px-2 py-1.5 border text-center ${aiAnaliz.metrik.marjGenel > 0 && aiAnaliz.metrik.marjGenel < 25 ? 'bg-red-50 border-red-100' : 'bg-white border-slate-100'}`}>
+                <p className="text-[8px] text-slate-400 font-medium uppercase tracking-wide">Kâr Marjı</p>
+                <p className={`text-[12px] font-bold leading-tight ${aiAnaliz.metrik.marjGenel > 0 && aiAnaliz.metrik.marjGenel < 25 ? 'text-red-600' : 'text-green-600'}`}>{aiAnaliz.metrik.marjGenel > 0 ? `%${aiAnaliz.metrik.marjGenel.toFixed(0)}` : '-'}</p>
               </div>
-              <div className="rounded-xl px-2.5 py-2 border bg-white border-slate-100">
-                <p className="text-[9px] text-slate-400 font-medium">Yayın Süresi</p>
-                <p className="text-sm font-bold text-slate-700">{aiAnaliz.metrik.elapsedMin} dk</p>
-                <p className="text-[9px] text-slate-400">başlangıçtan</p>
+              <div className="rounded-lg px-2 py-1.5 border bg-white border-slate-100 text-center">
+                <p className="text-[8px] text-slate-400 font-medium uppercase tracking-wide">Süre</p>
+                <p className="text-[12px] font-bold text-slate-700 leading-tight">{aiAnaliz.metrik.elapsedMin} dk</p>
               </div>
             </div>
-            <div className="space-y-2">
-              {aiTavsiye.map((a, i) => {
-                const cfg = a.t === 'warn' ? { Ic: AlertTriangle, c: 'text-red-500', bg: 'bg-red-50 border-red-100' } : a.t === 'good' ? { Ic: TrendingUp, c: 'text-green-600', bg: 'bg-green-50 border-green-100' } : { Ic: Lightbulb, c: 'text-amber-500', bg: 'bg-amber-50 border-amber-100' };
+            {/* Tavsiyeler — kompakt satırlar (en önemli 3) */}
+            <div className="space-y-1 mb-2.5">
+              {aiTavsiye.slice(0, 3).map((a, i) => {
+                const cfg = a.t === 'warn' ? { Ic: AlertTriangle, c: 'text-red-500', bg: 'bg-red-50' } : a.t === 'good' ? { Ic: TrendingUp, c: 'text-green-600', bg: 'bg-green-50' } : { Ic: Lightbulb, c: 'text-amber-500', bg: 'bg-amber-50' };
                 const Ic = cfg.Ic;
-                return <div key={i} className={`flex items-start gap-2 rounded-xl border px-3 py-2 ${cfg.bg}`}><Ic size={15} className={`${cfg.c} shrink-0 mt-0.5`} /><span className="text-[12px] text-slate-700 leading-snug">{a.m}</span></div>;
+                return <div key={i} className={`flex items-start gap-1.5 rounded-lg px-2 py-1.5 ${cfg.bg}`}><Ic size={13} className={`${cfg.c} shrink-0 mt-px`} /><span className="text-[11px] text-slate-700 leading-snug">{a.m}</span></div>;
               })}
             </div>
-            <div className="grid sm:grid-cols-2 gap-4 mt-3 pt-3 border-t border-indigo-100">
+            {/* En çok satan + En kârlı — yan yana kompakt */}
+            <div className="grid grid-cols-2 gap-3 pt-2.5 border-t border-indigo-100">
               <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase mb-1.5 flex items-center gap-1"><Package size={12} /> En Çok Satan</p>
-                <div className="space-y-1">
-                  {enCokUrun.slice(0, 4).map(([ad, adet]: any, i: number) => <div key={i} className="flex items-center justify-between text-[11px]"><span className="text-slate-600 truncate pr-2">{i + 1}. {ad}</span><span className="font-semibold text-slate-700 shrink-0">{adet} adet</span></div>)}
-                  {enCokUrun.length === 0 && <p className="text-[11px] text-slate-400">Henüz satış yok.</p>}
+                <p className="text-[9px] font-semibold text-slate-400 uppercase mb-1 flex items-center gap-1"><Package size={11} /> En Çok Satan</p>
+                <div className="space-y-0.5">
+                  {enCokUrun.slice(0, 3).map(([ad, adet]: any, i: number) => <div key={i} className="flex items-center justify-between text-[10px]"><span className="text-slate-600 truncate pr-2">{i + 1}. {ad}</span><span className="font-semibold text-slate-700 shrink-0">{adet}</span></div>)}
+                  {enCokUrun.length === 0 && <p className="text-[10px] text-slate-400">Henüz satış yok.</p>}
                 </div>
               </div>
               <div>
-                <p className="text-[10px] font-semibold text-slate-400 uppercase mb-1.5 flex items-center gap-1"><TrendingUp size={12} /> En Kârlı Ürünler</p>
-                <div className="space-y-1">
-                  {enKarliUrunler.slice(0, 4).map((p: any, i: number) => <div key={i} className="flex items-center justify-between text-[11px]"><span className="text-slate-600 truncate pr-2">{i + 1}. {p.ad}</span><span className="font-semibold text-green-600 shrink-0">%{p.oran.toFixed(0)} · {fmt(p.kar)}</span></div>)}
-                  {enKarliUrunler.length === 0 && <p className="text-[11px] text-slate-400">Alış/satış fiyatı girili ürün yok.</p>}
+                <p className="text-[9px] font-semibold text-slate-400 uppercase mb-1 flex items-center gap-1"><TrendingUp size={11} /> En Kârlı</p>
+                <div className="space-y-0.5">
+                  {enKarliUrunler.slice(0, 3).map((p: any, i: number) => <div key={i} className="flex items-center justify-between text-[10px]"><span className="text-slate-600 truncate pr-2">{i + 1}. {p.ad}</span><span className="font-semibold text-green-600 shrink-0">%{p.oran.toFixed(0)}</span></div>)}
+                  {enKarliUrunler.length === 0 && <p className="text-[10px] text-slate-400">Veri yok.</p>}
                 </div>
               </div>
             </div>
