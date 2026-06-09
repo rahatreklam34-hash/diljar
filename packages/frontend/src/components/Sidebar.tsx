@@ -40,6 +40,18 @@ export default function Sidebar() {
   const dark = theme === 'dark';
 
   useEffect(() => {
+    const main = document.getElementById('main-content');
+    document.body.classList.toggle('theme-dark', dark);
+    document.body.classList.toggle('theme-light', !dark);
+    if (main) main.classList.toggle('app-dark', dark);
+    return () => {
+      document.body.classList.remove('theme-dark', 'theme-light');
+      const m = document.getElementById('main-content');
+      if (m) m.classList.remove('app-dark');
+    };
+  }, [dark]);
+
+  useEffect(() => {
     for (const g of navGroups) {
       if (g.title && g.items.some((it) => it.to === location.pathname)) { setOpenGroup(g.title); return; }
     }
@@ -138,22 +150,22 @@ export default function Sidebar() {
       <button onClick={() => setMobileOpen(true)} className="lg:hidden fixed top-3 left-3 z-[60] p-2 bg-white text-slate-700 rounded-xl shadow-lg border border-slate-200" aria-label="Menuyu ac"><Menu size={20} /></button>
       {mobileOpen && <div className="lg:hidden fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[55]" onClick={() => setMobileOpen(false)} />}
 
-      <aside className={`fixed inset-y-0 left-0 z-[58] flex flex-col ${t.aside} border-r transition-all duration-300 h-screen overflow-y-auto ${collapsed ? 'w-64 lg:w-20' : 'w-64'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
+      <aside className={`wt-scroll fixed inset-y-0 left-0 z-[58] flex flex-col ${t.aside} border-r transition-all duration-300 h-screen overflow-y-auto ${collapsed ? 'w-64 lg:w-20' : 'w-64'} ${mobileOpen ? 'translate-x-0' : '-translate-x-full'} lg:translate-x-0`}>
         {/* Header */}
-        <div className={`flex items-center justify-between px-3 py-3 m-2 rounded-2xl border ${t.headerBg} sticky top-2 z-10 backdrop-blur`}>
+        <div className={`m-2 rounded-2xl border ${t.headerBg} sticky top-2 z-10 backdrop-blur ${isIconOnly ? 'flex flex-col items-center gap-1.5 px-2 py-2.5' : 'flex items-center justify-between px-3 py-3'}`}>
           <div className="flex items-center gap-2.5">
             <div className="w-9 h-9 bg-gradient-to-br from-[#7c3aed] to-[#6366f1] rounded-xl flex items-center justify-center font-extrabold text-white shrink-0 shadow-lg shadow-violet-600/40">W</div>
             {(!collapsed || mobileOpen) && <span className={`text-lg font-extrabold ${t.brand}`}>WTech</span>}
           </div>
-          <div className="flex items-center gap-1">
+          <div className={`flex items-center gap-1 ${isIconOnly ? 'flex-col' : ''}`}>
             <button onClick={toggleTheme} title={dark ? 'Gunduz modu' : 'Gece modu'} className={`p-2 rounded-lg transition-colors ${t.iconBtn}`}>{dark ? <Sun size={17} /> : <Moon size={17} />}</button>
-            <button onClick={() => setCollapsed(!collapsed)} className={`hidden lg:block p-2 rounded-lg transition-colors ${t.iconBtn}`}>{collapsed ? <Menu size={17} /> : <X size={17} />}</button>
+            <button onClick={() => setCollapsed(!collapsed)} title={collapsed ? 'Menuyu ac' : 'Menuyu kapat'} className={`hidden lg:block p-2 rounded-lg transition-colors ${t.iconBtn}`}>{collapsed ? <Menu size={17} /> : <X size={17} />}</button>
             <button onClick={() => setMobileOpen(false)} className={`lg:hidden p-2 rounded-lg ${t.iconBtn}`}><X size={17} /></button>
           </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-2 pb-2 overflow-y-auto space-y-1.5" onClick={() => mobileOpen && setMobileOpen(false)}>
+        <nav className="wt-scroll flex-1 px-2 pb-2 overflow-y-auto space-y-1.5" onClick={() => mobileOpen && setMobileOpen(false)}>
           {navGroups.map((group, gi) => {
             const key = group.title || '_';
             const visibleItems = group.items.filter((it) => canAccess(it.to));

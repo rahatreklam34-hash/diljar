@@ -6,8 +6,90 @@
     --sidebar-active: #6c63ff;
     --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   }
-  
+
   body {
     @apply bg-gray-50 text-gray-800 font-sans;
   }
 }
+
+/* ───────── Tema uyumlu kaydırma çubuğu ───────── */
+.wt-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(124, 58, 237, 0.45) transparent;
+}
+.wt-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+.wt-scroll::-webkit-scrollbar-track { background: transparent; }
+.wt-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #a78bfa, #6366f1);
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.wt-scroll::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #8b5cf6, #4f46e5);
+  background-clip: padding-box;
+}
+body.theme-dark .wt-scroll {
+  scrollbar-color: rgba(139, 92, 246, 0.55) transparent;
+}
+body.theme-dark .wt-scroll::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #7c3aed, #4338ca);
+  background-clip: padding-box;
+}
+
+/* Genel sayfa kaydırma çubuğu (koyu modda) */
+body.theme-dark::-webkit-scrollbar { width: 10px; height: 10px; }
+body.theme-dark::-webkit-scrollbar-track { background: #0b1020; }
+body.theme-dark::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #7c3aed, #4338ca);
+  border-radius: 9999px;
+}
+
+/* ───────── Global koyu tema (tüm yönetim paneli) ───────── */
+#main-content.app-dark { background-color: #0b1020 !important; color: #e2e8f0; }
+
+/* Yüzeyler */
+.app-dark .bg-white { background-color: #151c30 !important; }
+.app-dark .bg-slate-50,
+.app-dark .bg-gray-50,
+.app-dark .bg-neutral-50 { background-color: #10172a !important; }
+.app-dark .bg-slate-100,
+.app-dark .bg-gray-100 { background-color: #1b2238 !important; }
+.app-dark .bg-slate-200,
+.app-dark .bg-gray-200 { background-color: #232c45 !important; }
+
+/* Metin */
+.app-dark .text-slate-900,
+.app-dark .text-slate-800,
+.app-dark .text-slate-700,
+.app-dark .text-gray-900,
+.app-dark .text-gray-800,
+.app-dark .text-gray-700,
+.app-dark .text-black { color: #e7ebf3 !important; }
+.app-dark .text-slate-600,
+.app-dark .text-slate-500,
+.app-dark .text-gray-600,
+.app-dark .text-gray-500 { color: #9aa6bd !important; }
+.app-dark .text-slate-400,
+.app-dark .text-gray-400,
+.app-dark .text-slate-300 { color: #6b7689 !important; }
+
+/* Kenarlıklar */
+.app-dark .border-slate-100,
+.app-dark .border-slate-200,
+.app-dark .border-gray-100,
+.app-dark .border-gray-200,
+.app-dark .border-slate-50 { border-color: rgba(255, 255, 255, 0.08) !important; }
+
+/* Form alanları */
+.app-dark input,
+.app-dark textarea,
+.app-dark select { color: #e7ebf3; }
+.app-dark input::placeholder,
+.app-dark textarea::placeholder { color: #64748b; }
+
+/* Hover yüzeyleri */
+.app-dark .hover\:bg-slate-50:hover,
+.app-dark .hover\:bg-gray-50:hover { background-color: #1b2238 !important; }
+.app-dark .hover\:bg-slate-100:hover,
+.app-dark .hover\:bg-gray-100:hover { background-color: #232c45 !important; }
