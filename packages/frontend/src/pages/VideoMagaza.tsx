@@ -396,10 +396,6 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
                 </div>
               );
             })}
-            <span className="ml-auto flex items-center gap-1">
-              <button onClick={() => setAcc(true)} className="text-sm font-medium text-slate-500 hover:text-indigo-600 px-3 py-1.5 rounded-full hover:bg-slate-100">Hesabım</button>
-              <button onClick={() => setCartOpen(true)} className="text-sm font-medium text-slate-500 hover:text-indigo-600 px-3 py-1.5 rounded-full hover:bg-slate-100">Sepetim</button>
-            </span>
           </div>
         </nav>
       </header>
