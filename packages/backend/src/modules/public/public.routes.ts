@@ -945,7 +945,8 @@ router.post('/store/:slug/tami/pay', asyncHandler(async (req: Request, res: Resp
   const [name, ...rest] = adAll.split(/\s+/);
   const surName = rest.join(' ') || name;
   const phone = String(customer?.telefon || req.body?.buyer?.telefon || '5300000000').replace(/\D/g, '') || '5300000000';
-  const email = customer?.email || req.body?.buyer?.email || `siparis-${order.id}@diljar.com`;
+  const emailRaw = String(customer?.email || req.body?.buyer?.email || '').trim();
+  const email = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailRaw) ? emailRaw : `siparis-${order.id}@diljar.com`;
   const addr = customer?.adres || req.body?.buyer?.adres || 'Adres belirtilmedi';
   const address = { address: addr, city: 'Istanbul', country: 'Turkiye', contactName: adAll, companyName: null, zipCode: '34000', phoneNumber: phone, district: '-' };
   const items = (order.items as any[]) || [];
