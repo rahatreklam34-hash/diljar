@@ -358,9 +358,16 @@ export default function CanliYayinSatis() {
     const iptal = orders.filter((o) => o.durum === 'iptal').length;
     const iptalOran = orders.length ? Math.round((iptal / orders.length) * 100) : 0;
 
-    // Tempo durumu (etiket)
-    let tempoLabel = 'Veri bekleniyor'; let tempoColor: 'warn' | 'tip' | 'good' = 'tip';
-    if (elapsedMin >= 6 && total >= 3) {
+    // Tempo durumu (etiket) — kademeli: hiç boş kalmaz, yayının her anında anlamlı durum gösterir
+    let tempoLabel = 'Hazır'; let tempoColor: 'warn' | 'tip' | 'good' = 'tip';
+    if (total === 0) {
+      // Henüz satış yok: ilk dakikalarda "Başladı", uzadıkça "Durgun"
+      if (elapsedMin < 3) { tempoLabel = 'Başladı'; tempoColor = 'tip'; }
+      else { tempoLabel = 'Durgun'; tempoColor = 'warn'; }
+    } else if (total < 3 || elapsedMin < 6) {
+      // Satış var ama analiz için erken — boş bırakma, "Isınıyor" göster
+      tempoLabel = last5 > 0 ? 'Isınıyor' : 'Yavaş'; tempoColor = last5 > 0 ? 'good' : 'tip';
+    } else {
       if (last5 === 0) { tempoLabel = 'Durgun'; tempoColor = 'warn'; }
       else if (last5Rate < avgPerMin * 0.6) { tempoLabel = 'Yavaşlıyor'; tempoColor = 'warn'; }
       else if (last5Rate > avgPerMin * 1.4) { tempoLabel = 'Hızlanıyor'; tempoColor = 'good'; }
@@ -370,6 +377,8 @@ export default function CanliYayinSatis() {
     // ── Tempo tavsiyesi (yayın başından bu yana ortalamaya göre) ──
     if (total === 0 && elapsedMin >= 4) {
       tips.push({ t: 'warn', m: `${Math.round(elapsedMin)} dk oldu, henüz satış yok. Açılış indirimi yap, en dikkat çeken ürünü öne al ve kampanyaları duyur.` });
+    } else if (total >= 1 && (total < 3 || elapsedMin < 6)) {
+      tips.push({ t: 'tip', m: `İlk ${total} satış geldi (~${avgPerMin.toFixed(1)}/dk). Momentumu büyütmek için en çok ilgi gören ürünü öne çıkar; birkaç satış daha gelince tempo analizi netleşir.` });
     } else if (elapsedMin >= 6 && total >= 3) {
       if (last5 === 0) tips.push({ t: 'warn', m: `Son 5 dk'da hiç satış yok (yayın ort. ${avgPerMin.toFixed(1)}/dk). Hemen kısa süreli flaş indirim başlat ya da yeni ürün çıkar — tempoyu canlandır.` });
       else if (last5Rate < avgPerMin * 0.6) tips.push({ t: 'warn', m: `Satış yavaşladı: son 5 dk ${last5Rate.toFixed(1)}/dk, yayın ort. ${avgPerMin.toFixed(1)}/dk. İndirim/kampanya zamanı; ilgi düşmeden hamle yap.` });
