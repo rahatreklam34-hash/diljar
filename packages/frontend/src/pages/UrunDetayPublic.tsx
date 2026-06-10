@@ -102,7 +102,7 @@ export default function UrunDetayPublic() {
           <p className={`text-sm mt-1 flex items-center gap-1 ${(p.stokAdeti || 0) > 0 ? 'text-green-600' : 'text-red-500'}`}><span className={`w-2 h-2 rounded-full ${(p.stokAdeti || 0) > 0 ? 'bg-green-500' : 'bg-red-500'}`} /> {(p.stokAdeti || 0) > 0 ? 'Stokta var' : 'Stok yok'}</p>
 
           {(p.variations || []).length > 0 && (
-            <div className="mt-4"><p className="text-sm font-medium text-slate-700 mb-2">Beden / Varyasyon</p><div className="flex flex-wrap gap-2">{p.variations.map((v: any) => <button key={v.deger} disabled={v.stok <= 0} onClick={() => setVarSel(v.deger)} className={`px-3.5 py-2 rounded-xl border text-sm ${varSel === v.deger ? 'bg-indigo-600 text-white border-indigo-600' : v.stok <= 0 ? 'border-slate-200 text-slate-300 line-through' : 'border-slate-200 text-slate-700'}`}>{v.deger}</button>)}</div></div>
+            <div className="mt-4"><p className="text-sm font-medium text-slate-700 mb-2">Beden / Varyasyon</p><div className="flex flex-wrap gap-2">{p.variations.map((v: any, i: number) => { const out = v.stok <= 0; return <button key={(v.deger || '') + i} disabled={out} onClick={() => setVarSel(v.deger)} title={out ? `${v.deger} — tükendi` : v.deger} className={`relative overflow-hidden px-3.5 py-2 rounded-xl border text-sm ${varSel === v.deger ? 'bg-indigo-600 text-white border-indigo-600' : out ? 'border-slate-200 text-slate-400 bg-slate-50' : 'border-slate-200 text-slate-700'}`}>{v.deger}{out && <span className="absolute left-1/2 top-1/2 w-[150%] h-[1.5px] bg-red-500 -translate-x-1/2 -translate-y-1/2 -rotate-[20deg] pointer-events-none" />}</button>; })}</div></div>
           )}
 
           <div className="flex items-center gap-3 mt-4">

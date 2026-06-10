@@ -77,6 +77,14 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   useEffect(() => { try { localStorage.setItem('wt_cart', JSON.stringify(cart)); } catch { /* */ } }, [cart]);
   // Ürün detayından "Sepete Ekle" sonrası sepet ekranını aç (?cart=1)
   useEffect(() => { if (sp.get('cart') === '1') openCart(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    const pay = sp.get('payment');
+    if (!pay) return;
+    if (pay === 'success') { setCart({}); try { localStorage.removeItem('wt_cart'); } catch { /* */ } setCheckout(false); setDone({ ok: true }); }
+    else if (pay === 'fail') { alert('Ödeme tamamlanamadı veya iptal edildi. Siparişiniz beklemede; tekrar deneyebilirsiniz.'); }
+    const next = new URLSearchParams(sp); next.delete('payment'); setSp(next, { replace: true });
+    /* eslint-disable-next-line */
+  }, []);
   // İndirim kodu + sepet önizleme (kampanya/kupon otomatik)
   const [codeInput, setCodeInput] = useState('');
   const [discountCode, setDiscountCode] = useState('');
@@ -315,8 +323,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
 
   const Card = ({ p }: any) => {
     const d = disc(p.eskiFiyat, p.satisFiyat); const vp = (Number(data?.puanOrani) || 0) > 0 ? Number(data.puanOrani) : vipRate(p.satisFiyat);
-    const bedenler = (p.variations || []).filter((v: any) => (v.stok || 0) > 0).map((v: any) => v.deger);
-    const tukenenler = (p.variations || []).filter((v: any) => (v.stok || 0) <= 0).map((v: any) => v.deger);
+    const vars = (p.variations || []);
     return (
       <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden flex flex-col">
         <div className="relative">
@@ -327,10 +334,14 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
         <div className="p-3 flex flex-col flex-1">
           <p onClick={() => nav(`/urun/${p.id}`)} className="text-sm font-semibold text-slate-800 leading-tight line-clamp-2 cursor-pointer hover:text-indigo-600">{p.ad}</p>
           <p className="text-[11px] text-slate-400 mt-0.5">{p.marka || '\u00A0'}</p>
-          {(bedenler.length > 0 || tukenenler.length > 0) && (
+          {vars.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
-              {bedenler.slice(0, 6).map((b: string) => <span key={b} className="text-[10px] font-medium px-1.5 py-0.5 rounded border border-slate-200 text-slate-600 bg-white">{b}</span>)}
-              {tukenenler.slice(0, 3).map((b: string) => <span key={b} className="text-[10px] px-1.5 py-0.5 rounded border border-slate-100 text-slate-300 line-through bg-slate-50">{b}</span>)}
+              {vars.slice(0, 8).map((v: any, i: number) => { const out = (v.stok || 0) <= 0; return (
+                <span key={(v.deger || '') + i} title={out ? `${v.deger} — tükendi` : v.deger} className={`relative overflow-hidden text-[10px] font-medium px-1.5 py-0.5 rounded border ${out ? 'border-slate-200 text-slate-400 bg-slate-50' : 'border-slate-200 text-slate-600 bg-white'}`}>
+                  {v.deger}
+                  {out && <span className="absolute left-1/2 top-1/2 w-[140%] h-px bg-red-500 -translate-x-1/2 -translate-y-1/2 -rotate-[20deg] pointer-events-none" />}
+                </span>
+              ); })}
             </div>
           )}
           <div className="flex items-center gap-1.5 mt-1.5">{d > 0 && <span className="text-[11px] text-slate-400 line-through">{fmt(p.eskiFiyat)}</span>}<span className="text-base font-bold text-red-600">{fmt(p.satisFiyat)}</span></div>
@@ -668,7 +679,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl p-5">
             <div className="flex items-center justify-between mb-3"><h3 className="font-bold text-slate-800">{varModal.ad}</h3><button onClick={() => setVarModal(null)}><X size={20} className="text-slate-400" /></button></div>
             <p className="text-xs text-slate-500 mb-2">Beden / varyasyon seçin:</p>
-            <div className="flex flex-wrap gap-2 mb-4">{(varModal.variations || []).map((v: any) => <button key={v.deger} disabled={v.stok <= 0} onClick={() => setVarSel(v.deger)} className={`px-3 py-2 rounded-xl border text-sm ${varSel === v.deger ? 'bg-indigo-600 text-white border-indigo-600' : v.stok <= 0 ? 'border-slate-200 text-slate-300 line-through' : 'border-slate-200 text-slate-600'}`}>{v.deger}</button>)}</div>
+            <div className="flex flex-wrap gap-2 mb-4">{(varModal.variations || []).map((v: any, i: number) => { const out = v.stok <= 0; return <button key={(v.deger || '') + i} disabled={out} onClick={() => setVarSel(v.deger)} className={`relative overflow-hidden px-3 py-2 rounded-xl border text-sm ${varSel === v.deger ? 'bg-indigo-600 text-white border-indigo-600' : out ? 'border-slate-200 text-slate-400 bg-slate-50' : 'border-slate-200 text-slate-600'}`}>{v.deger}{out && <span className="absolute left-1/2 top-1/2 w-[150%] h-[1.5px] bg-red-500 -translate-x-1/2 -translate-y-1/2 -rotate-[20deg] pointer-events-none" />}</button>; })}</div>
             <button disabled={!varSel} onClick={() => { addToCart(varModal, varSel); setVarModal(null); }} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold disabled:opacity-50">Sepete Ekle</button>
           </div>
         </div>

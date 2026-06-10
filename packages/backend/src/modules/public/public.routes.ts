@@ -97,7 +97,7 @@ async function loadStore(slug: string) {
   const tenant = await prisma.tenant.findUnique({ where: { id: store.tenantId }, select: { name: true } });
   let products = await prisma.product.findMany({
     where: { tenantId: store.tenantId, onlineMagaza: true, aktif: true },
-    select: { id: true, ad: true, satisFiyat: true, eskiFiyat: true, oneCikan: true, images: true, aciklama: true, marka: true, cinsiyet: true, stokAdeti: true, kategoriId: true, createdAt: true, variations: { select: { ad: true, deger: true, stok: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } },
+    select: { id: true, ad: true, satisFiyat: true, eskiFiyat: true, oneCikan: true, images: true, aciklama: true, marka: true, cinsiyet: true, stokAdeti: true, kategoriId: true, createdAt: true, variations: { select: { ad: true, deger: true, stok: true, ekFiyat: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } },
   });
   // Stok biten ürünleri mağaza vitrininden gizle (varyasyonlu ise toplam varyasyon stoğu, değilse stokAdeti)
   products = products.filter((p) => {
@@ -260,7 +260,7 @@ router.get('/katalog/:slug', asyncHandler(async (req: Request, res: Response) =>
   const store = await prisma.storeSetting.findFirst({ where: { slug: req.params.slug } });
   if (!store) throw new ApiError(404, 'Katalog bulunamadi');
   const items = await prisma.catalogItem.findMany({ where: { tenantId: store.tenantId }, orderBy: { updatedAt: 'desc' }, take: 200 });
-  const prods = await prisma.product.findMany({ where: { tenantId: store.tenantId, id: { in: items.map((i) => i.productId) }, aktif: true }, include: { variations: { select: { ad: true, deger: true, stok: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } } });
+  const prods = await prisma.product.findMany({ where: { tenantId: store.tenantId, id: { in: items.map((i) => i.productId) }, aktif: true }, include: { variations: { select: { ad: true, deger: true, stok: true, ekFiyat: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } } });
   const pMap = new Map(prods.map((p) => [p.id, p]));
   const now = Date.now();
   const list = items.map((i) => {
@@ -360,12 +360,14 @@ router.post('/store/:slug/order', asyncHandler(async (req: Request, res: Respons
   const orderItems: any[] = [];
   let araToplam = 0;
   for (const it of items) {
-    const p = prodMap.get(it.productId);
+    const p: any = prodMap.get(it.productId);
     if (!p) continue;
     const adet = Math.max(1, Number(it.adet) || 1);
-    araToplam += p.satisFiyat * adet;
+    const v = it.varyasyon ? (p.variations || []).find((x: any) => x.deger === it.varyasyon) : null;
+    const birim = (p.satisFiyat || 0) + (v?.ekFiyat || 0);
+    araToplam += birim * adet;
     const adAd = it.varyasyon ? `${p.ad} (${it.varyasyon})` : p.ad;
-    orderItems.push({ productId: p.id, ad: adAd, varyasyon: it.varyasyon || null, adet, fiyat: p.satisFiyat, stokDusuldu: true });
+    orderItems.push({ productId: p.id, ad: adAd, varyasyon: it.varyasyon || null, adet, fiyat: birim, stokDusuldu: true });
   }
   if (orderItems.length === 0) throw new ApiError(422, 'Gecerli urun yok');
 
