@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Toaster } from 'react-hot-toast';
 import api from './lib/api';
@@ -152,24 +152,17 @@ function PublicOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-// Kök: ziyaretçi -> videolu mağaza, giriş yapan -> uygulama
-function RootGate() {
-  const { user, loading } = useAuth();
-  if (loading) return null;
-  if (user) return <Navigate to="/anasayfa" replace />;
-  return <PrimaryStoreRedirect />;
-}
-function PrimaryStoreRedirect() {
+// Kök dizin: e-ticaret mağazası (ziyaretçi & sahibi). Giriş yapan sahibi /anasayfa'ya login akışında yönlenir.
+function StoreView() {
   const [slug, setSlug] = useState<string | null | undefined>(undefined);
   useEffect(() => { api.get('/public/primary-store').then((r) => setSlug(r.data?.slug || null)).catch(() => setSlug(null)); }, []);
   if (slug === undefined) return null;
   if (!slug) return <Navigate to="/login" replace />;
-  return <Navigate to={`/m/${slug}`} replace />;
+  return <VideoMagaza slug={slug} />;
 }
-// Eski /magaza/:slug linklerini yeni mağaza yapısına (/m/:slug) yönlendir
-function MagazaRedirect() {
-  const { slug } = useParams();
-  return <Navigate to={`/m/${slug || ''}`} replace />;
+// Eski /m/:slug ve /magaza/:slug linklerini kök dizine yönlendir
+function LegacyStoreRedirect() {
+  return <Navigate to="/" replace />;
 }
 
 export default function App() {
@@ -178,13 +171,19 @@ export default function App() {
       <AuthProvider>
         <Toaster position="top-right" />
         <Routes>
-          <Route path="/" element={<RootGate />} />
-          <Route path="/m/:slug" element={<VideoMagaza />} />
-          <Route path="/m/:slug/urun/:id" element={<UrunDetayPublic />} />
-          <Route path="/m/:slug/*" element={<VideoMagaza />} />
+          <Route path="/" element={<StoreView />} />
+          <Route path="/kategori/:id" element={<StoreView />} />
+          <Route path="/cinsiyet/:g" element={<StoreView />} />
+          <Route path="/fiyati-dusenler" element={<StoreView />} />
+          <Route path="/one-cikanlar" element={<StoreView />} />
+          <Route path="/yeni-gelenler" element={<StoreView />} />
+          <Route path="/son-sans" element={<StoreView />} />
+          <Route path="/tum-urunler" element={<StoreView />} />
           <Route path="/urun/:id" element={<UrunDetayPublic />} />
           <Route path="/katalog/:slug" element={<KatalogPublic />} />
-          <Route path="/magaza/:slug" element={<MagazaRedirect />} />
+          <Route path="/m/:slug/*" element={<LegacyStoreRedirect />} />
+          <Route path="/m/:slug" element={<LegacyStoreRedirect />} />
+          <Route path="/magaza/:slug" element={<LegacyStoreRedirect />} />
           <Route path="/sohbet/:slug" element={<PublicChat />} />
           <Route path="/uye/:slug" element={<UyeOl />} />
           <Route path="/sepet/:token" element={<Sepet />} />

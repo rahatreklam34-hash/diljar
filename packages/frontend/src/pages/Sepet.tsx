@@ -442,7 +442,7 @@ export default function Sepet() {
 
       {/* Menü drawer */}
       {menu && (() => {
-        const goStore = () => { setMenu(false); if (data.slug) window.open(`/m/${data.slug}`, '_blank'); else toast.error('Mağaza linki yok'); };
+        const goStore = () => { setMenu(false); window.open('/', '_blank'); };
         const goTo = (id: string) => { setMenu(false); setTimeout(() => id === 'top' ? window.scrollTo({ top: 0, behavior: 'smooth' }) : document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }), 60); };
         const MItem = ({ icon: Ic, label, onClick, badge }: any) => (
           <button onClick={onClick} className="w-full flex items-center gap-3 px-2 py-3 hover:bg-slate-50 rounded-xl text-left">
@@ -524,7 +524,7 @@ export default function Sepet() {
             <div className="rounded-2xl bg-indigo-50 border border-indigo-100 p-3 flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center"><Radio size={20} /></div>
               <div className="flex-1"><p className="text-sm font-semibold text-slate-800">Canlı yayınları kaçırdıysanız</p><p className="text-[11px] text-slate-500">Yayında çıkan tüm ürünlere buradan ulaşabilirsiniz.</p></div>
-              <button onClick={() => data.slug && window.open(`/m/${data.slug}`, '_blank')} className="text-xs font-medium text-white bg-indigo-600 px-3 py-2 rounded-lg shrink-0">Canlı Yayına Dön</button>
+              <button onClick={() => window.open('/', '_blank')} className="text-xs font-medium text-white bg-indigo-600 px-3 py-2 rounded-lg shrink-0">Canlı Yayına Dön</button>
             </div>
 
             {/* Dönem sekmeleri */}

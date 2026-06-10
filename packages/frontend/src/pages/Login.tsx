@@ -18,7 +18,7 @@ export default function Login() {
     setBusy(true);
     try {
       await login(email, password);
-      const to = location.state?.from?.pathname || '/';
+      const to = location.state?.from?.pathname || '/anasayfa';
       navigate(to, { replace: true });
     } catch (err) {
       setError(apiErrorMessage(err));

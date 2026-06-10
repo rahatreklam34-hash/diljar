@@ -39,7 +39,7 @@ export default function KatalogPublic() {
             <h1 className="text-lg font-bold text-slate-800 leading-tight">{data?.ad || 'Ürün Kataloğu'}</h1>
             <p className="text-[11px] text-slate-400">{items.length} ürün · canlı katalog</p>
           </div>
-          {data?.slug && <a href={`/m/${data.slug}`} className="ml-auto text-xs font-medium text-indigo-600 hover:underline">Mağazaya git →</a>}
+          <a href="/" className="ml-auto text-xs font-medium text-indigo-600 hover:underline">Mağazaya git →</a>
         </div>
       </header>
 

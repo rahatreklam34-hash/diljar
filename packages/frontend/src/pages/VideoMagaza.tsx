@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState, useMemo, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
 import { Search, Heart, ShoppingBag, Zap, Home, LayoutGrid, Radio, User, Plus, Minus, X, Star, ChevronDown, Grid2x2, List, Truck, RotateCcw, ShieldCheck, Headphones, Lock, SlidersHorizontal, Tag, CreditCard, Check } from 'lucide-react';
 import api, { apiErrorMessage } from '../lib/api';
 
@@ -20,6 +20,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const params = useParams();
   const slug = slugProp || params.slug;
   const nav = useNavigate();
+  const loc = useLocation();
   const [sp, setSp] = useSearchParams();
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState('');
@@ -32,8 +33,8 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   };
   const sort = sp.get('sirala') || 'yeni';
   const setSort = (v: string) => updateParams({ sirala: v === 'yeni' ? null : v, sayfa: null });
-  // Yol tabanlı kategori/bölüm (Trendyol gibi): /m/:slug/kategori/erkek, /m/:slug/fiyati-dusenler ...
-  const restPath = (params['*'] || '').replace(/^\/+|\/+$/g, '');
+  // Yol tabanlı kategori/bölüm (kök dizin, Trendyol gibi): /kategori/erkek, /fiyati-dusenler ...
+  const restPath = loc.pathname.replace(/^\/+|\/+$/g, '');
   const kat = (() => {
     if (!restPath || restPath === 'tum-urunler') return 'tumu';
     if (restPath.startsWith('kategori/')) return 'kat:' + restPath.slice(9);
@@ -43,12 +44,12 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const katToPath = (v: string) => {
     if (v.startsWith('kat:')) return `/kategori/${v.slice(4)}`;
     if (v.startsWith('cins:')) return `/cinsiyet/${v.slice(5)}`;
-    return (({ indirim: '/fiyati-dusenler', coksatan: '/one-cikanlar', yeni: '/yeni-gelenler', sonsans: '/son-sans', tumu: '' } as Record<string, string>)[v]) ?? '';
+    return (({ indirim: '/fiyati-dusenler', coksatan: '/one-cikanlar', yeni: '/yeni-gelenler', sonsans: '/son-sans', tumu: '/' } as Record<string, string>)[v]) ?? '/';
   };
   const setKat = (v: string) => {
     const qs = new URLSearchParams(sp); qs.delete('sayfa');
     const query = qs.toString();
-    nav(`/m/${slug}${katToPath(v)}${query ? `?${query}` : ''}`);
+    nav(`${katToPath(v)}${query ? `?${query}` : ''}`);
   };
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -349,7 +350,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
       {/* Header */}
       <header className="sticky top-0 z-30 bg-white border-b border-slate-100">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link to={slugProp ? '/' : `/m/${slug}`} className="flex items-center gap-1.5"><span className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><Zap size={16} /></span><span className="font-extrabold text-slate-900 hidden sm:block">{data.logoText || data.name}</span></Link>
+          <Link to="/" className="flex items-center gap-1.5"><span className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><Zap size={16} /></span><span className="font-extrabold text-slate-900 hidden sm:block">{data.logoText || data.name}</span></Link>
           <div className="relative flex-1 max-w-xl mx-auto"><Search size={16} className="absolute left-3 top-2.5 text-slate-400" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ürün, kod veya marka ara..." className="w-full pl-9 pr-3 py-2 text-base bg-slate-100 rounded-xl outline-none" /></div>
           <button onClick={() => setAcc(true)} className="hidden sm:inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-indigo-600"><User size={18} /> {shopUser ? shopUser.ad.split(' ')[0] : 'Üye Ol / Giriş'}</button>
           <button onClick={() => setCartOpen(true)} className="relative"><ShoppingBag size={22} className="text-slate-700" />{count > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] flex items-center justify-center">{count}</span>}</button>

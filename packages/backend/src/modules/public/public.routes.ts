@@ -423,8 +423,8 @@ router.post('/store/:slug/order', asyncHandler(async (req: Request, res: Respons
       userAddress: customer.adres || '-',
       userPhone: customer.telefon,
       userIp: ip,
-      okUrl: `${env.APP_DOMAIN}/m/${req.params.slug}?payment=success`,
-      failUrl: `${env.APP_DOMAIN}/m/${req.params.slug}?payment=fail`,
+      okUrl: `${env.APP_DOMAIN}/?payment=success`,
+      failUrl: `${env.APP_DOMAIN}/?payment=fail`,
       basket,
     });
     if (tok.ok) {
