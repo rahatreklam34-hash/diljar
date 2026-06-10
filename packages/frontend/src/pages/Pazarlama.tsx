@@ -30,7 +30,7 @@ export default function Pazarlama() {
     } finally { setSending(false); }
   };
 
-  if (!d) return <div className="p-6 text-slate-400">Yükleniyor...</div>;
+  if (!d) return <div className="p-6 flex justify-center"><span className="w-7 h-7 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div>;
 
   return (
     <div className="space-y-5">

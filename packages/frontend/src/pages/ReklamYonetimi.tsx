@@ -351,7 +351,7 @@ function Kampanyalar({ data, loading, reload, datePreset, dateFrom, dateTo }: an
     finally { setActing(''); }
   };
 
-  if (!data) return <div className={`${card} p-8 text-center text-sm text-slate-400`}>{loading ? 'Yükleniyor…' : 'Önce Özet sekmesinden verileri yükleyin.'}</div>;
+  if (!data) return <div className={`${card} p-8 text-center text-sm text-slate-400`}>{loading ? <span className="inline-block w-6 h-6 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin align-middle" /> : 'Önce Özet sekmesinden verileri yükleyin.'}</div>;
 
   return (
     <div className={`${card} overflow-hidden`}>
@@ -391,7 +391,7 @@ function Kampanyalar({ data, loading, reload, datePreset, dateFrom, dateTo }: an
                 {openId === c.campaignId && (
                   <tr key={`${c.campaignId}-d`} className="bg-slate-50/60">
                     <td colSpan={9} className="px-4 py-3">
-                      {detailLoading ? <p className="text-sm text-slate-400 flex items-center gap-2"><Loader2 className="animate-spin" size={15} /> Detay yükleniyor…</p>
+                      {detailLoading ? <p className="text-sm text-slate-400 flex items-center gap-2"><Loader2 className="animate-spin" size={15} /></p>
                         : detailErr ? <p className="text-sm text-rose-600">{detailErr}</p>
                           : detail ? (
                             <div className="space-y-4">

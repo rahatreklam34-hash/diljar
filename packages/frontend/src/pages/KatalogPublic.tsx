@@ -45,7 +45,7 @@ export default function KatalogPublic() {
 
       <main className="max-w-5xl mx-auto px-4 py-5">
         {!loaded ? (
-          <p className="text-center text-slate-400 py-16">Yükleniyor...</p>
+          <div className="flex justify-center py-16"><span className="w-7 h-7 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div>
         ) : items.length === 0 ? (
           <div className="text-center text-slate-400 py-16"><Package size={32} className="mx-auto mb-3 text-slate-300" /><p>Katalogda henüz ürün yok.</p></div>
         ) : (

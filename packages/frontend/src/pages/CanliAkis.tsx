@@ -86,7 +86,7 @@ export default function CanliAkis() {
       </div>
 
       {!loaded ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center text-slate-400">Yükleniyor...</div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 flex justify-center"><span className="w-7 h-7 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div>
       ) : (
         <>
           {/* Ekran dağılımı */}

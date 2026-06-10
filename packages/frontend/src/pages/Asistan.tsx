@@ -58,7 +58,7 @@ function Egitim() {
   const delKb = async (id: string) => { try { await api.delete(`/assistant/knowledge/${id}`); load(); } catch (e) { toast.error(apiErrorMessage(e)); } };
   const genProfil = async () => { try { const r = await api.post('/assistant/profile/generate', {}); setCfg((c: any) => ({ ...c, profil: r.data.profil })); toast.success('Profil (CV) oluşturuldu'); } catch (e) { toast.error(apiErrorMessage(e)); } };
   const seedKb = async () => { try { const r = await api.post('/assistant/knowledge/seed', {}); toast.success(`${r.data.eklenen} hazır bilgi eklendi`); load(); } catch (e) { toast.error(apiErrorMessage(e)); } };
-  if (!cfg) return <div className="text-slate-400">Yükleniyor...</div>;
+  if (!cfg) return <div className="flex justify-center p-6"><span className="w-7 h-7 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div>;
 
   return (
     <div className="space-y-5">

@@ -97,7 +97,7 @@ export default function PublicStore() {
   };
 
   if (err) return <div className="min-h-screen flex items-center justify-center text-slate-500 p-6 text-center">{err}</div>;
-  if (!data) return <div className="min-h-screen flex items-center justify-center text-slate-400">Yükleniyor...</div>;
+  if (!data) return <div className="min-h-screen flex items-center justify-center"><span className="w-8 h-8 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div>;
 
   if (done) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">

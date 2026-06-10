@@ -310,7 +310,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   };
 
   if (err) return <div className="min-h-screen flex items-center justify-center text-slate-500 p-6 text-center bg-slate-100">{err}</div>;
-  if (!data) return <div className="min-h-screen flex items-center justify-center text-slate-400 bg-slate-100">Yükleniyor...</div>;
+  if (!data) return <div className="min-h-screen flex items-center justify-center bg-slate-100"><span className="w-8 h-8 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div>;
   if (done) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
       <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center max-w-sm">
@@ -329,7 +329,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
     return (
       <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden flex flex-col">
         <div className="relative">
-          <div onClick={() => nav(`/urun/${p.id}`)} className="aspect-square bg-slate-50 cursor-pointer">{(p.images || [])[0] && <img src={p.images[0]} className="w-full h-full object-cover" />}</div>
+          <div onClick={() => nav(`/urun/${p.id}`)} className="aspect-square bg-slate-50 cursor-pointer">{(p.images || [])[0] && <img src={p.images[0]} loading="lazy" decoding="async" className="w-full h-full object-cover" />}</div>
           {d > 0 && <span className={`absolute top-2 left-2 text-[10px] font-bold text-white px-2 py-0.5 rounded ${discColor(d)}`}>%{d} İNDİRİM</span>}
           <button className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/90 flex items-center justify-center text-slate-400 hover:text-red-500"><Heart size={15} /></button>
         </div>

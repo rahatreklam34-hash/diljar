@@ -222,7 +222,7 @@ export default function Sepet() {
   };
 
   if (err) return <div className="min-h-screen flex items-center justify-center text-slate-500 p-6 text-center bg-slate-100">{err}</div>;
-  if (!data) return <div className="min-h-screen flex items-center justify-center text-slate-400 bg-slate-100">Yükleniyor...</div>;
+  if (!data) return <div className="min-h-screen flex items-center justify-center bg-slate-100"><span className="w-8 h-8 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div>;
 
   const STEPS = [{ t: 'Sepetim', i: ShoppingBag }, { t: 'Teslimat', i: Truck }, { t: 'Ödeme', i: CreditCard }, { t: 'Onay', i: CheckCircle2 }, { t: 'Kargo', i: Truck }];
   const curStep = data.durum === 'sepet' ? 0 : bildirildi || data.durum !== 'yeni' ? 2 : 1;
@@ -604,7 +604,7 @@ export default function Sepet() {
             <div className="w-8" />
           </div>
           <div className="max-w-md lg:max-w-4xl mx-auto p-4 space-y-5">
-            {!katalog ? <p className="text-center text-slate-400 py-10">Yükleniyor...</p> : (
+            {!katalog ? <div className="flex justify-center py-10"><span className="w-7 h-7 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div> : (
               <>
                 <div className="grid grid-cols-2 gap-3">
                   {(katalog.kategoriler || []).map((k: any) => (

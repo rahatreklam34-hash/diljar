@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { Toaster } from 'react-hot-toast';
 import api from './lib/api';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -7,62 +7,67 @@ import { AppProvider } from './context/AppContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
 import CommandPalette from './components/CommandPalette';
-import Dashboard from './pages/Dashboard';
-import CariHesaplar from './pages/CariHesaplar';
-import GelirGider from './pages/GelirGider';
-import KasaBankaPage from './pages/KasaBanka';
-import BankaHareketleri from './pages/BankaHareketleri';
-import Cekler from './pages/Cekler';
-import PersonelPage from './pages/Personel';
-import FinansalDurum from './pages/FinansalDurum';
-import Ajanda from './pages/Ajanda';
-import Bildirimler from './pages/Bildirimler';
-import Ayarlar from './pages/Ayarlar';
-import HareketLoglari from './pages/HareketLoglari';
-import Belgelerim from './pages/Belgelerim';
-import DuzenliOdemeler from './pages/DuzenliOdemeler';
-import Hedeflerim from './pages/Hedeflerim';
-import Login from './pages/Login';
-import Register from './pages/Register';
-import DestekMerkezi from './pages/DestekMerkezi';
-import Hakkimizda from './pages/Hakkimizda';
-import Iletisim from './pages/Iletisim';
-import KVKK from './pages/KVKK';
-import Gizlilik from './pages/Gizlilik';
-import MesafeliSatis from './pages/MesafeliSatis';
-import IadeIptal from './pages/IadeIptal';
-import Entegrasyonlar from './pages/Entegrasyonlar';
 import { StoreProvider } from './context/StoreContext';
-import Urunlerim from './pages/Urunlerim';
-import UrunDetay from './pages/UrunDetay';
-import TopluUrunEkle from './pages/TopluUrunEkle';
-import Varyasyonlar from './pages/Varyasyonlar';
-import Kategoriler from './pages/Kategoriler';
-import SatisKodu from './pages/SatisKodu';
-import OnlineMagaza from './pages/OnlineMagaza';
-import Siparislerim from './pages/Siparislerim';
-import Musterilerim from './pages/Musterilerim';
-import MusteriDetay from './pages/MusteriDetay';
-import CanliYayinSatis from './pages/CanliYayinSatis';
-import CanliAkis from './pages/CanliAkis';
-import ReklamYonetimi from './pages/ReklamYonetimi';
-import KasaSatis from './pages/KasaSatis';
-import SaticiPerformans from './pages/SaticiPerformans';
-import Personeller from './pages/Personeller';
-import EkipSohbet from './pages/EkipSohbet';
-import Pazarlama from './pages/Pazarlama';
-import MusteriDavranislari from './pages/MusteriDavranislari';
-import Sicil from './pages/Sicil';
-import Asistan from './pages/Asistan';
-import AsistanSatislari from './pages/AsistanSatislari';
-import DestekTalepleri from './pages/DestekTalepleri';
-import PublicStore from './pages/PublicStore';
-import VideoMagaza from './pages/VideoMagaza';
-import UrunDetayPublic from './pages/UrunDetayPublic';
-import KatalogPublic from './pages/KatalogPublic';
-import PublicChat from './pages/PublicChat';
-import UyeOl from './pages/UyeOl';
-import Sepet from './pages/Sepet';
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const CariHesaplar = lazy(() => import('./pages/CariHesaplar'));
+const GelirGider = lazy(() => import('./pages/GelirGider'));
+const KasaBankaPage = lazy(() => import('./pages/KasaBanka'));
+const BankaHareketleri = lazy(() => import('./pages/BankaHareketleri'));
+const Cekler = lazy(() => import('./pages/Cekler'));
+const PersonelPage = lazy(() => import('./pages/Personel'));
+const FinansalDurum = lazy(() => import('./pages/FinansalDurum'));
+const Ajanda = lazy(() => import('./pages/Ajanda'));
+const Bildirimler = lazy(() => import('./pages/Bildirimler'));
+const Ayarlar = lazy(() => import('./pages/Ayarlar'));
+const HareketLoglari = lazy(() => import('./pages/HareketLoglari'));
+const Belgelerim = lazy(() => import('./pages/Belgelerim'));
+const DuzenliOdemeler = lazy(() => import('./pages/DuzenliOdemeler'));
+const Hedeflerim = lazy(() => import('./pages/Hedeflerim'));
+const Login = lazy(() => import('./pages/Login'));
+const Register = lazy(() => import('./pages/Register'));
+const DestekMerkezi = lazy(() => import('./pages/DestekMerkezi'));
+const Hakkimizda = lazy(() => import('./pages/Hakkimizda'));
+const Iletisim = lazy(() => import('./pages/Iletisim'));
+const KVKK = lazy(() => import('./pages/KVKK'));
+const Gizlilik = lazy(() => import('./pages/Gizlilik'));
+const MesafeliSatis = lazy(() => import('./pages/MesafeliSatis'));
+const IadeIptal = lazy(() => import('./pages/IadeIptal'));
+const Entegrasyonlar = lazy(() => import('./pages/Entegrasyonlar'));
+const Urunlerim = lazy(() => import('./pages/Urunlerim'));
+const UrunDetay = lazy(() => import('./pages/UrunDetay'));
+const TopluUrunEkle = lazy(() => import('./pages/TopluUrunEkle'));
+const Varyasyonlar = lazy(() => import('./pages/Varyasyonlar'));
+const Kategoriler = lazy(() => import('./pages/Kategoriler'));
+const SatisKodu = lazy(() => import('./pages/SatisKodu'));
+const OnlineMagaza = lazy(() => import('./pages/OnlineMagaza'));
+const Siparislerim = lazy(() => import('./pages/Siparislerim'));
+const Musterilerim = lazy(() => import('./pages/Musterilerim'));
+const MusteriDetay = lazy(() => import('./pages/MusteriDetay'));
+const CanliYayinSatis = lazy(() => import('./pages/CanliYayinSatis'));
+const CanliAkis = lazy(() => import('./pages/CanliAkis'));
+const ReklamYonetimi = lazy(() => import('./pages/ReklamYonetimi'));
+const KasaSatis = lazy(() => import('./pages/KasaSatis'));
+const SaticiPerformans = lazy(() => import('./pages/SaticiPerformans'));
+const Personeller = lazy(() => import('./pages/Personeller'));
+const EkipSohbet = lazy(() => import('./pages/EkipSohbet'));
+const Pazarlama = lazy(() => import('./pages/Pazarlama'));
+const MusteriDavranislari = lazy(() => import('./pages/MusteriDavranislari'));
+const Sicil = lazy(() => import('./pages/Sicil'));
+const Asistan = lazy(() => import('./pages/Asistan'));
+const AsistanSatislari = lazy(() => import('./pages/AsistanSatislari'));
+const DestekTalepleri = lazy(() => import('./pages/DestekTalepleri'));
+const PublicStore = lazy(() => import('./pages/PublicStore'));
+const VideoMagaza = lazy(() => import('./pages/VideoMagaza'));
+const UrunDetayPublic = lazy(() => import('./pages/UrunDetayPublic'));
+const KatalogPublic = lazy(() => import('./pages/KatalogPublic'));
+const PublicChat = lazy(() => import('./pages/PublicChat'));
+const UyeOl = lazy(() => import('./pages/UyeOl'));
+const Sepet = lazy(() => import('./pages/Sepet'));
+
+// Sayfa yüklenirken yazısız ince spinner
+function PageLoader() {
+  return <div className="min-h-screen flex items-center justify-center bg-slate-50"><span className="w-8 h-8 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div>;
+}
 
 function AccessGuard() {
   const { canAccess, user } = useAuth();
@@ -90,6 +95,7 @@ function TenantApp() {
         <Sidebar />
         <main className="flex-1 min-w-0 ml-0 lg:ml-64 overflow-x-hidden transition-all duration-300" id="main-content">
           <div className="p-4 pt-16 lg:p-5 lg:pt-5">
+            <Suspense fallback={<div className="flex items-center justify-center py-24"><span className="w-7 h-7 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div>}>
             <Routes>
               <Route path="/anasayfa" element={<Dashboard />} />
               <Route path="/cari-hesaplar" element={<CariHesaplar />} />
@@ -137,6 +143,7 @@ function TenantApp() {
               <Route path="/destek-talepleri" element={<DestekTalepleri />} />
               <Route path="*" element={<Navigate to="/anasayfa" replace />} />
             </Routes>
+            </Suspense>
           </div>
         </main>
       </div>
@@ -170,6 +177,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Toaster position="top-right" />
+        <Suspense fallback={<PageLoader />}>
         <Routes>
           <Route path="/" element={<StoreView />} />
           <Route path="/kategori/:id" element={<StoreView />} />
@@ -197,6 +205,7 @@ export default function App() {
           <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
           <Route path="/*" element={<ProtectedRoute><TenantApp /></ProtectedRoute>} />
         </Routes>
+        </Suspense>
       </AuthProvider>
     </BrowserRouter>
   );

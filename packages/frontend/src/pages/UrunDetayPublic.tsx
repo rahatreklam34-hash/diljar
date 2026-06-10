@@ -71,7 +71,7 @@ export default function UrunDetayPublic() {
   };
 
   if (err) return <div className="min-h-screen flex items-center justify-center text-slate-500 p-6 bg-slate-100">{err}</div>;
-  if (!d) return <div className="min-h-screen flex items-center justify-center text-slate-400 bg-slate-100">Yükleniyor...</div>;
+  if (!d) return <div className="min-h-screen flex items-center justify-center bg-slate-100"><span className="w-8 h-8 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div>;
   const dd = disc(p.eskiFiyat, p.satisFiyat); const imgs: string[] = p.images || [];
 
   return (
