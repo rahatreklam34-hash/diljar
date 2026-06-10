@@ -93,3 +93,7 @@ body.theme-dark::-webkit-scrollbar-thumb {
 .app-dark .hover\:bg-gray-50:hover { background-color: #1b2238 !important; }
 .app-dark .hover\:bg-slate-100:hover,
 .app-dark .hover\:bg-gray-100:hover { background-color: #232c45 !important; }
+
+/* Kaydırma çubuğunu gizle (yatay şeritler için) — kaydırma yine çalışır */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; width: 0; height: 0; }

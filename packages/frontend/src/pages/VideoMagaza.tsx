@@ -48,6 +48,8 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [siparisDetay, setSiparisDetay] = useState<any>(null);
   const [slideIdx, setSlideIdx] = useState(0);
   const [storyView, setStoryView] = useState<number | null>(null);
+  const [page, setPage] = useState(1);
+  const PER_PAGE = 24;
   // Sepeti localStorage'a kaydet (ürün detay sayfasından eklenenler de görünsün)
   useEffect(() => { try { localStorage.setItem('wt_cart', JSON.stringify(cart)); } catch { /* */ } }, [cart]);
   // Ürün detayından "Sepete Ekle" sonrası sepet ekranını aç (?cart=1)
@@ -203,6 +205,13 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
     else if (sort === 'yeni') l = [...l].sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
     return l;
   }, [products, q, kat, sort, genderSel, brandSel, sizeSel, priceMin, priceMax]);
+
+  // Sayfalama
+  const isDefaultView = kat === 'tumu' && !q && activeFilterCount === 0;
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
+  const pageItems = useMemo(() => filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE), [filtered, page]);
+  useEffect(() => { setPage(1); }, [kat, q, sort, genderSel, brandSel, sizeSel, priceMin, priceMax]);
+  const gotoPage = (p: number) => { const np = Math.min(pageCount, Math.max(1, p)); setPage(np); setTimeout(() => document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }), 40); };
 
   const cartItems = Object.values(cart);
   const count = cartItems.reduce((s: number, x: any) => s + x.adet, 0);
@@ -395,7 +404,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
 
         {/* Hikayeler (Story) */}
         {stories.length > 0 && (
-          <div className="flex gap-4 overflow-x-auto py-4 wt-scroll">
+          <div className="flex gap-4 overflow-x-auto py-4 no-scrollbar">
             {stories.map((st: any, i: number) => (
               <button key={st.id || i} onClick={() => setStoryView(i)} className="flex flex-col items-center gap-1.5 shrink-0 w-[68px]">
                 <span className="w-16 h-16 rounded-full p-[2.5px] bg-gradient-to-tr from-amber-400 via-pink-500 to-indigo-600">
@@ -482,23 +491,38 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
           </div>
         )}
 
-        {/* Bölümlü vitrin (varsayılan görünüm) */}
-        {(kat === 'tumu' && !q && activeFilterCount === 0) && sections.map((sec) => (
-          <div key={sec.key} className="mb-5">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="text-base font-bold text-slate-800">{sec.title}</h2>
+        {/* Bölümlü vitrin (varsayılan görünüm) — yatay kaydırma yok, grid */}
+        {isDefaultView && sections.map((sec) => (
+          <div key={sec.key} className="mb-6">
+            <div className="flex items-center justify-between mb-2.5">
+              <h2 className="text-base sm:text-lg font-bold text-slate-800">{sec.title}</h2>
               <button onClick={() => { setKat(sec.key); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className="text-xs font-semibold text-indigo-600 hover:underline">Tümünü Gör →</button>
             </div>
-            <div className="flex gap-3 overflow-x-auto pb-2 wt-scroll">
-              {sec.items.map((p: any) => <div key={p.id} className="w-40 sm:w-48 shrink-0"><Card p={p} /></div>)}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {sec.items.slice(0, 6).map((p: any) => <Card key={p.id} p={p} />)}
             </div>
           </div>
         ))}
 
         {/* Ürünler */}
-        {(kat === 'tumu' && !q && activeFilterCount === 0) && <h2 className="text-base font-bold text-slate-800 mb-2">Tüm Ürünler</h2>}
+        {isDefaultView && <h2 className="text-base sm:text-lg font-bold text-slate-800 mb-2.5">Tüm Ürünler</h2>}
         {filtered.length === 0 ? <div className="text-center text-slate-400 py-16 bg-white rounded-2xl">Ürün bulunamadı.</div> : (
-          <div className={view === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>{filtered.map((p) => <Card key={p.id} p={p} />)}</div>
+          <>
+            <div className={view === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>{pageItems.map((p) => <Card key={p.id} p={p} />)}</div>
+            {pageCount > 1 && (
+              <div className="flex items-center justify-center gap-1.5 mt-6 flex-wrap">
+                <button onClick={() => gotoPage(page - 1)} disabled={page === 1} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-600 disabled:opacity-40 hover:bg-slate-50">‹ Önceki</button>
+                {Array.from({ length: pageCount }, (_, i) => i + 1).filter((p) => p === 1 || p === pageCount || Math.abs(p - page) <= 2).map((p, idx, arr) => (
+                  <span key={p} className="flex items-center">
+                    {idx > 0 && arr[idx - 1] !== p - 1 && <span className="px-1 text-slate-300">…</span>}
+                    <button onClick={() => gotoPage(p)} className={`w-9 h-9 rounded-xl text-sm font-semibold ${p === page ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{p}</button>
+                  </span>
+                ))}
+                <button onClick={() => gotoPage(page + 1)} disabled={page === pageCount} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-600 disabled:opacity-40 hover:bg-slate-50">Sonraki ›</button>
+              </div>
+            )}
+            <p className="text-center text-[11px] text-slate-400 mt-2">{filtered.length} ürün · Sayfa {page}/{pageCount}</p>
+          </>
         )}
 
         {/* VIP bandı */}
