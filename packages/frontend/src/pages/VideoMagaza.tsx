@@ -52,18 +52,18 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [priceMin, setPriceMin] = useState('');
   const [priceMax, setPriceMax] = useState('');
   const [cart, setCart] = useState<Record<string, any>>(() => { try { return JSON.parse(localStorage.getItem('wt_cart') || '{}'); } catch { return {}; } });
-  const [cartOpen, setCartOpen] = useState(false);
   const [varModal, setVarModal] = useState<any>(null);
   const [varSel, setVarSel] = useState('');
   const [busy, setBusy] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [checkout, setCheckout] = useState(false);
-  const [checkoutStep, setCheckoutStep] = useState<'teslimat' | 'odeme' | 'onay'>('teslimat');
+  const [checkoutStep, setCheckoutStep] = useState<'sepet' | 'teslimat' | 'odeme' | 'onay'>('sepet');
   const [cust, setCust] = useState({ ad: '', telefon: '', email: '', adres: '', il: '', ilce: '' });
   const [paytrUrl, setPaytrUrl] = useState('');
   const [orderInfo, setOrderInfo] = useState<any>(null);
   const [tcard, setTcard] = useState({ number: '', holderName: '', expireMonth: '', expireYear: '', cvv: '' });
   const [payErr, setPayErr] = useState('');
+  const openCart = () => { setOrderInfo(null); setPaytrUrl(''); setPayErr(''); setCheckoutStep('sepet'); setCheckout(true); };
   const [done, setDone] = useState<any>(null);
   const [legalModal, setLegalModal] = useState('');
   const [siparisDetay, setSiparisDetay] = useState<any>(null);
@@ -75,7 +75,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   // Sepeti localStorage'a kaydet (ürün detay sayfasından eklenenler de görünsün)
   useEffect(() => { try { localStorage.setItem('wt_cart', JSON.stringify(cart)); } catch { /* */ } }, [cart]);
   // Ürün detayından "Sepete Ekle" sonrası sepet ekranını aç (?cart=1)
-  useEffect(() => { if (sp.get('cart') === '1') setCartOpen(true); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { if (sp.get('cart') === '1') openCart(); /* eslint-disable-next-line */ }, []);
   // İndirim kodu + sepet önizleme (kampanya/kupon otomatik)
   const [codeInput, setCodeInput] = useState('');
   const [discountCode, setDiscountCode] = useState('');
@@ -175,13 +175,13 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const track = (screen: string, label?: string | null, type?: string) => { if (!slug) return; api.post(`/public/store/${slug}/track`, { sessionId, screen, label: label || null, type, device: deviceType }).catch(() => {}); };
   const OZEL_LBL: Record<string, string> = { indirim: 'İndirimdekiler', coksatan: 'Çok Satanlar', yeni: 'Yeni Fırsatlar', sonsans: 'Son Şans' };
   const screenInfo = useMemo(() => {
+    if (checkout && checkoutStep === 'sepet') return { screen: 'cart', label: null as string | null };
     if (checkout) return { screen: 'checkout', label: null as string | null };
-    if (cartOpen) return { screen: 'cart', label: null as string | null };
     if (kat.startsWith('kat:')) { const c = (data?.categories || []).find((x: any) => x.id === kat.slice(4)); return { screen: 'category', label: c?.ad || 'Kategori' }; }
     if (kat.startsWith('cins:')) return { screen: 'category', label: GENDER_LBL[kat.slice(5)] || 'Cinsiyet' };
     if (OZEL_LBL[kat]) return { screen: 'category', label: OZEL_LBL[kat] };
     return { screen: 'browse', label: null as string | null };
-  }, [checkout, cartOpen, kat, data]);
+  }, [checkout, checkoutStep, kat, data]);
   const screenRef = useRef(screenInfo);
   const lastCatRef = useRef<string | null>(null);
   useEffect(() => {
@@ -200,7 +200,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, sessionId]);
   useEffect(() => { if (checkout) track('checkout', null, 'checkout'); /* eslint-disable-next-line */ }, [checkout]);
-  useEffect(() => { if (cartOpen) track('cart', null, 'cart_view'); /* eslint-disable-next-line */ }, [cartOpen]);
+  useEffect(() => { if (checkout && checkoutStep === 'sepet') track('cart', null, 'cart_view'); /* eslint-disable-next-line */ }, [checkout, checkoutStep]);
 
   const filtered = useMemo(() => {
     let l = products.filter((p) => !q || p.ad.toLowerCase().includes(q.toLowerCase()) || (p.marka || '').toLowerCase().includes(q.toLowerCase()));
@@ -263,13 +263,13 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
     let fiyat = p.satisFiyat;
     if (varyasyon) { const v = (p.variations || []).find((x: any) => x.deger === varyasyon); if (v) fiyat += v.ekFiyat || 0; }
     setCart((c) => ({ ...c, [key]: { productId: p.id, varyasyon: varyasyon || null, ad: p.ad, fiyat, img: (p.images || [])[0] || '', adet: (c[key]?.adet || 0) + 1 } }));
-    setCartOpen(true);
+    openCart();
     track('cart', p.ad, 'cart_add');
   };
   const sepeteEkle = (p: any) => { if ((p.variations || []).length > 0) { setVarModal(p); setVarSel(''); } else addToCart(p); };
   const sub = (key: string) => setCart((c) => { const n = (c[key]?.adet || 0) - 1; const copy = { ...c }; if (n <= 0) delete copy[key]; else copy[key] = { ...copy[key], adet: n }; return copy; });
   const inc = (key: string) => setCart((c) => ({ ...c, [key]: { ...c[key], adet: c[key].adet + 1 } }));
-  const tamamla = () => { if (cartItems.length === 0) return; setCartOpen(false); setCheckoutStep('teslimat'); setCheckout(true); };
+  const tamamla = () => { if (cartItems.length === 0) return; setCheckoutStep('teslimat'); setCheckout(true); };
   const odemeYap = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!cust.ad || !cust.telefon || !cust.adres || !cust.il || !cust.ilce) { alert('Ad Soyad, telefon, il, ilçe ve teslimat adresi zorunludur'); return; }
@@ -363,7 +363,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
         searchValue={q}
         onSearchChange={setQ}
         onAccount={() => setAcc(true)}
-        onCart={() => setCartOpen(true)}
+        onCart={openCart}
         accountLabel={shopUser ? shopUser.ad.split(' ')[0] : 'Üye Ol / Giriş'}
       />
 
@@ -657,7 +657,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
         <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex flex-col items-center gap-0.5 text-indigo-600 flex-1"><Home size={20} /><span className="text-[10px]">Ana Sayfa</span></button>
         <button onClick={() => document.getElementById('urunler')?.scrollIntoView()} className="flex flex-col items-center gap-0.5 text-slate-400 flex-1"><LayoutGrid size={20} /><span className="text-[10px]">Kataloglar</span></button>
         <button onClick={() => { setKat('indirim'); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className="w-12 h-12 rounded-full bg-indigo-600 text-white flex flex-col items-center justify-center -mt-5 shadow-lg flex-1 max-w-12 mx-auto"><Radio size={18} /><span className="text-[8px]">FIRSAT</span></button>
-        <button onClick={() => setCartOpen(true)} className="flex flex-col items-center gap-0.5 text-slate-400 flex-1 relative"><ShoppingBag size={20} />{count > 0 && <span className="absolute top-0 right-5 w-3.5 h-3.5 rounded-full bg-indigo-600 text-white text-[8px] flex items-center justify-center">{count}</span>}<span className="text-[10px]">Sepetim</span></button>
+        <button onClick={openCart} className="flex flex-col items-center gap-0.5 text-slate-400 flex-1 relative"><ShoppingBag size={20} />{count > 0 && <span className="absolute top-0 right-5 w-3.5 h-3.5 rounded-full bg-indigo-600 text-white text-[8px] flex items-center justify-center">{count}</span>}<span className="text-[10px]">Sepetim</span></button>
         <button onClick={() => setAcc(true)} className="flex flex-col items-center gap-0.5 text-slate-400 flex-1"><User size={20} /><span className="text-[10px]">Hesabım</span></button>
       </nav>
 
@@ -674,54 +674,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
       )}
 
       {/* Sepet drawer */}
-      {cartOpen && (
-        <div className="fixed inset-0 z-[100] flex justify-end bg-black/50" onClick={() => setCartOpen(false)}>
-          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-white h-full flex flex-col">
-            <div className="flex items-center justify-between p-4 border-b border-slate-100"><h2 className="font-bold text-slate-800">Sepetim ({count})</h2><button onClick={() => setCartOpen(false)}><X size={20} className="text-slate-400" /></button></div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {cartItems.length === 0 && <p className="text-slate-400 text-center py-10">Sepetiniz boş.</p>}
-              {Object.entries(cart).map(([key, x]: any) => (
-                <div key={key} className="flex items-center gap-3">
-                  <div className="w-14 h-14 rounded-lg bg-slate-100 overflow-hidden shrink-0">{x.img && <img src={x.img} className="w-full h-full object-cover" />}</div>
-                  <div className="flex-1 min-w-0"><p className="text-sm font-medium text-slate-800 truncate">{x.ad}</p>{x.varyasyon && <p className="text-xs text-slate-400">{x.varyasyon}</p>}<p className="text-sm font-bold text-slate-900">{fmt(x.fiyat * x.adet)}</p></div>
-                  <div className="flex items-center gap-1.5"><button onClick={() => sub(key)} className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center"><Minus size={13} /></button><span className="w-5 text-center text-sm">{x.adet}</span><button onClick={() => inc(key)} className="w-7 h-7 rounded-lg border border-slate-200 flex items-center justify-center"><Plus size={13} /></button></div>
-                </div>
-              ))}
-            </div>
-            {cartItems.length > 0 && (
-              <div className="p-4 border-t border-slate-100 space-y-2">
-                {/* İndirim kodu */}
-                {discountCode && preview?.kuponGecerli ? (
-                  <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 text-sm">
-                    <span className="text-emerald-700 font-medium inline-flex items-center gap-1"><Tag size={13} /> {preview.kuponKod} uygulandı</span>
-                    <button onClick={kuponKaldir} className="text-[11px] text-emerald-600 underline">kaldır</button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5">
-                    <input value={codeInput} onChange={(e) => setCodeInput(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === 'Enter' && kuponUygula()} placeholder="İndirim kodu" className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg uppercase" />
-                    <button onClick={kuponUygula} className="px-3 py-2 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-700">Uygula</button>
-                  </div>
-                )}
-                {discountCode && preview && !preview.kuponGecerli && <p className="text-[11px] text-red-500">Kod geçersiz veya pasif.</p>}
-                {/* Özet */}
-                <div className="space-y-1 text-sm">
-                  <div className="flex justify-between text-slate-500"><span>Ara Toplam</span><span>{fmt(preview ? preview.araToplam : araToplam)}</span></div>
-                  {(preview?.kampanyalar || []).map((k: any, i: number) => (
-                    <div key={i} className="flex justify-between text-emerald-600"><span className="inline-flex items-center gap-1 truncate pr-2"><Tag size={12} className="shrink-0" /> {k.ad}</span><span className="shrink-0">-{fmt(k.indirim)}</span></div>
-                  ))}
-                  {preview && preview.kuponIndirim > 0 && <div className="flex justify-between text-emerald-600"><span>Kupon ({preview.kuponKod})</span><span>-{fmt(preview.kuponIndirim)}</span></div>}
-                  {toplamIndirim > 0 && <div className="flex justify-between text-[12px] text-slate-400"><span>Toplam İndirim</span><span className="text-emerald-600 font-medium">-{fmt(toplamIndirim)}</span></div>}
-                </div>
-                <div className="flex justify-between font-bold text-slate-800 pt-1 border-t border-slate-100"><span>Toplam</span><span>{fmt(odenecek)}</span></div>
-                <button onClick={tamamla} disabled={busy} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50">Siparişi Tamamla</button>
-                <p className="text-[11px] text-slate-400 text-center inline-flex items-center justify-center gap-1 w-full"><Lock size={11} /> Güvenli ödeme · 256-bit SSL</p>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Çok adımlı Ödeme (Sepetim → Teslimat → Ödeme → Onay) */}
+      {/* Çok adımlı akış (Sepet → Teslimat → Ödeme → Onay) */}
       {checkout && (
         <div className="fixed inset-0 z-[100] bg-slate-50 overflow-y-auto">
           {/* Üst bar */}
@@ -737,7 +690,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
             <div className="max-w-3xl mx-auto px-4 pb-3">
               <div className="flex items-center">
                 {[
-                  { t: 'Sepetim', done: true, active: false, go: () => { setCheckout(false); setCartOpen(true); setOrderInfo(null); setPaytrUrl(''); setPayErr(''); } },
+                  { t: 'Sepetim', done: checkoutStep !== 'sepet', active: checkoutStep === 'sepet', go: () => { setOrderInfo(null); setPaytrUrl(''); setPayErr(''); setCheckoutStep('sepet'); } },
                   { t: 'Teslimat Bilgileri', done: checkoutStep === 'odeme', active: checkoutStep === 'teslimat', go: () => { setCheckoutStep('teslimat'); setOrderInfo(null); setPaytrUrl(''); setPayErr(''); } },
                   { t: 'Ödeme', done: false, active: checkoutStep === 'odeme', go: null as any },
                   { t: 'Sipariş Onayı', done: false, active: false, go: null as any },
@@ -757,6 +710,45 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
           <div className="max-w-6xl mx-auto px-4 py-5 grid lg:grid-cols-[1fr_minmax(300px,360px)] gap-5 items-start">
             {/* Sol: adım içeriği */}
             <div className="space-y-4 min-w-0">
+              {checkoutStep === 'sepet' && (
+                <div className="bg-white rounded-2xl border border-slate-200 p-5">
+                  <h2 className="font-bold text-slate-800 text-lg flex items-center gap-2 mb-3"><ShoppingBag size={18} className="text-indigo-600" /> Sepetim ({count})</h2>
+                  {cartItems.length === 0 ? (
+                    <div className="text-center py-12">
+                      <ShoppingBag size={40} className="mx-auto text-slate-200" />
+                      <p className="text-slate-500 mt-3 font-medium">Sepetiniz boş</p>
+                      <button onClick={() => setCheckout(false)} className="mt-4 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-medium">Alışverişe Başla</button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      {Object.entries(cart).map(([key, x]: any) => (
+                        <div key={key} className="flex items-center gap-3 pb-3 border-b border-slate-50 last:border-0">
+                          <div className="w-16 h-16 rounded-xl bg-slate-100 overflow-hidden shrink-0">{x.img && <img src={x.img} loading="lazy" className="w-full h-full object-cover" />}</div>
+                          <div className="flex-1 min-w-0"><p className="text-sm font-medium text-slate-800 truncate">{x.ad}</p>{x.varyasyon && <p className="text-xs text-slate-400">Beden / Varyasyon: {x.varyasyon}</p>}<p className="text-sm font-bold text-slate-900 mt-0.5">{fmt(x.fiyat * x.adet)}</p></div>
+                          <div className="flex items-center gap-1.5"><button onClick={() => sub(key)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-50"><Minus size={14} /></button><span className="w-6 text-center text-sm font-medium">{x.adet}</span><button onClick={() => inc(key)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center hover:bg-slate-50"><Plus size={14} /></button></div>
+                          <button onClick={() => setCart((c) => { const copy = { ...c }; delete copy[key]; return copy; })} title="Kaldır" className="text-slate-300 hover:text-red-500 ml-1"><X size={18} /></button>
+                        </div>
+                      ))}
+                      {/* İndirim kodu */}
+                      <div className="pt-2">
+                        {discountCode && preview?.kuponGecerli ? (
+                          <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2 text-sm">
+                            <span className="text-emerald-700 font-medium inline-flex items-center gap-1"><Tag size={13} /> {preview.kuponKod} uygulandı</span>
+                            <button onClick={kuponKaldir} className="text-[11px] text-emerald-600 underline">kaldır</button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-1.5">
+                            <input value={codeInput} onChange={(e) => setCodeInput(e.target.value.toUpperCase())} onKeyDown={(e) => e.key === 'Enter' && kuponUygula()} placeholder="İndirim kodu" className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg uppercase" />
+                            <button onClick={kuponUygula} className="px-4 py-2 text-sm bg-slate-800 text-white rounded-lg hover:bg-slate-700">Uygula</button>
+                          </div>
+                        )}
+                        {discountCode && preview && !preview.kuponGecerli && <p className="text-[11px] text-red-500 mt-1">Kod geçersiz veya pasif.</p>}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {checkoutStep === 'teslimat' && (
                 <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
                   <h2 className="font-bold text-slate-800 text-lg flex items-center gap-2"><Truck size={18} className="text-indigo-600" /> Teslimat Bilgileri</h2>
@@ -832,12 +824,15 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
               <div className="flex justify-between items-center border-t border-slate-100 mt-2 pt-2"><span className="font-bold text-slate-800">Toplam <span className="text-[10px] text-slate-400 font-normal">(KDV Dahil)</span></span><span className="text-xl font-extrabold text-indigo-600">{fmt(odenecek)}</span></div>
               {(Number(data.puanOrani) || 0) > 0 && <div className="mt-3 bg-violet-50 rounded-xl px-3 py-2 text-xs text-violet-700 flex items-center justify-between"><span>Bu siparişten kazanılacak puan</span><span className="font-bold">+{Math.round(odenecek * Number(data.puanOrani) / 100)}</span></div>}
 
+              {checkoutStep === 'sepet' && (
+                <button onClick={tamamla} disabled={cartItems.length === 0} className="w-full mt-4 bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2">Teslimat Bilgilerine Geç →</button>
+              )}
               {checkoutStep === 'teslimat' && (
                 <button onClick={() => odemeYap()} disabled={busy} className="w-full mt-4 bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"><Lock size={16} /> {busy ? 'Hazırlanıyor...' : 'Ödemeye Geç'}</button>
               )}
               {checkoutStep === 'odeme' && (
                 <div className="flex gap-2 mt-4">
-                  <button onClick={() => { setCheckout(false); setCartOpen(true); setOrderInfo(null); setPaytrUrl(''); setPayErr(''); }} className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-2xl font-medium hover:bg-slate-50">← Sepete Dön</button>
+                  <button onClick={() => { setCheckoutStep('sepet'); setOrderInfo(null); setPaytrUrl(''); setPayErr(''); }} className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-2xl font-medium hover:bg-slate-50">← Sepete Dön</button>
                   <button onClick={() => { setCheckoutStep('teslimat'); setOrderInfo(null); setPaytrUrl(''); setPayErr(''); }} className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-2xl font-medium hover:bg-slate-50">← Teslimat Bilgileri</button>
                 </div>
               )}
