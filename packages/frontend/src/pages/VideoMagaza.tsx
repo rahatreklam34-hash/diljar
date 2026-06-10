@@ -20,12 +20,20 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const params = useParams();
   const slug = slugProp || params.slug;
   const nav = useNavigate();
-  const [sp] = useSearchParams();
+  const [sp, setSp] = useSearchParams();
   const [data, setData] = useState<any>(null);
   const [err, setErr] = useState('');
-  const [kat, setKat] = useState('tumu');
-  const [q, setQ] = useState('');
-  const [sort, setSort] = useState('yeni');
+  const [q, setQ] = useState(sp.get('ara') || '');
+  // URL tabanlı durum (kategori / sıralama / sayfa) — adres çubuğuna yansır, ileri/geri ve link paylaşımı çalışır
+  const updateParams = (patch: Record<string, string | null>, replace = false) => {
+    const next = new URLSearchParams(sp);
+    Object.entries(patch).forEach(([k, v]) => { if (!v) next.delete(k); else next.set(k, v); });
+    setSp(next, { replace });
+  };
+  const kat = sp.get('kategori') || 'tumu';
+  const sort = sp.get('sirala') || 'yeni';
+  const setKat = (v: string) => updateParams({ kategori: v === 'tumu' ? null : v, sayfa: null });
+  const setSort = (v: string) => updateParams({ sirala: v === 'yeni' ? null : v, sayfa: null });
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [genderSel, setGenderSel] = useState<Set<string>>(new Set());
@@ -48,8 +56,9 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [siparisDetay, setSiparisDetay] = useState<any>(null);
   const [slideIdx, setSlideIdx] = useState(0);
   const [storyView, setStoryView] = useState<number | null>(null);
-  const [page, setPage] = useState(1);
   const PER_PAGE = 24;
+  const page = Number(sp.get('sayfa')) || 1;
+  const setPage = (p: number) => updateParams({ sayfa: p <= 1 ? null : String(p) });
   // Sepeti localStorage'a kaydet (ürün detay sayfasından eklenenler de görünsün)
   useEffect(() => { try { localStorage.setItem('wt_cart', JSON.stringify(cart)); } catch { /* */ } }, [cart]);
   // Ürün detayından "Sepete Ekle" sonrası sepet ekranını aç (?cart=1)
@@ -100,7 +109,6 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
     if (c.customHead && !document.getElementById('wt-customhead')) { const d = document.createElement('div'); d.id = 'wt-customhead'; d.style.display = 'none'; d.innerHTML = c.customHead; document.head.appendChild(d); }
   }, [data?.config]);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
-  useEffect(() => { const uq = sp.get('q'); const uk = sp.get('kat'); if (uq) setQ(uq); if (uk) setKat(uk); /* eslint-disable-next-line */ }, []);
 
   const products: any[] = data?.products || [];
   const topMenu: any[] = Array.isArray(data?.topMenu) ? data.topMenu : [];
@@ -209,9 +217,16 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   // Sayfalama
   const isDefaultView = kat === 'tumu' && !q && activeFilterCount === 0;
   const pageCount = Math.max(1, Math.ceil(filtered.length / PER_PAGE));
-  const pageItems = useMemo(() => filtered.slice((page - 1) * PER_PAGE, page * PER_PAGE), [filtered, page]);
-  useEffect(() => { setPage(1); }, [kat, q, sort, genderSel, brandSel, sizeSel, priceMin, priceMax]);
+  const safePage = Math.min(Math.max(1, page), pageCount);
+  const pageItems = useMemo(() => filtered.slice((safePage - 1) * PER_PAGE, safePage * PER_PAGE), [filtered, safePage]);
   const gotoPage = (p: number) => { const np = Math.min(pageCount, Math.max(1, p)); setPage(np); setTimeout(() => document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }), 40); };
+  // Arama metnini URL'ye yansıt (debounce, geçmişi kirletmeden)
+  useEffect(() => {
+    if ((sp.get('ara') || '') === q) return;
+    const t = setTimeout(() => updateParams({ ara: q || null, sayfa: null }, true), 400);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [q]);
 
   const cartItems = Object.values(cart);
   const count = cartItems.reduce((s: number, x: any) => s + x.adet, 0);
@@ -511,17 +526,17 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
             <div className={view === 'grid' ? 'grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3' : 'grid grid-cols-1 sm:grid-cols-2 gap-3'}>{pageItems.map((p) => <Card key={p.id} p={p} />)}</div>
             {pageCount > 1 && (
               <div className="flex items-center justify-center gap-1.5 mt-6 flex-wrap">
-                <button onClick={() => gotoPage(page - 1)} disabled={page === 1} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-600 disabled:opacity-40 hover:bg-slate-50">‹ Önceki</button>
-                {Array.from({ length: pageCount }, (_, i) => i + 1).filter((p) => p === 1 || p === pageCount || Math.abs(p - page) <= 2).map((p, idx, arr) => (
+                <button onClick={() => gotoPage(safePage - 1)} disabled={safePage === 1} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-600 disabled:opacity-40 hover:bg-slate-50">‹ Önceki</button>
+                {Array.from({ length: pageCount }, (_, i) => i + 1).filter((p) => p === 1 || p === pageCount || Math.abs(p - safePage) <= 2).map((p, idx, arr) => (
                   <span key={p} className="flex items-center">
                     {idx > 0 && arr[idx - 1] !== p - 1 && <span className="px-1 text-slate-300">…</span>}
-                    <button onClick={() => gotoPage(p)} className={`w-9 h-9 rounded-xl text-sm font-semibold ${p === page ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{p}</button>
+                    <button onClick={() => gotoPage(p)} className={`w-9 h-9 rounded-xl text-sm font-semibold ${p === safePage ? 'bg-indigo-600 text-white shadow-sm' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'}`}>{p}</button>
                   </span>
                 ))}
-                <button onClick={() => gotoPage(page + 1)} disabled={page === pageCount} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-600 disabled:opacity-40 hover:bg-slate-50">Sonraki ›</button>
+                <button onClick={() => gotoPage(safePage + 1)} disabled={safePage === pageCount} className="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm text-slate-600 disabled:opacity-40 hover:bg-slate-50">Sonraki ›</button>
               </div>
             )}
-            <p className="text-center text-[11px] text-slate-400 mt-2">{filtered.length} ürün · Sayfa {page}/{pageCount}</p>
+            <p className="text-center text-[11px] text-slate-400 mt-2">{filtered.length} ürün · Sayfa {safePage}/{pageCount}</p>
           </>
         )}
 
