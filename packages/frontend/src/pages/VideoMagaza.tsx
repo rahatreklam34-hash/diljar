@@ -66,7 +66,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [now, setNow] = useState(Date.now());
   const [checkout, setCheckout] = useState(false);
   const [checkoutStep, setCheckoutStep] = useState<'teslimat' | 'odeme' | 'onay'>('teslimat');
-  const [cust, setCust] = useState({ ad: '', telefon: '', email: '', adres: '' });
+  const [cust, setCust] = useState({ ad: '', telefon: '', email: '', adres: '', il: '', ilce: '' });
   const [paytrUrl, setPaytrUrl] = useState('');
   const [orderInfo, setOrderInfo] = useState<any>(null);
   const [tcard, setTcard] = useState({ number: '', holderName: '', expireMonth: '', expireYear: '', cvv: '' });
@@ -282,7 +282,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const tamamla = () => { if (cartItems.length === 0) return; setCartOpen(false); setCheckoutStep('teslimat'); setCheckout(true); };
   const odemeYap = async (e?: React.FormEvent) => {
     e?.preventDefault();
-    if (!cust.ad || !cust.telefon || !cust.adres) { alert('Ad Soyad, telefon ve teslimat adresi zorunludur'); return; }
+    if (!cust.ad || !cust.telefon || !cust.adres || !cust.il || !cust.ilce) { alert('Ad Soyad, telefon, il, ilçe ve teslimat adresi zorunludur'); return; }
     setBusy(true);
     try {
       const items = cartItems.map((x: any) => ({ productId: x.productId, adet: x.adet, varyasyon: x.varyasyon || undefined }));
@@ -303,10 +303,10 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
     setBusy(true); setPayErr('');
     try {
       const yil = tcard.expireYear.length === 2 ? '20' + tcard.expireYear : tcard.expireYear;
-      const r = await api.post(`/public/store/${slug}/tami/pay`, { orderId: orderInfo.orderId, card: { number: num, cvv: tcard.cvv, expireMonth: Number(tcard.expireMonth), expireYear: Number(yil), holderName: tcard.holderName || cust.ad } });
+      const r = await api.post(`/public/store/${slug}/tami/pay`, { orderId: orderInfo.orderId, card: { number: num, cvv: tcard.cvv, expireMonth: Number(tcard.expireMonth), expireYear: Number(yil), holderName: tcard.holderName || cust.ad }, buyer: { ad: cust.ad, telefon: cust.telefon, email: cust.email, adres: cust.adres, il: cust.il, ilce: cust.ilce } });
       if (r.data.ok && r.data.html) { document.open(); document.write(r.data.html); document.close(); return; }
       setPayErr(r.data.message || 'Ödeme başlatılamadı.');
-    } catch (er) { setPayErr(apiErrorMessage(er)); } finally { setBusy(false); }
+    } catch (er: any) { setPayErr(er?.response?.data?.message || apiErrorMessage(er)); } finally { setBusy(false); }
   };
 
   if (err) return <div className="min-h-screen flex items-center justify-center text-slate-500 p-6 text-center bg-slate-100">{err}</div>;
@@ -773,13 +773,18 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
             {/* Adım göstergesi */}
             <div className="max-w-3xl mx-auto px-4 pb-3">
               <div className="flex items-center">
-                {[['Sepetim', true, false], ['Teslimat Bilgileri', checkoutStep === 'odeme', checkoutStep === 'teslimat'], ['Ödeme', false, checkoutStep === 'odeme'], ['Sipariş Onayı', false, false]].map(([t, done, active]: any, i: number, arr: any[]) => (
-                  <div key={t} className="flex items-center flex-1 last:flex-none">
-                    <div className="flex items-center gap-1.5">
-                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${done ? 'bg-emerald-500 text-white' : active ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>{done ? <Check size={13} /> : i + 1}</span>
-                      <span className={`text-[11px] sm:text-xs font-medium ${active ? 'text-indigo-600' : done ? 'text-emerald-600' : 'text-slate-400'} hidden xs:inline sm:inline`}>{t}</span>
-                    </div>
-                    {i < arr.length - 1 && <div className={`flex-1 h-0.5 mx-2 ${done ? 'bg-emerald-400' : 'bg-slate-200'}`} />}
+                {[
+                  { t: 'Sepetim', done: true, active: false, go: () => { setCheckout(false); setCartOpen(true); setOrderInfo(null); setPaytrUrl(''); setPayErr(''); } },
+                  { t: 'Teslimat Bilgileri', done: checkoutStep === 'odeme', active: checkoutStep === 'teslimat', go: () => { setCheckoutStep('teslimat'); setOrderInfo(null); setPaytrUrl(''); setPayErr(''); } },
+                  { t: 'Ödeme', done: false, active: checkoutStep === 'odeme', go: null as any },
+                  { t: 'Sipariş Onayı', done: false, active: false, go: null as any },
+                ].map((s, i, arr) => (
+                  <div key={s.t} className="flex items-center flex-1 last:flex-none">
+                    <button type="button" disabled={!s.go} onClick={s.go || undefined} className={`flex items-center gap-1.5 ${s.go ? 'cursor-pointer hover:opacity-80' : 'cursor-default'}`}>
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-bold ${s.done ? 'bg-emerald-500 text-white' : s.active ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>{s.done ? <Check size={13} /> : i + 1}</span>
+                      <span className={`text-[11px] sm:text-xs font-medium ${s.active ? 'text-indigo-600' : s.done ? 'text-emerald-600' : 'text-slate-400'} hidden xs:inline sm:inline`}>{s.t}</span>
+                    </button>
+                    {i < arr.length - 1 && <div className={`flex-1 h-0.5 mx-2 ${s.done ? 'bg-emerald-400' : 'bg-slate-200'}`} />}
                   </div>
                 ))}
               </div>
@@ -795,8 +800,10 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
                   <div className="grid sm:grid-cols-2 gap-3">
                     <div className="sm:col-span-2"><label className="block text-xs text-slate-500 mb-1">Ad Soyad *</label><input value={cust.ad} onChange={(e) => setCust({ ...cust, ad: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
                     <div><label className="block text-xs text-slate-500 mb-1">Telefon *</label><input value={cust.telefon} onChange={(e) => setCust({ ...cust, telefon: e.target.value })} placeholder="05xx xxx xx xx" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
-                    <div><label className="block text-xs text-slate-500 mb-1">E-posta</label><input value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
-                    <div className="sm:col-span-2"><label className="block text-xs text-slate-500 mb-1">Teslimat Adresi *</label><textarea rows={3} value={cust.adres} onChange={(e) => setCust({ ...cust, adres: e.target.value })} placeholder="Mahalle, sokak, no, daire, ilçe/il" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
+                    <div><label className="block text-xs text-slate-500 mb-1">E-posta</label><input value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} placeholder="ornek@mail.com" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
+                    <div><label className="block text-xs text-slate-500 mb-1">İl *</label><input value={cust.il} onChange={(e) => setCust({ ...cust, il: e.target.value })} placeholder="İstanbul" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
+                    <div><label className="block text-xs text-slate-500 mb-1">İlçe *</label><input value={cust.ilce} onChange={(e) => setCust({ ...cust, ilce: e.target.value })} placeholder="Kadıköy" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
+                    <div className="sm:col-span-2"><label className="block text-xs text-slate-500 mb-1">Teslimat Adresi *</label><textarea rows={3} value={cust.adres} onChange={(e) => setCust({ ...cust, adres: e.target.value })} placeholder="Mahalle, sokak, no, daire" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
                   </div>
                   <p className="text-[11px] text-slate-400 inline-flex items-center gap-1"><Lock size={12} /> Bilgileriniz yalnızca siparişinizin teslimatı için kullanılır.</p>
                 </div>
@@ -866,7 +873,10 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
                 <button onClick={() => odemeYap()} disabled={busy} className="w-full mt-4 bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"><Lock size={16} /> {busy ? 'Hazırlanıyor...' : 'Ödemeye Geç'}</button>
               )}
               {checkoutStep === 'odeme' && (
-                <button onClick={() => setCheckoutStep('teslimat')} className="w-full mt-4 border border-slate-200 text-slate-600 py-2.5 rounded-2xl font-medium hover:bg-slate-50">← Teslimat Bilgilerine Dön</button>
+                <div className="flex gap-2 mt-4">
+                  <button onClick={() => { setCheckout(false); setCartOpen(true); setOrderInfo(null); setPaytrUrl(''); setPayErr(''); }} className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-2xl font-medium hover:bg-slate-50">← Sepete Dön</button>
+                  <button onClick={() => { setCheckoutStep('teslimat'); setOrderInfo(null); setPaytrUrl(''); setPayErr(''); }} className="flex-1 border border-slate-200 text-slate-600 py-2.5 rounded-2xl font-medium hover:bg-slate-50">← Teslimat Bilgileri</button>
+                </div>
               )}
 
               <div className="mt-4 space-y-2 border-t border-slate-100 pt-3">

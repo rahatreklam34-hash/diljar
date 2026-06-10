@@ -947,8 +947,10 @@ router.post('/store/:slug/tami/pay', asyncHandler(async (req: Request, res: Resp
   const phone = String(customer?.telefon || req.body?.buyer?.telefon || '5300000000').replace(/\D/g, '') || '5300000000';
   const emailRaw = String(customer?.email || req.body?.buyer?.email || '').trim();
   const email = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailRaw) ? emailRaw : `siparis-${order.id}@diljar.com`;
-  const addr = customer?.adres || req.body?.buyer?.adres || 'Adres belirtilmedi';
-  const address = { address: addr, city: 'Istanbul', country: 'Turkiye', contactName: adAll, companyName: null, zipCode: '34000', phoneNumber: phone, district: '-' };
+  const addr = String(req.body?.buyer?.adres || customer?.adres || 'Adres belirtilmedi');
+  const city = String(req.body?.buyer?.il || 'Istanbul').slice(0, 40) || 'Istanbul';
+  const district = String(req.body?.buyer?.ilce || '-').slice(0, 40) || '-';
+  const address = { address: addr, city, country: 'Turkiye', contactName: adAll, companyName: null, zipCode: '34000', phoneNumber: phone, district };
   const items = (order.items as any[]) || [];
   const basketItems = items.map((it, idx) => ({ itemId: String(it.productId || idx), itemType: 'PHYSICAL', name: String(it.ad || 'Urun').slice(0, 60), category: 'Giyim', subCategory: '-', unitPrice: Number(it.fiyat) || 0, totalPrice: (Number(it.fiyat) || 0) * (Number(it.adet) || 1), numberOfProducts: Number(it.adet) || 1 }));
 
@@ -957,7 +959,7 @@ router.post('/store/:slug/tami/pay', asyncHandler(async (req: Request, res: Resp
     amount: Number(order.toplam) || 0,
     callbackUrl: `${env.APP_DOMAIN}/api/v1/public/tami/callback`,
     card: { number: String(card.number).replace(/\s/g, ''), cvv: String(card.cvv || ''), expireMonth: Number(card.expireMonth) || 0, expireYear: Number(card.expireYear) || 0, holderName: String(card.holderName || adAll) },
-    buyer: { ipAddress: ip, buyerId: String(order.customerId || 'b' + order.id).slice(0, 30), name, surName, identityNumber: null, city: 'Istanbul', country: 'Turkiye', emailAddress: email, phoneNumber: phone, registrationAddress: addr, zipCode: '34000' },
+    buyer: { ipAddress: ip, buyerId: String(order.customerId || 'b' + order.id).slice(0, 30), name, surName, identityNumber: null, city, country: 'Turkiye', emailAddress: email, phoneNumber: phone, registrationAddress: addr, zipCode: '34000' },
     billingAddress: address,
     shippingAddress: address,
     basket: { basketId: String(order.id).slice(0, 20), basketItems },
