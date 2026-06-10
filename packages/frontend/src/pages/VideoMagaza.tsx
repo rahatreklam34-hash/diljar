@@ -3,6 +3,7 @@ import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'reac
 import { Search, Heart, ShoppingBag, Zap, Home, LayoutGrid, Radio, User, Plus, Minus, X, Star, ChevronDown, Grid2x2, List, Truck, RotateCcw, ShieldCheck, Headphones, Lock, SlidersHorizontal, Tag, CreditCard, Check } from 'lucide-react';
 import api, { apiErrorMessage } from '../lib/api';
 import StoreHeader from '../components/StoreHeader';
+import { IL_ILCE, ILLER } from '../lib/turkiye';
 
 const fmt = (n: number) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
 const disc = (eski?: number, satis?: number) => (eski && satis && eski > satis) ? Math.round(((eski - satis) / eski) * 100) : 0;
@@ -768,8 +769,8 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
                     <div className="sm:col-span-2"><label className="block text-xs text-slate-500 mb-1">Ad Soyad *</label><input value={cust.ad} onChange={(e) => setCust({ ...cust, ad: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
                     <div><label className="block text-xs text-slate-500 mb-1">Telefon *</label><input value={cust.telefon} onChange={(e) => setCust({ ...cust, telefon: e.target.value })} placeholder="05xx xxx xx xx" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
                     <div><label className="block text-xs text-slate-500 mb-1">E-posta</label><input value={cust.email} onChange={(e) => setCust({ ...cust, email: e.target.value })} placeholder="ornek@mail.com" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
-                    <div><label className="block text-xs text-slate-500 mb-1">İl *</label><input value={cust.il} onChange={(e) => setCust({ ...cust, il: e.target.value })} placeholder="İstanbul" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
-                    <div><label className="block text-xs text-slate-500 mb-1">İlçe *</label><input value={cust.ilce} onChange={(e) => setCust({ ...cust, ilce: e.target.value })} placeholder="Kadıköy" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
+                    <div><label className="block text-xs text-slate-500 mb-1">İl *</label><select value={cust.il} onChange={(e) => setCust({ ...cust, il: e.target.value, ilce: '' })} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white"><option value="">İl seçiniz</option>{ILLER.map((il) => <option key={il} value={il}>{il}</option>)}</select></div>
+                    <div><label className="block text-xs text-slate-500 mb-1">İlçe *</label><select value={cust.ilce} onChange={(e) => setCust({ ...cust, ilce: e.target.value })} disabled={!cust.il} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white disabled:bg-slate-50 disabled:text-slate-400"><option value="">{cust.il ? 'İlçe seçiniz' : 'Önce il seçiniz'}</option>{(IL_ILCE[cust.il] || []).map((ilce) => <option key={ilce} value={ilce}>{ilce}</option>)}</select></div>
                     <div className="sm:col-span-2"><label className="block text-xs text-slate-500 mb-1">Teslimat Adresi *</label><textarea rows={3} value={cust.adres} onChange={(e) => setCust({ ...cust, adres: e.target.value })} placeholder="Mahalle, sokak, no, daire" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
                   </div>
                   <p className="text-[11px] text-slate-400 inline-flex items-center gap-1"><Lock size={12} /> Bilgileriniz yalnızca siparişinizin teslimatı için kullanılır.</p>
