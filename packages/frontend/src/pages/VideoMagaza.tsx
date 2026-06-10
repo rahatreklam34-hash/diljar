@@ -63,6 +63,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [orderInfo, setOrderInfo] = useState<any>(null);
   const [tcard, setTcard] = useState({ number: '', holderName: '', expireMonth: '', expireYear: '', cvv: '' });
   const [payErr, setPayErr] = useState('');
+  const [sozlesmeOk, setSozlesmeOk] = useState(false);
   const openCart = () => { setOrderInfo(null); setPaytrUrl(''); setPayErr(''); setCheckoutStep('sepet'); setCheckout(true); };
   const [done, setDone] = useState<any>(null);
   const [legalModal, setLegalModal] = useState('');
@@ -828,7 +829,14 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
                 <button onClick={tamamla} disabled={cartItems.length === 0} className="w-full mt-4 bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2">Teslimat Bilgilerine Geç →</button>
               )}
               {checkoutStep === 'teslimat' && (
-                <button onClick={() => odemeYap()} disabled={busy} className="w-full mt-4 bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"><Lock size={16} /> {busy ? 'Hazırlanıyor...' : 'Ödemeye Geç'}</button>
+                <>
+                  <label className="flex items-start gap-2 mt-4 text-[11px] text-slate-500 cursor-pointer">
+                    <input type="checkbox" checked={sozlesmeOk} onChange={(e) => setSozlesmeOk(e.target.checked)} className="mt-0.5 rounded accent-indigo-600" />
+                    <span><button type="button" onClick={() => setLegalModal('mesafeli')} className="text-indigo-600 underline">Mesafeli Satış Sözleşmesi ve Ön Bilgilendirme Formu</button>'nu okudum, onaylıyorum.</span>
+                  </label>
+                  <button onClick={() => odemeYap()} disabled={busy || !sozlesmeOk} className="w-full mt-3 bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"><Lock size={16} /> {busy ? 'Hazırlanıyor...' : 'Ödemeye Geç'}</button>
+                  {!sozlesmeOk && <p className="text-[11px] text-amber-500 text-center mt-1">Devam etmek için sözleşmeyi onaylayın.</p>}
+                </>
               )}
               {checkoutStep === 'odeme' && (
                 <div className="flex gap-2 mt-4">
