@@ -7,6 +7,7 @@ import { prisma } from '../../lib/prisma';
 import { env } from '../../config/env';
 import { asyncHandler, ApiError } from '../../lib/http';
 import { createPaytrToken, verifyPaytrCallback, PaytrConfig } from '../payment/paytr';
+import { getTami, tamiInitAuth, tamiComplete3ds, verifyTamiCallback } from '../tami/tami.service';
 import { botReply, offeredTicket } from '../bot/engine';
 import { summarizeTicket } from '../bot/llm';
 import { promoteReserved, campaignAdjust } from '../store/live.routes';
@@ -436,7 +437,8 @@ router.post('/store/:slug/order', asyncHandler(async (req: Request, res: Respons
     return res.status(201).json({ ok: true, orderId: result.id, toplam, paytrError: tok.reason });
   }
 
-  res.status(201).json({ ok: true, orderId: result.id, toplam });
+  const tamiAvailable = !!(await getTami(tenantId));
+  res.status(201).json({ ok: true, orderId: result.id, toplam, tamiAvailable });
 }));
 
 // PayTR bildirim (callback) — PayTR sunucusu buraya POST eder
@@ -921,6 +923,70 @@ router.post('/sepet/:token/paytr', asyncHandler(async (req: Request, res: Respon
     return res.json({ ok: true, iframeUrl: `https://www.paytr.com/odeme/guvenli/${tok.token}` });
   }
   return res.json({ ok: false, configured: true, error: tok.reason });
+}));
+
+// ───────── Tami 3D ödeme: sipariş için ödeme başlat ─────────
+const rnd4 = () => String(Math.floor(1000 + Math.random() * 9000));
+router.post('/store/:slug/tami/pay', asyncHandler(async (req: Request, res: Response) => {
+  const store = await prisma.storeSetting.findFirst({ where: { slug: req.params.slug, active: true } });
+  if (!store) throw new ApiError(404, 'Magaza bulunamadi');
+  const tami = await getTami(store.tenantId);
+  if (!tami) throw new ApiError(400, 'Tami ödeme yapılandırılmamış');
+  const { orderId, card } = req.body || {};
+  if (!orderId || !card?.number) throw new ApiError(400, 'orderId ve kart bilgileri gerekli');
+  const order = await prisma.storeOrder.findFirst({ where: { id: orderId, tenantId: store.tenantId } });
+  if (!order) throw new ApiError(404, 'Sipariş bulunamadi');
+  if ((order.gelirKaydedilen || 0) > 0) throw new ApiError(400, 'Sipariş zaten ödenmiş');
+  const customer = order.customerId ? await prisma.customer.findUnique({ where: { id: order.customerId } }) : null;
+
+  const tamiOid = 'd' + Date.now() + rnd4();
+  const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
+  const adAll = String(customer?.ad || 'Musteri').trim();
+  const [name, ...rest] = adAll.split(/\s+/);
+  const surName = rest.join(' ') || name;
+  const phone = String(customer?.telefon || req.body?.buyer?.telefon || '5300000000').replace(/\D/g, '') || '5300000000';
+  const email = customer?.email || req.body?.buyer?.email || `siparis-${order.id}@diljar.com`;
+  const addr = customer?.adres || req.body?.buyer?.adres || 'Adres belirtilmedi';
+  const address = { address: addr, city: 'Istanbul', country: 'Turkiye', contactName: adAll, companyName: null, zipCode: '34000', phoneNumber: phone, district: '-' };
+  const items = (order.items as any[]) || [];
+  const basketItems = items.map((it, idx) => ({ itemId: String(it.productId || idx), itemType: 'PHYSICAL', name: String(it.ad || 'Urun').slice(0, 60), category: 'Giyim', subCategory: '-', unitPrice: Number(it.fiyat) || 0, totalPrice: (Number(it.fiyat) || 0) * (Number(it.adet) || 1), numberOfProducts: Number(it.adet) || 1 }));
+
+  const resp = await tamiInitAuth(tami, {
+    orderId: tamiOid,
+    amount: Number(order.toplam) || 0,
+    callbackUrl: `${env.APP_DOMAIN}/api/v1/public/tami/callback`,
+    card: { number: String(card.number).replace(/\s/g, ''), cvv: String(card.cvv || ''), expireMonth: Number(card.expireMonth) || 0, expireYear: Number(card.expireYear) || 0, holderName: String(card.holderName || adAll) },
+    buyer: { ipAddress: ip, buyerId: String(order.customerId || 'b' + order.id).slice(0, 30), name, surName, identityNumber: null, city: 'Istanbul', country: 'Turkiye', emailAddress: email, phoneNumber: phone, registrationAddress: addr, zipCode: '34000' },
+    billingAddress: address,
+    shippingAddress: address,
+    basket: { basketId: String(order.id).slice(0, 20), basketItems },
+  });
+
+  if (resp?.success && resp.threeDSHtmlContent) {
+    await prisma.storeOrder.update({ where: { id: order.id }, data: { not: `tami_oid:${tamiOid}` } });
+    const html = Buffer.from(resp.threeDSHtmlContent, 'base64').toString('utf8');
+    return res.json({ ok: true, html });
+  }
+  res.status(400).json({ ok: false, message: resp?.errorMessage || 'Tami ödeme başlatılamadı', code: resp?.errorCode });
+}));
+
+// ───────── Tami callback (banka 3D sonucu buraya POST eder) ─────────
+router.post('/tami/callback', express.urlencoded({ extended: false }), asyncHandler(async (req: Request, res: Response) => {
+  const body: any = req.body || {};
+  const oid: string = body.orderId || '';
+  const fail = `${env.APP_DOMAIN}/?payment=fail`;
+  const order = await prisma.storeOrder.findFirst({ where: { not: `tami_oid:${oid}` } });
+  if (!order) return res.redirect(fail);
+  const tami = await getTami(order.tenantId);
+  if (!tami || !verifyTamiCallback(tami.secret, body)) return res.redirect(fail);
+  const ok3d = String(body.success) === 'true' || String(body.mdStatus) === '1';
+  if (!ok3d) return res.redirect(fail);
+  const comp = await tamiComplete3ds(tami, oid);
+  if (!comp?.success) return res.redirect(fail);
+  if ((order.gelirKaydedilen || 0) <= 0) {
+    await prisma.storeOrder.update({ where: { id: order.id }, data: { durum: 'hazirlaniyor', tahsilat: order.toplam, gelirKaydedilen: order.toplam, odemeYontemi: 'Kredi Kartı (Tami)', not: 'Odeme alindi (Tami)' } });
+  }
+  res.redirect(`${env.APP_DOMAIN}/?payment=success`);
 }));
 
 export default router;

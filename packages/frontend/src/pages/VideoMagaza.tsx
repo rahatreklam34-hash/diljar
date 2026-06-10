@@ -68,6 +68,9 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const [checkoutStep, setCheckoutStep] = useState<'teslimat' | 'odeme' | 'onay'>('teslimat');
   const [cust, setCust] = useState({ ad: '', telefon: '', email: '', adres: '' });
   const [paytrUrl, setPaytrUrl] = useState('');
+  const [orderInfo, setOrderInfo] = useState<any>(null);
+  const [tcard, setTcard] = useState({ number: '', holderName: '', expireMonth: '', expireYear: '', cvv: '' });
+  const [payErr, setPayErr] = useState('');
   const [done, setDone] = useState<any>(null);
   const [legalModal, setLegalModal] = useState('');
   const [siparisDetay, setSiparisDetay] = useState<any>(null);
@@ -285,10 +288,25 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
       const items = cartItems.map((x: any) => ({ productId: x.productId, adet: x.adet, varyasyon: x.varyasyon || undefined }));
       const r = await api.post(`/public/store/${slug}/order`, { customer: cust, items, discountCode: discountCode || undefined });
       if (r.data.iframeUrl) { setPaytrUrl(r.data.iframeUrl); setCheckoutStep('odeme'); return; }
+      if (r.data.tamiAvailable) { setOrderInfo(r.data); setPayErr(''); setCheckoutStep('odeme'); return; }
       if (r.data.paytrError) alert('Ödeme başlatılamadı: ' + r.data.paytrError + '\nSiparişiniz kaydedildi, sizinle iletişime geçilecek.');
       track('browse', null, 'order');
       setDone(r.data); setCart({}); setCheckout(false); setDiscountCode(''); setCodeInput(''); setPreview(null);
     } catch (e) { alert(apiErrorMessage(e)); } finally { setBusy(false); }
+  };
+
+  // Tami 3D ödeme: kart bilgileri → /tami/pay → 3DS HTML'i tam sayfada aç
+  const tamiPay = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const num = tcard.number.replace(/\s/g, '');
+    if (num.length < 15 || !tcard.cvv || !tcard.expireMonth || !tcard.expireYear) { setPayErr('Kart bilgilerini eksiksiz girin.'); return; }
+    setBusy(true); setPayErr('');
+    try {
+      const yil = tcard.expireYear.length === 2 ? '20' + tcard.expireYear : tcard.expireYear;
+      const r = await api.post(`/public/store/${slug}/tami/pay`, { orderId: orderInfo.orderId, card: { number: num, cvv: tcard.cvv, expireMonth: Number(tcard.expireMonth), expireYear: Number(yil), holderName: tcard.holderName || cust.ad } });
+      if (r.data.ok && r.data.html) { document.open(); document.write(r.data.html); document.close(); return; }
+      setPayErr(r.data.message || 'Ödeme başlatılamadı.');
+    } catch (er) { setPayErr(apiErrorMessage(er)); } finally { setBusy(false); }
   };
 
   if (err) return <div className="min-h-screen flex items-center justify-center text-slate-500 p-6 text-center bg-slate-100">{err}</div>;
@@ -787,11 +805,30 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
               {checkoutStep === 'odeme' && (
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
                   <div className="p-5 border-b border-slate-100 flex items-center justify-between gap-2 flex-wrap">
-                    <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center"><CreditCard size={18} /></span><div><h2 className="font-bold text-slate-800">Kredi / Banka Kartı ile Ödeme</h2><p className="text-[11px] text-slate-400">Kart bilgileriniz 256-bit SSL ile PayTR güvencesiyle işlenir, saklanmaz.</p></div></div>
+                    <div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-violet-100 text-violet-600 flex items-center justify-center"><CreditCard size={18} /></span><div><h2 className="font-bold text-slate-800">Kredi / Banka Kartı ile Ödeme</h2><p className="text-[11px] text-slate-400">Kart bilgileriniz 256-bit SSL ile güvenli altyapı üzerinden işlenir, saklanmaz.</p></div></div>
                     <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400"><span className="px-1.5 py-0.5 bg-slate-100 rounded">VISA</span><span className="px-1.5 py-0.5 bg-slate-100 rounded">MC</span><span className="px-1.5 py-0.5 bg-slate-100 rounded">TROY</span></div>
                   </div>
                   {paytrUrl ? (
                     <iframe src={paytrUrl} className="w-full" style={{ height: '70vh', minHeight: 520 }} title="Kart ile Ödeme" />
+                  ) : orderInfo ? (
+                    <form onSubmit={tamiPay} className="p-5 space-y-3">
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500">Kart Numarası</label>
+                        <input value={tcard.number} onChange={(e) => setTcard({ ...tcard, number: e.target.value.replace(/[^0-9]/g, '').replace(/(.{4})/g, '$1 ').trim().slice(0, 19) })} inputMode="numeric" placeholder="0000 0000 0000 0000" className="w-full mt-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm tracking-wider" />
+                      </div>
+                      <div>
+                        <label className="text-xs font-semibold text-slate-500">Kart Üzerindeki İsim</label>
+                        <input value={tcard.holderName} onChange={(e) => setTcard({ ...tcard, holderName: e.target.value })} placeholder="Ad Soyad" className="w-full mt-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm" />
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div><label className="text-xs font-semibold text-slate-500">Ay</label><input value={tcard.expireMonth} onChange={(e) => setTcard({ ...tcard, expireMonth: e.target.value.replace(/[^0-9]/g, '').slice(0, 2) })} inputMode="numeric" placeholder="AA" className="w-full mt-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm" /></div>
+                        <div><label className="text-xs font-semibold text-slate-500">Yıl</label><input value={tcard.expireYear} onChange={(e) => setTcard({ ...tcard, expireYear: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) })} inputMode="numeric" placeholder="YYYY" className="w-full mt-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm" /></div>
+                        <div><label className="text-xs font-semibold text-slate-500">CVV</label><input value={tcard.cvv} onChange={(e) => setTcard({ ...tcard, cvv: e.target.value.replace(/[^0-9]/g, '').slice(0, 4) })} inputMode="numeric" placeholder="000" className="w-full mt-1 px-3 py-2.5 border border-slate-200 rounded-xl text-sm" /></div>
+                      </div>
+                      {payErr && <p className="text-rose-600 text-sm flex items-center gap-1.5"><Lock size={14} /> {payErr}</p>}
+                      <button type="submit" disabled={busy} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 disabled:opacity-50 inline-flex items-center justify-center gap-2"><Lock size={16} /> {busy ? '3D doğrulamaya yönlendiriliyor...' : `${fmt(odenecek)} Güvenli Öde`}</button>
+                      <p className="text-[11px] text-slate-400 text-center inline-flex items-center gap-1 justify-center w-full"><ShieldCheck size={12} className="text-emerald-500" /> 3D Secure ile bankanıza yönlendirileceksiniz.</p>
+                    </form>
                   ) : (
                     <div className="p-6 text-center text-slate-500">
                       <Lock size={26} className="mx-auto mb-3 text-slate-300" />

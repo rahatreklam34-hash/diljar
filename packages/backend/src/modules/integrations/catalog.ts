@@ -42,6 +42,18 @@ export const AI_PROVIDERS: ProviderDef[] = [
 
 export const PAYMENT_PROVIDERS: ProviderDef[] = [
   {
+    provider: 'tami',
+    label: 'Tami (Sanal POS / 3D)',
+    category: 'PAYMENT',
+    description: 'Tami 3D Secure ödeme altyapısı. Üye işyeri no, terminal no ve gizli anahtar (secret key) Tami panelinden alınır. Ortam: test (sandbox) veya prod.',
+    fields: [
+      { key: 'merchant_number', label: 'Üye İşyeri No (Merchant Number)' },
+      { key: 'terminal_number', label: 'Terminal No (Terminal Number)' },
+      { key: 'secret_key', label: 'Gizli Anahtar (Secret Key)', type: 'password' },
+      { key: 'mode', label: 'Ortam (test / prod — varsayılan test)', optional: true },
+    ],
+  },
+  {
     provider: 'paytr',
     label: 'PayTR',
     category: 'PAYMENT',
