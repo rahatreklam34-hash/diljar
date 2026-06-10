@@ -121,7 +121,7 @@ export default function TopluUrunEkle() {
   const inp = 'px-3 py-2 text-sm border border-slate-200 rounded-lg w-full bg-white';
 
   return (
-    <div>
+    <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => e.preventDefault()}>
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center"><PackagePlus className="text-indigo-600" size={22} /></div>
         <div className="flex-1 min-w-[180px]"><h1 className="text-xl font-bold text-slate-800">Toplu Ürün Ekle</h1><p className="text-sm text-slate-400">Görselleri sürükle-bırak — her görsel bir ürün olur</p></div>
@@ -177,16 +177,20 @@ export default function TopluUrunEkle() {
       {items.length > 0 && (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {items.map((it) => (
-            <div key={it.id} className="bg-white rounded-2xl border border-slate-200 p-3">
+            <div
+              key={it.id}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dropTarget !== it.id) setDropTarget(it.id); }}
+              onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setDropTarget(it.id); }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null); }}
+              onDrop={(e) => onCardDrop(e, it.id)}
+              className={`bg-white rounded-2xl border-2 p-3 transition-colors ${dropTarget === it.id ? 'border-indigo-500 ring-2 ring-indigo-200 bg-indigo-50/40' : 'border-slate-200'}`}
+            >
               <div className="flex gap-3">
-                {/* Kapak görseli — tıkla büyüt, üstüne görsel bırak */}
+                {/* Kapak görseli — tıkla büyüt */}
                 <div
                   onClick={() => setLightbox({ images: it.images, idx: 0 })}
-                  onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDropTarget(it.id); }}
-                  onDragLeave={() => setDropTarget(null)}
-                  onDrop={(e) => onCardDrop(e, it.id)}
-                  title="Tıkla büyüt · üstüne görsel bırak (galeri)"
-                  className={`relative w-24 h-24 rounded-xl overflow-hidden border-2 shrink-0 cursor-zoom-in ${dropTarget === it.id ? 'border-indigo-500 ring-2 ring-indigo-200' : 'border-slate-200'}`}
+                  title="Tıkla büyüt · karta görsel bırak (galeri)"
+                  className={`relative w-24 h-24 rounded-xl overflow-hidden border-2 shrink-0 cursor-zoom-in ${dropTarget === it.id ? 'border-indigo-400' : 'border-slate-200'}`}
                 >
                   {it.images[0] ? <img src={it.images[0]} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-300"><ImagePlus size={20} /></div>}
                   {it.images.length > 1 && <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded-full">+{it.images.length - 1}</span>}
