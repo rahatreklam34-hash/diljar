@@ -164,7 +164,7 @@ function PrimaryStoreRedirect() {
   useEffect(() => { api.get('/public/primary-store').then((r) => setSlug(r.data?.slug || null)).catch(() => setSlug(null)); }, []);
   if (slug === undefined) return null;
   if (!slug) return <Navigate to="/login" replace />;
-  return <VideoMagaza slug={slug} />;
+  return <Navigate to={`/m/${slug}`} replace />;
 }
 // Eski /magaza/:slug linklerini yeni mağaza yapısına (/m/:slug) yönlendir
 function MagazaRedirect() {
@@ -181,6 +181,7 @@ export default function App() {
           <Route path="/" element={<RootGate />} />
           <Route path="/m/:slug" element={<VideoMagaza />} />
           <Route path="/m/:slug/urun/:id" element={<UrunDetayPublic />} />
+          <Route path="/m/:slug/*" element={<VideoMagaza />} />
           <Route path="/urun/:id" element={<UrunDetayPublic />} />
           <Route path="/katalog/:slug" element={<KatalogPublic />} />
           <Route path="/magaza/:slug" element={<MagazaRedirect />} />

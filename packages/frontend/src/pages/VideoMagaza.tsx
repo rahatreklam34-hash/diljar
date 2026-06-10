@@ -30,10 +30,26 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
     Object.entries(patch).forEach(([k, v]) => { if (!v) next.delete(k); else next.set(k, v); });
     setSp(next, { replace });
   };
-  const kat = sp.get('kategori') || 'tumu';
   const sort = sp.get('sirala') || 'yeni';
-  const setKat = (v: string) => updateParams({ kategori: v === 'tumu' ? null : v, sayfa: null });
   const setSort = (v: string) => updateParams({ sirala: v === 'yeni' ? null : v, sayfa: null });
+  // Yol tabanlı kategori/bölüm (Trendyol gibi): /m/:slug/kategori/erkek, /m/:slug/fiyati-dusenler ...
+  const restPath = (params['*'] || '').replace(/^\/+|\/+$/g, '');
+  const kat = (() => {
+    if (!restPath || restPath === 'tum-urunler') return 'tumu';
+    if (restPath.startsWith('kategori/')) return 'kat:' + restPath.slice(9);
+    if (restPath.startsWith('cinsiyet/')) return 'cins:' + restPath.slice(9);
+    return (({ 'fiyati-dusenler': 'indirim', 'one-cikanlar': 'coksatan', 'yeni-gelenler': 'yeni', 'son-sans': 'sonsans' } as Record<string, string>)[restPath]) || 'tumu';
+  })();
+  const katToPath = (v: string) => {
+    if (v.startsWith('kat:')) return `/kategori/${v.slice(4)}`;
+    if (v.startsWith('cins:')) return `/cinsiyet/${v.slice(5)}`;
+    return (({ indirim: '/fiyati-dusenler', coksatan: '/one-cikanlar', yeni: '/yeni-gelenler', sonsans: '/son-sans', tumu: '' } as Record<string, string>)[v]) ?? '';
+  };
+  const setKat = (v: string) => {
+    const qs = new URLSearchParams(sp); qs.delete('sayfa');
+    const query = qs.toString();
+    nav(`/m/${slug}${katToPath(v)}${query ? `?${query}` : ''}`);
+  };
   const [view, setView] = useState<'grid' | 'list'>('grid');
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [genderSel, setGenderSel] = useState<Set<string>>(new Set());
