@@ -1,7 +1,8 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, ShoppingBag, Star, X, ImagePlus, Send, Truck, ShieldCheck, RotateCcw, Search, User, Zap } from 'lucide-react';
+import { ArrowLeft, ShoppingBag, Star, X, ImagePlus, Send, Truck, ShieldCheck, RotateCcw } from 'lucide-react';
 import api, { apiErrorMessage } from '../lib/api';
+import StoreHeader from '../components/StoreHeader';
 
 const fmt = (n: number) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
 const disc = (eski?: number, satis?: number) => (eski && satis && eski > satis) ? Math.round(((eski - satis) / eski) * 100) : 0;
@@ -16,6 +17,8 @@ export default function UrunDetayPublic() {
   const nav = useNavigate();
   const [slug, setSlug] = useState<string | undefined>(params.slug);
   const [storeName, setStoreName] = useState('');
+  const [storeTopMenu, setStoreTopMenu] = useState<any[]>([]);
+  const [cartCount, setCartCount] = useState(0);
   const [d, setD] = useState<any>(null);
   const [err, setErr] = useState('');
   const [imgIdx, setImgIdx] = useState(0);
@@ -31,7 +34,8 @@ export default function UrunDetayPublic() {
   const [ygonder, setYgonder] = useState(false);
 
   // slug yoksa (/urun/:id) birincil mağaza slug'ını çöz
-  useEffect(() => { api.get('/public/primary-store').then((r) => { if (!slug) setSlug(r.data?.slug || ''); setStoreName(r.data?.magaza || ''); }).catch(() => { if (!slug) setSlug(''); }); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { api.get('/public/primary-store').then((r) => { if (!slug) setSlug(r.data?.slug || ''); setStoreName(r.data?.magaza || ''); setStoreTopMenu(Array.isArray(r.data?.topMenu) ? r.data.topMenu : []); }).catch(() => { if (!slug) setSlug(''); }); /* eslint-disable-next-line */ }, []);
+  useEffect(() => { try { const c = JSON.parse(localStorage.getItem('wt_cart') || '{}'); setCartCount(Object.values(c).reduce((s: number, x: any) => s + (x.adet || 0), 0)); } catch { /* */ } }, []);
   const load = () => { if (!slug) return; api.get(`/public/store/${slug}/urun/${id}`).then((r) => { setD(r.data); }).catch((e) => setErr(apiErrorMessage(e))); api.post(`/public/store/${slug}/urun/${id}/view`, {}, { headers: { ...(localStorage.getItem('shopToken_' + slug) ? { Authorization: 'Bearer ' + localStorage.getItem('shopToken_' + slug) } : {}) } }).catch(() => {}); };
   useEffect(() => { load(); window.scrollTo(0, 0); /* eslint-disable-next-line */ }, [slug, id]);
 
@@ -77,23 +81,7 @@ export default function UrunDetayPublic() {
 
   return (
     <div className="min-h-screen bg-slate-100">
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-100">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <button onClick={() => nav('/')} className="p-1.5 rounded-lg hover:bg-slate-100 shrink-0"><ArrowLeft size={20} /></button>
-          <Link to="/" className="flex items-center gap-1.5 shrink-0"><span className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><Zap size={16} /></span><span className="font-extrabold text-slate-900 hidden sm:block">{storeName}</span></Link>
-          <form onSubmit={(e) => { e.preventDefault(); const v = (e.currentTarget.elements.namedItem('q') as HTMLInputElement)?.value || ''; nav(v ? `/?ara=${encodeURIComponent(v)}` : '/'); }} className="relative flex-1 max-w-xl"><Search size={16} className="absolute left-3 top-2.5 text-slate-400" /><input name="q" placeholder="Ürün, kod veya marka ara..." className="w-full pl-9 pr-3 py-2 text-sm bg-slate-100 rounded-xl outline-none" /></form>
-          <Link to={slug ? `/uye/${slug}` : '/'} className="hidden sm:inline-flex items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-indigo-600 shrink-0"><User size={18} /> Üye Ol / Giriş</Link>
-          <button onClick={() => nav('/?cart=1')} title="Sepetim" className="text-slate-700 hover:text-indigo-600 shrink-0"><ShoppingBag size={22} /></button>
-        </div>
-        {/* Üst menü (web) — mağaza ile aynı hap tarzı */}
-        <nav className="hidden sm:block border-t border-slate-100 bg-white/80 backdrop-blur">
-          <div className="max-w-6xl mx-auto px-4 flex items-center gap-2 py-2">
-            {[['/one-cikanlar', 'Öne Çıkanlar'], ['/fiyati-dusenler', 'Fiyatı Düşenler'], ['/yeni-gelenler', 'Yeni Gelenler'], ['/son-sans', 'Son Şans'], ['/tum-urunler', 'Tüm Ürünler']].map(([to, t]) => (
-              <Link key={to} to={to} className="px-4 py-2 text-sm font-semibold rounded-full text-slate-600 hover:bg-slate-100">{t}</Link>
-            ))}
-          </div>
-        </nav>
-      </header>
+      <StoreHeader logoText={storeName} topMenu={storeTopMenu} cartCount={cartCount} />
 
       <div className="max-w-5xl mx-auto px-4 py-4 grid md:grid-cols-2 gap-6">
         {/* Görseller */}

@@ -148,7 +148,7 @@ router.get('/primary-store', asyncHandler(async (_req: Request, res: Response) =
   const s = await prisma.storeSetting.findFirst({ where: { active: true, slug: { not: null } }, orderBy: { createdAt: 'asc' } });
   let magaza = '';
   if (s) { const t = await prisma.tenant.findUnique({ where: { id: s.tenantId }, select: { name: true } }); magaza = s.logoText || t?.name || ''; }
-  res.json({ slug: s?.slug || null, magaza });
+  res.json({ slug: s?.slug || null, magaza, logoText: magaza, topMenu: Array.isArray(s?.topMenu) ? s?.topMenu : [] });
 }));
 
 // ───────── Müşteri Üyeliği (mağaza) ─────────

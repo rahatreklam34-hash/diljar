@@ -2,19 +2,12 @@
 import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
 import { Search, Heart, ShoppingBag, Zap, Home, LayoutGrid, Radio, User, Plus, Minus, X, Star, ChevronDown, Grid2x2, List, Truck, RotateCcw, ShieldCheck, Headphones, Lock, SlidersHorizontal, Tag, CreditCard, Check } from 'lucide-react';
 import api, { apiErrorMessage } from '../lib/api';
+import StoreHeader from '../components/StoreHeader';
 
 const fmt = (n: number) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
 const disc = (eski?: number, satis?: number) => (eski && satis && eski > satis) ? Math.round(((eski - satis) / eski) * 100) : 0;
 const vipRate = (p: number) => p >= 1500 ? 5 : p >= 800 ? 4 : 3;
 const discColor = (d: number) => d >= 30 ? 'bg-red-500' : d >= 20 ? 'bg-orange-500' : 'bg-green-500';
-
-const KATLAR = [
-  { k: 'tumu', t: 'Tümü', icon: Zap },
-  { k: 'indirim', t: 'İndirimdekiler', icon: () => <span className="font-bold">%</span> },
-  { k: 'coksatan', t: 'Çok Satanlar', icon: Star },
-  { k: 'yeni', t: 'Yeni Fırsatlar', icon: Zap },
-  { k: 'sonsans', t: 'Son Şans', icon: RotateCcw },
-];
 
 export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const params = useParams();
@@ -143,9 +136,6 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   const activeFilterCount = genderSel.size + brandSel.size + sizeSel.size + (priceMin ? 1 : 0) + (priceMax ? 1 : 0);
   const toggleSet = (setter: any, val: string) => setter((s: Set<string>) => { const n = new Set(s); n.has(val) ? n.delete(val) : n.add(val); return n; });
   const clearFilters = () => { setGenderSel(new Set()); setBrandSel(new Set()); setSizeSel(new Set()); setPriceMin(''); setPriceMax(''); };
-  // Menü öğesini filtre anahtarına çevir
-  const katKey = (it: any) => it.type === 'kategori' ? `kat:${it.value}` : it.type === 'cinsiyet' ? `cins:${it.value}` : it.value;
-
   // Story / Widget bağlantısını çöz (mağaza içi filtre/kategori/ürün veya dış URL)
   const goProducts = () => setTimeout(() => document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }), 60);
   const resolveLink = (link: any) => {
@@ -366,39 +356,16 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   return (
     <div className="min-h-screen bg-slate-100">
       {/* Header */}
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-100">
-        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-          <Link to="/" className="flex items-center gap-1.5"><span className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><Zap size={16} /></span><span className="font-extrabold text-slate-900 hidden sm:block">{data.logoText || data.name}</span></Link>
-          <div className="relative flex-1 max-w-xl mx-auto"><Search size={16} className="absolute left-3 top-2.5 text-slate-400" /><input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ürün, kod veya marka ara..." className="w-full pl-9 pr-3 py-2 text-base bg-slate-100 rounded-xl outline-none" /></div>
-          <button onClick={() => setAcc(true)} className="hidden sm:inline-flex items-center gap-1.5 text-sm text-slate-600 hover:text-indigo-600"><User size={18} /> {shopUser ? shopUser.ad.split(' ')[0] : 'Üye Ol / Giriş'}</button>
-          <button onClick={() => setCartOpen(true)} className="relative"><ShoppingBag size={22} className="text-slate-700" />{count > 0 && <span className="absolute -top-1.5 -right-1.5 w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] flex items-center justify-center">{count}</span>}</button>
-        </div>
-        {/* Üst menü (web) — modern hap tarzı */}
-        <nav className="hidden sm:block border-t border-slate-100 bg-white/80 backdrop-blur">
-          <div className="max-w-6xl mx-auto px-4 flex items-center gap-2 py-2">
-            {(topMenu.length > 0
-              ? topMenu.map((m: any) => ({ key: katKey(m), label: m.label, children: m.children || [] }))
-              : KATLAR.map((c) => ({ key: c.k, label: c.t, children: [] as any[] }))
-            ).map((m: any) => {
-              const active = kat === m.key || (m.children || []).some((c: any) => kat === katKey(c));
-              return (
-                <div key={m.key} className="relative group">
-                  <button onClick={() => { setKat(m.key); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className={`px-4 py-2 text-sm font-semibold rounded-full inline-flex items-center gap-1 transition-colors ${active ? 'bg-indigo-600 text-white shadow-sm shadow-indigo-200' : 'text-slate-600 hover:bg-slate-100'}`}>{m.label}{(m.children || []).length > 0 && <ChevronDown size={13} />}</button>
-                  {(m.children || []).length > 0 && (
-                    <div className="absolute left-0 top-full pt-1 hidden group-hover:block z-40">
-                      <div className="bg-white border border-slate-100 rounded-2xl shadow-xl py-1.5 min-w-[190px]">
-                        {m.children.map((c: any, ci: number) => { const ck = katKey(c); return (
-                          <button key={ci} onClick={() => { setKat(ck); document.getElementById('urunler')?.scrollIntoView({ behavior: 'smooth' }); }} className={`w-full text-left px-4 py-2 text-sm hover:bg-indigo-50 hover:text-indigo-600 rounded-lg ${kat === ck ? 'text-indigo-600 font-medium' : 'text-slate-600'}`}>{c.label}</button>
-                        ); })}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </nav>
-      </header>
+      <StoreHeader
+        logoText={data.logoText || data.name}
+        topMenu={topMenu}
+        cartCount={count}
+        searchValue={q}
+        onSearchChange={setQ}
+        onAccount={() => setAcc(true)}
+        onCart={() => setCartOpen(true)}
+        accountLabel={shopUser ? shopUser.ad.split(' ')[0] : 'Üye Ol / Giriş'}
+      />
 
       <div className="max-w-6xl mx-auto px-4 pb-28 sm:pb-10">
         {/* Geri sayım bandı */}
