@@ -73,6 +73,13 @@ export default function OnlineMagaza() {
   const [imgZoom, setImgZoom] = useState('');
   const [editModal, setEditModal] = useState<any | null>(null);
   const [editForm, setEditForm] = useState<any>({ satisFiyat: '', eskiFiyat: '', aciklama: '', oneCikan: false, collections: [] as string[] });
+  const [nameEdit, setNameEdit] = useState<{ id: string; val: string } | null>(null);
+  const saveName = async (p: any, val: string) => {
+    const t = (val || '').trim();
+    setNameEdit(null);
+    if (!t || t === p.ad) return;
+    try { await api.patch(`/store/products/${p.id}`, { ad: t }); toast.success('Ürün adı güncellendi'); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
+  };
 
   useEffect(() => {
     if (storeSetting) setS({ active: storeSetting.active, slug: storeSetting.slug || '', logoText: storeSetting.logoText || '', heroTitle: storeSetting.heroTitle || '', heroSubtitle: storeSetting.heroSubtitle || '', heroImage: storeSetting.heroImage || '', heroVideo: storeSetting.heroVideo || '', bankaAd: storeSetting.bankaAd || '', iban: storeSetting.iban || '', hesapSahibi: storeSetting.hesapSahibi || '', slides: storeSetting.slides || [], stories: storeSetting.stories || [], widgets: storeSetting.widgets || [], productOrder: storeSetting.productOrder || [], topMenu: storeSetting.topMenu || [], freeShipThreshold: storeSetting.freeShipThreshold || 0, puanOrani: storeSetting.puanOrani || 0, config: { ...DEFAULT_CONFIG, ...(storeSetting.config || {}) } });
@@ -816,7 +823,11 @@ export default function OnlineMagaza() {
                       <input type="number" min={1} defaultValue={globalPos(p.id)} key={globalPos(p.id)} onBlur={(e) => { const v = Number(e.target.value); if (v && v !== globalPos(p.id)) setPosition(p.id, v); }} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }} className="w-8 px-0.5 py-0.5 text-[10px] text-center border border-slate-200 rounded" title="Genel vitrin sırası" />
                       {(cfg.collectionItems?.[p.id]?.length || 0) > 0 && <span className="ml-auto text-[8px] text-indigo-500 inline-flex items-center gap-0.5" title="Koleksiyonlarda"><Folder size={9} />{cfg.collectionItems[p.id].length}</span>}
                     </div>
-                    <p className="text-[11px] font-medium text-slate-800 leading-tight line-clamp-2">{p.ad}</p>
+                    {nameEdit?.id === p.id ? (
+                      <input autoFocus value={nameEdit!.val} onChange={(e) => setNameEdit({ id: p.id, val: e.target.value })} onBlur={() => saveName(p, nameEdit!.val)} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); else if (e.key === 'Escape') setNameEdit(null); }} className="w-full px-1 py-0.5 text-[11px] font-medium border border-indigo-300 rounded focus:outline-none focus:ring-1 focus:ring-indigo-400" />
+                    ) : (
+                      <p onDoubleClick={() => setNameEdit({ id: p.id, val: p.ad })} title="Düzenlemek için çift tıkla" className="text-[11px] font-medium text-slate-800 leading-tight line-clamp-2 cursor-text hover:bg-indigo-50/60 rounded px-0.5 -mx-0.5">{p.ad}</p>
+                    )}
                     <div className="flex items-center gap-1 mt-0.5">{ind > 0 && <span className="text-[9px] text-slate-300 line-through">{fmt(p.eskiFiyat)}</span>}<span className={`text-xs font-bold ${ind > 0 ? 'text-rose-600' : 'text-slate-800'}`}>{fmt(p.satisFiyat)}</span></div>
                     {bedenler.length > 0 && <div className="flex flex-wrap gap-0.5 mt-0.5">{bedenler.slice(0, 4).map((v: any) => <span key={v.id || v.deger} className="text-[8px] px-1 py-0.5 rounded border border-slate-200 text-slate-500">{v.deger}</span>)}</div>}
                     <div className="flex items-center gap-0.5 mt-auto pt-1.5">
