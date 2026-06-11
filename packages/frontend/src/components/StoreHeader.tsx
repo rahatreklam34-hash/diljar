@@ -1,5 +1,5 @@
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { Search, User, ShoppingBag, ChevronDown, Zap } from 'lucide-react';
+import { Search, User, ShoppingBag, ChevronDown } from 'lucide-react';
 
 const katKey = (it: any) => (it.type === 'kategori' ? `kat:${it.value}` : it.type === 'cinsiyet' ? `cins:${it.value}` : it.value);
 const katToPath = (v: string) => {
@@ -38,7 +38,7 @@ export default function StoreHeader({ logoText, topMenu = [], cartCount = 0, sea
   return (
     <header className="sticky top-0 z-30 bg-white border-b border-slate-100">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
-        <Link to="/" className="flex items-center gap-1.5 shrink-0"><span className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center"><Zap size={16} /></span><span className="font-extrabold text-slate-900 hidden sm:block">{logoText}</span></Link>
+        <Link to="/" className="flex items-center shrink-0" title={logoText || 'DiLjar'}><img src="/diljar-logo.png" alt={logoText || 'DiLjar'} className="h-9 sm:h-10 w-auto object-contain" /></Link>
         <form
           onSubmit={(e) => { e.preventDefault(); if (controlled) return; const v = (e.currentTarget.elements.namedItem('q') as HTMLInputElement)?.value || ''; nav(v ? `/?ara=${encodeURIComponent(v)}` : '/'); }}
           className="relative flex-1 max-w-xl mx-auto"

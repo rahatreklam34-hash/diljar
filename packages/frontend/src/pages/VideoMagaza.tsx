@@ -333,7 +333,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
           <button className="absolute top-2 right-2 w-7 h-7 rounded-full bg-white/90 flex items-center justify-center text-slate-400 hover:text-red-500"><Heart size={15} /></button>
         </div>
         <div className="p-3 flex flex-col flex-1">
-          <p onClick={() => nav(`/urun/${p.id}`)} className="text-sm font-semibold text-slate-800 leading-tight line-clamp-2 cursor-pointer hover:text-indigo-600">{p.ad}</p>
+          <p onClick={() => nav(`/urun/${p.id}`)} className="text-sm font-semibold text-slate-800 leading-tight line-clamp-2 min-h-[2.5em] cursor-pointer hover:text-indigo-600">{p.ad}</p>
           <p className="text-[11px] text-slate-400 mt-0.5">{p.marka || '\u00A0'}</p>
           {vars.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1.5">
@@ -348,7 +348,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
           <div className="flex items-center gap-1.5 mt-1.5">{d > 0 && <span className="text-[11px] text-slate-400 line-through">{fmt(p.eskiFiyat)}</span>}<span className="text-base font-bold text-red-600">{fmt(p.satisFiyat)}</span></div>
           <span className="inline-flex items-center gap-1 text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mt-1.5 w-fit"><Star size={9} className="fill-indigo-600" /> %{vp} VIP Puan</span>
           <span className={`text-[11px] mt-1 flex items-center gap-1 ${(p.stokAdeti || 0) > 0 ? 'text-green-600' : 'text-red-500'}`}><span className={`w-1.5 h-1.5 rounded-full ${(p.stokAdeti || 0) > 0 ? 'bg-green-500' : 'bg-red-500'}`} /> {(p.stokAdeti || 0) > 0 ? 'Stokta var' : 'Stok yok'}</span>
-          <button onClick={() => sepeteEkle(p)} disabled={(p.stokAdeti || 0) <= 0} className="w-full mt-2.5 bg-indigo-600 text-white rounded-lg py-2 text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-indigo-700 disabled:opacity-40"><ShoppingBag size={14} /> Sepete Ekle</button>
+          <button onClick={() => sepeteEkle(p)} disabled={(p.stokAdeti || 0) <= 0} className="w-full mt-auto pt-2.5 bg-indigo-600 text-white rounded-lg py-2 text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-indigo-700 disabled:opacity-40"><ShoppingBag size={14} /> Sepete Ekle</button>
         </div>
       </div>
     );
