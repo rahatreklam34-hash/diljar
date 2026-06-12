@@ -57,6 +57,10 @@ model Tenant {
   variationTemplates VariationTemplate[]
   liveStreams   LiveStream[]
   liveOrders    LiveOrder[]
+  freeStreams   FreeStream[]
+  freeOrders    FreeOrder[]
+  freeProducts  FreeProduct[]
+  suppliers     Supplier[]
   botConfig     BotConfig?
   botKnowledge  BotKnowledge[]
   botGaps       BotGap[]
@@ -889,4 +893,82 @@ model CatalogItem {
 
   @@unique([tenantId, productId])
   @@index([tenantId, updatedAt])
+}
+
+// ─── Serbest Satış Alt Sistemi ───────────────────────────────────────────────
+
+model Supplier {
+  id         String    @id @default(cuid())
+  tenantId   String
+  tenant     Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad         String
+  loginCode  String    @unique
+  pinHash    String
+  aktif      Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+
+  freeProducts FreeProduct[]
+  freeOrders   FreeOrder[]
+
+  @@index([tenantId])
+}
+
+model FreeStream {
+  id        String    @id @default(cuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  baslik    String?
+  status    String    @default("active") // active | ended
+  startedAt DateTime  @default(now())
+  endedAt   DateTime?
+
+  freeOrders FreeOrder[]
+
+  @@index([tenantId, status])
+}
+
+model FreeProduct {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplierId  String?
+  ad          String
+  salesCode   String?
+  images      Json     @default("[]")
+  variations  Json     @default("[]") // [{deger:string, stok:number}]
+  alisFiyat   Float    @default(0)
+  satisFiyat  Float    @default(0)
+  aktif       Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  supplier   Supplier?   @relation(fields: [supplierId], references: [id])
+  freeOrders FreeOrder[]
+
+  @@index([tenantId])
+}
+
+model FreeOrder {
+  id            String   @id @default(cuid())
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  streamId      String?
+  freeProductId String?
+  supplierId    String?
+  user          String
+  kod           String?
+  urun          String
+  beden         String?
+  durum         String   @default("rezerve") // rezerve | onaylandi | iptal
+  tutar         Float    @default(0)
+  alis          Float    @default(0)
+  storeOrderId  String?
+  createdAt     DateTime @default(now())
+
+  stream      FreeStream?  @relation(fields: [streamId], references: [id])
+  freeProduct FreeProduct? @relation(fields: [freeProductId], references: [id])
+  supplier    Supplier?    @relation(fields: [supplierId], references: [id])
+
+  @@index([tenantId, streamId])
+  @@index([tenantId, durum])
 }

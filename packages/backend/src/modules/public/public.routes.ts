@@ -994,4 +994,104 @@ router.post('/tami/callback', express.urlencoded({ extended: false }), asyncHand
   res.redirect(`${env.APP_DOMAIN}/?payment=success`);
 }));
 
+// ─── Tedarikçi Portalı (/api/v1/public/supplier) ─────────────────────────────
+
+// Supplier JWT middleware
+function supplierAuth(req: Request, res: Response, next: Function) {
+  const auth = req.headers.authorization || '';
+  const token = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+  if (!token) return res.status(401).json({ error: 'Token gerekli' });
+  try {
+    const payload = jwt.verify(token, env.JWT_SECRET || 'secret') as any;
+    if (payload.type !== 'supplier') return res.status(403).json({ error: 'Yetkisiz' });
+    (req as any).supplierId = payload.supplierId;
+    (req as any).supplierTenantId = payload.tenantId;
+    next();
+  } catch { return res.status(401).json({ error: 'Geçersiz token' }); }
+}
+
+// Tedarikçi girişi (public — token yok)
+router.post('/supplier/login', asyncHandler(async (req: Request, res: Response) => {
+  const { loginCode, pin } = req.body || {};
+  if (!loginCode || !pin) throw new ApiError(400, 'loginCode ve pin zorunludur');
+  const s = await prisma.supplier.findFirst({ where: { loginCode, aktif: true } });
+  if (!s) throw new ApiError(401, 'Geçersiz giriş kodu');
+  const ok = await bcrypt.compare(String(pin), s.pinHash);
+  if (!ok) throw new ApiError(401, 'Hatalı PIN');
+  const token = jwt.sign({ supplierId: s.id, tenantId: s.tenantId, type: 'supplier' }, env.JWT_SECRET || 'secret', { expiresIn: '30d' } as any);
+  res.json({ token, supplier: { id: s.id, ad: s.ad } });
+}));
+
+// Tedarikçi profili
+router.get('/supplier/me', supplierAuth as any, asyncHandler(async (req: Request, res: Response) => {
+  const sid = (req as any).supplierId;
+  const s = await prisma.supplier.findFirst({ where: { id: sid } });
+  if (!s) throw new ApiError(404, 'Bulunamadı');
+  res.json({ id: s.id, ad: s.ad, loginCode: s.loginCode });
+}));
+
+// Tedarikçinin ürünleri (alış fiyatı görünür, satış fiyatı GİZLİ)
+router.get('/supplier/products', supplierAuth as any, asyncHandler(async (req: Request, res: Response) => {
+  const sid = (req as any).supplierId;
+  const t = (req as any).supplierTenantId;
+  const prods = await prisma.freeProduct.findMany({ where: { tenantId: t, supplierId: sid, aktif: true }, orderBy: { createdAt: 'desc' } });
+  res.json(prods.map((p) => ({ ...p, satisFiyat: undefined })));
+}));
+
+// Tedarikçi ürün yükleme
+router.post('/supplier/products', supplierAuth as any, asyncHandler(async (req: Request, res: Response) => {
+  const sid = (req as any).supplierId;
+  const t = (req as any).supplierTenantId;
+  const { ad, images, bedenler, alisFiyat, variations } = req.body || {};
+  if (!ad) throw new ApiError(400, 'Ürün adı zorunludur');
+  let salesCode: string | null = null;
+  const sc = await prisma.salesCode.findFirst({ where: { tenantId: t, used: false }, orderBy: { createdAt: 'asc' } });
+  if (sc) { salesCode = sc.code; await prisma.salesCode.update({ where: { id: sc.id }, data: { used: true } }); }
+  let vars: { deger: string; stok: number }[] = [];
+  if (Array.isArray(variations) && variations.length > 0) {
+    vars = variations.map((v: any) => ({ deger: String(v.deger || v), stok: Number(v.stok) || 1 }));
+  } else if (bedenler) {
+    vars = String(bedenler).split(',').map((b: string) => b.trim()).filter(Boolean).map((b: string) => ({ deger: b, stok: 1 }));
+  }
+  const p = await prisma.freeProduct.create({ data: { tenantId: t, supplierId: sid, ad, salesCode, images: images || [], variations: vars, alisFiyat: Number(alisFiyat) || 0, satisFiyat: 0 } });
+  res.status(201).json({ ...p, satisFiyat: undefined });
+}));
+
+// Tedarikçi ürün güncelleme (sadece kendi ürünleri)
+router.patch('/supplier/products/:id', supplierAuth as any, asyncHandler(async (req: Request, res: Response) => {
+  const sid = (req as any).supplierId;
+  const t = (req as any).supplierTenantId;
+  const { ad, images, variations, alisFiyat } = req.body || {};
+  const data: any = {};
+  if (ad !== undefined) data.ad = ad;
+  if (images !== undefined) data.images = images;
+  if (variations !== undefined) data.variations = variations;
+  if (alisFiyat !== undefined) data.alisFiyat = Number(alisFiyat);
+  await prisma.freeProduct.updateMany({ where: { id: req.params.id, tenantId: t, supplierId: sid }, data });
+  const p = await prisma.freeProduct.findFirst({ where: { id: req.params.id } });
+  res.json(p ? { ...p, satisFiyat: undefined } : { ok: true });
+}));
+
+// Tedarikçi satış raporu (satış fiyatı GİZLİ)
+router.get('/supplier/sales', supplierAuth as any, asyncHandler(async (req: Request, res: Response) => {
+  const sid = (req as any).supplierId;
+  const t = (req as any).supplierTenantId;
+  const orders = await prisma.freeOrder.findMany({
+    where: { tenantId: t, supplierId: sid, durum: { in: ['onaylandi', 'rezerve'] } },
+    include: { freeProduct: true },
+    orderBy: { createdAt: 'desc' },
+  });
+  // Ürün bazlı gruplama — satış fiyatı/tutar dönmez
+  const map = new Map<string, { ad: string; image: string | null; toplam: number; bedenler: Record<string, number> }>();
+  for (const o of orders) {
+    const key = o.freeProductId || o.urun;
+    const img = o.freeProduct ? (Array.isArray(o.freeProduct.images) ? (o.freeProduct.images as any[])[0] || null : null) : null;
+    if (!map.has(key)) map.set(key, { ad: o.urun, image: img, toplam: 0, bedenler: {} });
+    const e = map.get(key)!;
+    e.toplam++;
+    if (o.beden) e.bedenler[o.beden] = (e.bedenler[o.beden] || 0) + 1;
+  }
+  res.json([...map.values()]);
+}));
+
 export default router;

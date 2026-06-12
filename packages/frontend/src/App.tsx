@@ -63,6 +63,9 @@ const KatalogPublic = lazy(() => import('./pages/KatalogPublic'));
 const PublicChat = lazy(() => import('./pages/PublicChat'));
 const UyeOl = lazy(() => import('./pages/UyeOl'));
 const Sepet = lazy(() => import('./pages/Sepet'));
+const SerbestSatis = lazy(() => import('./pages/SerbestSatis'));
+const SerbestTedarikciler = lazy(() => import('./pages/SerbestTedarikciler'));
+const TedarikciPortal = lazy(() => import('./pages/TedarikciPortal'));
 
 // Sayfa yüklenirken yazısız ince spinner
 function PageLoader() {
@@ -129,6 +132,8 @@ function TenantApp() {
               <Route path="/musterilerim" element={<Musterilerim />} />
               <Route path="/musterilerim/:id" element={<MusteriDetay />} />
               <Route path="/canli-yayin" element={<CanliYayinSatis />} />
+              <Route path="/serbest-satis" element={<SerbestSatis />} />
+              <Route path="/serbest-tedarikciler" element={<SerbestTedarikciler />} />
               <Route path="/canli-akis" element={<CanliAkis />} />
               <Route path="/reklam" element={<ReklamYonetimi />} />
               <Route path="/kasa-satis" element={<KasaSatis />} />
@@ -203,6 +208,7 @@ export default function App() {
           <Route path="/iade-iptal" element={<IadeIptal />} />
           <Route path="/login" element={<PublicOnly><Login /></PublicOnly>} />
           <Route path="/register" element={<PublicOnly><Register /></PublicOnly>} />
+          <Route path="/tedarikci" element={<TedarikciPortal />} />
           <Route path="/*" element={<ProtectedRoute><TenantApp /></ProtectedRoute>} />
         </Routes>
         </Suspense>

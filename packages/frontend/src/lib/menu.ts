@@ -52,6 +52,13 @@ export const navGroups: MenuGroup[] = [
     ],
   },
   {
+    title: 'Serbest Satis',
+    items: [
+      { to: '/serbest-satis', icon: Radio, label: 'Satis Ekrani' },
+      { to: '/serbest-tedarikciler', icon: UserCog, label: 'Tedarikciler' },
+    ],
+  },
+  {
     title: 'Siparisler',
     items: [
       { to: '/siparisler', icon: ShoppingBag, label: 'Tum Siparisler' },
