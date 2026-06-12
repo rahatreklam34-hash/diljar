@@ -52,9 +52,9 @@ export const navGroups: MenuGroup[] = [
     ],
   },
   {
-    title: 'Serbest Satis',
+    title: 'DROPSHOPING',
     items: [
-      { to: '/serbest-satis', icon: Radio, label: 'Satis Ekrani' },
+      { to: '/bekleyen-siparisler', icon: ClipboardList, label: 'Bekleyen Siparisler' },
       { to: '/serbest-tedarikciler', icon: UserCog, label: 'Tedarikciler' },
     ],
   },

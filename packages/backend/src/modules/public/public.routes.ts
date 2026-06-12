@@ -1046,7 +1046,7 @@ router.get('/supplier/products', supplierAuth as any, asyncHandler(async (req: R
 router.post('/supplier/products', supplierAuth as any, asyncHandler(async (req: Request, res: Response) => {
   const sid = (req as any).supplierId;
   const t = (req as any).supplierTenantId;
-  const { ad, images, bedenler, alisFiyat, variations } = req.body || {};
+  const { ad, images, bedenler, alisFiyat, variations, cinsiyet, aciklama } = req.body || {};
   if (!ad) throw new ApiError(400, 'Ürün adı zorunludur');
   let salesCode: string | null = null;
   const sc = await prisma.salesCode.findFirst({ where: { tenantId: t, used: false }, orderBy: { createdAt: 'asc' } });
@@ -1058,7 +1058,7 @@ router.post('/supplier/products', supplierAuth as any, asyncHandler(async (req: 
     vars = String(bedenler).split(',').map((b: string) => b.trim()).filter(Boolean).map((b: string) => ({ deger: b, stok: 1 }));
   }
   const alis = Number(alisFiyat) || 0;
-  const p = await prisma.freeProduct.create({ data: { tenantId: t, supplierId: sid, ad, salesCode, images: images || [], variations: vars, alisFiyat: alis, satisFiyat: supRound2(alis * SUP_PRICE_MULT) } });
+  const p = await prisma.freeProduct.create({ data: { tenantId: t, supplierId: sid, ad, salesCode, cinsiyet: cinsiyet || null, aciklama: aciklama || null, images: images || [], variations: vars, alisFiyat: alis, satisFiyat: supRound2(alis * SUP_PRICE_MULT) } });
   res.status(201).json({ ...p, satisFiyat: undefined });
 }));
 
@@ -1066,9 +1066,11 @@ router.post('/supplier/products', supplierAuth as any, asyncHandler(async (req: 
 router.patch('/supplier/products/:id', supplierAuth as any, asyncHandler(async (req: Request, res: Response) => {
   const sid = (req as any).supplierId;
   const t = (req as any).supplierTenantId;
-  const { ad, images, variations, alisFiyat } = req.body || {};
+  const { ad, images, variations, alisFiyat, cinsiyet, aciklama } = req.body || {};
   const data: any = {};
   if (ad !== undefined) data.ad = ad;
+  if (cinsiyet !== undefined) data.cinsiyet = cinsiyet || null;
+  if (aciklama !== undefined) data.aciklama = aciklama || null;
   if (images !== undefined) data.images = images;
   if (variations !== undefined) data.variations = variations;
   if (alisFiyat !== undefined) {
@@ -1089,22 +1091,20 @@ router.delete('/supplier/products/:id', supplierAuth as any, asyncHandler(async 
   res.json({ ok: true });
 }));
 
-// Tedarikçi satış raporu (satış fiyatı GİZLİ)
+// Tedarikçi satış raporu (satış fiyatı GİZLİ) — iptal edilenler HARİÇ
 router.get('/supplier/sales', supplierAuth as any, asyncHandler(async (req: Request, res: Response) => {
   const sid = (req as any).supplierId;
   const t = (req as any).supplierTenantId;
-  const orders = await prisma.freeOrder.findMany({
-    where: { tenantId: t, supplierId: sid, durum: { in: ['onaylandi', 'rezerve'] } },
-    include: { freeProduct: true },
+  const orders = await prisma.liveOrder.findMany({
+    where: { tenantId: t, supplierId: sid, drop: true, durum: { in: ['onaylandi', 'rezerve'] } },
     orderBy: { createdAt: 'desc' },
   });
   // Ürün bazlı gruplama — satış fiyatı/tutar dönmez; ciro tedarikçinin KENDİ alış fiyatına göre
   const map = new Map<string, { ad: string; image: string | null; toplam: number; alisFiyat: number; ciro: number; bedenler: Record<string, number> }>();
   for (const o of orders) {
     const key = o.freeProductId || o.urun;
-    const img = o.freeProduct ? (Array.isArray(o.freeProduct.images) ? (o.freeProduct.images as any[])[0] || null : null) : null;
-    const alis = o.alis || (o.freeProduct?.alisFiyat || 0);
-    if (!map.has(key)) map.set(key, { ad: o.urun, image: img, toplam: 0, alisFiyat: alis, ciro: 0, bedenler: {} });
+    const alis = o.alis || 0;
+    if (!map.has(key)) map.set(key, { ad: o.urun, image: o.gorsel || null, toplam: 0, alisFiyat: alis, ciro: 0, bedenler: {} });
     const e = map.get(key)!;
     e.toplam++;
     e.ciro = supRound2(e.ciro + alis);
@@ -1117,7 +1117,7 @@ router.get('/supplier/sales', supplierAuth as any, asyncHandler(async (req: Requ
 router.get('/supplier/account', supplierAuth as any, asyncHandler(async (req: Request, res: Response) => {
   const sid = (req as any).supplierId;
   const t = (req as any).supplierTenantId;
-  const orders = await prisma.freeOrder.findMany({ where: { tenantId: t, supplierId: sid, durum: { in: ['onaylandi', 'rezerve'] } } });
+  const orders = await prisma.liveOrder.findMany({ where: { tenantId: t, supplierId: sid, drop: true, durum: { in: ['onaylandi', 'rezerve'] } } });
   const borc = supRound2(orders.reduce((s, o) => s + (o.alis || 0), 0));
   const payments = await prisma.supplierPayment.findMany({ where: { tenantId: t, supplierId: sid }, orderBy: { createdAt: 'desc' } });
   const odenen = supRound2(payments.reduce((s, p) => s + (p.tutar || 0), 0));

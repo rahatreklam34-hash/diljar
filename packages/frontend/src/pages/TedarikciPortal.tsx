@@ -36,7 +36,7 @@ function printBarkod(arr: any[]) {
 export default function TedarikciPortal() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('supplier_token'));
   const [supplier, setSupplier] = useState<any>(null);
-  const [tab, setTab] = useState<'urunler' | 'yukle' | 'satislar' | 'hesap'>('urunler');
+  const [tab, setTab] = useState<'urunler' | 'yukle' | 'satislar' | 'encok' | 'hesap'>('urunler');
 
   // Giriş formu
   const [loginCode, setLoginCode] = useState('');
@@ -50,13 +50,13 @@ export default function TedarikciPortal() {
   const [account, setAccount] = useState<any | null>(null);
 
   // Yükleme formu
-  const [form, setForm] = useState({ ad: '', bedenler: '', alisFiyat: '', images: [] as string[] });
+  const [form, setForm] = useState({ ad: '', bedenler: '', alisFiyat: '', cinsiyet: '', aciklama: '', images: [] as string[] });
   const [formVars, setFormVars] = useState<{ deger: string; stok: number }[]>([]);
   const [formBusy, setFormBusy] = useState(false);
 
   // Düzenleme
   const [editProd, setEditProd] = useState<any | null>(null);
-  const [editForm, setEditForm] = useState({ ad: '', bedenler: '', alisFiyat: '', images: [] as string[] });
+  const [editForm, setEditForm] = useState({ ad: '', bedenler: '', alisFiyat: '', cinsiyet: '', aciklama: '', images: [] as string[] });
   const [editVars, setEditVars] = useState<{ deger: string; stok: number }[]>([]);
   const [editBusy, setEditBusy] = useState(false);
 
@@ -98,12 +98,11 @@ export default function TedarikciPortal() {
     if (!form.ad.trim()) { toast.error('Ürün adı zorunludur'); return; }
     setFormBusy(true);
     try {
-      await sApi.post('/public/supplier/products', { ad: form.ad, images: form.images, variations: formVars, alisFiyat: Number(form.alisFiyat) || 0 });
-      toast.success('Ürün yüklendi');
-      setForm({ ad: '', bedenler: '', alisFiyat: '', images: [] });
-      setFormVars([]);
+      await sApi.post('/public/supplier/products', { ad: form.ad, images: form.images, variations: formVars, alisFiyat: Number(form.alisFiyat) || 0, cinsiyet: form.cinsiyet || null, aciklama: form.aciklama || null });
+      toast.success('Ürün yüklendi — taslak korundu, yeni görsel + ad + stok girin');
+      // Taslak mantığı: cinsiyet, açıklama, bedenler ve alış fiyatı korunur; sadece ad + görsel sıfırlanır
+      setForm((f) => ({ ...f, ad: '', images: [] }));
       await loadProducts();
-      setTab('urunler');
     } catch (e: any) { toast.error(e?.response?.data?.error || 'Hata'); }
     setFormBusy(false);
   };
@@ -111,7 +110,7 @@ export default function TedarikciPortal() {
   const openEdit = (p: any) => {
     const vars: any[] = Array.isArray(p.variations) ? p.variations : [];
     setEditProd(p);
-    setEditForm({ ad: p.ad || '', bedenler: vars.map((v) => v.deger).join(','), alisFiyat: String(p.alisFiyat || ''), images: Array.isArray(p.images) ? p.images : [] });
+    setEditForm({ ad: p.ad || '', bedenler: vars.map((v) => v.deger).join(','), alisFiyat: String(p.alisFiyat || ''), cinsiyet: p.cinsiyet || '', aciklama: p.aciklama || '', images: Array.isArray(p.images) ? p.images : [] });
     setEditVars(vars.map((v) => ({ deger: v.deger, stok: Number(v.stok) || 0 })));
   };
 
@@ -119,7 +118,7 @@ export default function TedarikciPortal() {
     if (!editProd) return;
     setEditBusy(true);
     try {
-      await sApi.patch(`/public/supplier/products/${editProd.id}`, { ad: editForm.ad, images: editForm.images, variations: editVars, alisFiyat: Number(editForm.alisFiyat) || 0 });
+      await sApi.patch(`/public/supplier/products/${editProd.id}`, { ad: editForm.ad, images: editForm.images, variations: editVars, alisFiyat: Number(editForm.alisFiyat) || 0, cinsiyet: editForm.cinsiyet || null, aciklama: editForm.aciklama || null });
       toast.success('Ürün güncellendi');
       setEditProd(null);
       await loadProducts();
@@ -168,11 +167,12 @@ export default function TedarikciPortal() {
 
       {/* Sekmeler */}
       <div className="max-w-2xl mx-auto px-4 pt-4">
-        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 mb-4">
-          <button onClick={() => setTab('urunler')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'urunler' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>Ürünlerim ({products.length})</button>
-          <button onClick={() => setTab('yukle')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'yukle' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>Ürün Yükle</button>
-          <button onClick={() => { setTab('satislar'); loadSales(); }} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'satislar' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>Satışlarım</button>
-          <button onClick={() => { setTab('hesap'); loadAccount(); }} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'hesap' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>Cari</button>
+        <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-xl p-1 mb-4 flex-wrap">
+          <button onClick={() => setTab('urunler')} className={`flex-1 min-w-[80px] py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'urunler' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>Ürünlerim ({products.length})</button>
+          <button onClick={() => setTab('yukle')} className={`flex-1 min-w-[80px] py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'yukle' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>Ürün Yükle</button>
+          <button onClick={() => { setTab('satislar'); loadSales(); }} className={`flex-1 min-w-[80px] py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'satislar' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>Satışlarım</button>
+          <button onClick={() => { setTab('encok'); loadSales(); }} className={`flex-1 min-w-[80px] py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'encok' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>En Çok Satılanlar</button>
+          <button onClick={() => { setTab('hesap'); loadAccount(); }} className={`flex-1 min-w-[80px] py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'hesap' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>Cari</button>
         </div>
 
         {/* Ürünlerim */}
@@ -192,8 +192,9 @@ export default function TedarikciPortal() {
                 <div key={p.id} className="bg-white rounded-2xl border border-slate-200 p-4 flex items-start gap-3">
                   {img ? <img src={img} className="w-16 h-16 rounded-xl object-cover shrink-0" /> : <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center shrink-0"><Package size={20} className="text-slate-300" /></div>}
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-800">{p.ad}</p>
+                    <p className="font-semibold text-slate-800">{p.ad}{p.cinsiyet ? <span className="ml-1.5 text-[10px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full align-middle font-medium">{p.cinsiyet}</span> : null}</p>
                     <p className="text-xs text-slate-400 mt-0.5">Kod: {p.salesCode || '-'} · Alış: {fmt(p.alisFiyat)} · Toplam Stok: {topStok}</p>
+                    {p.aciklama ? <p className="text-[11px] text-slate-400 mt-0.5 italic line-clamp-2">{p.aciklama}</p> : null}
                     {vars.length > 0 && (
                       <div className="flex flex-wrap gap-1 mt-2">
                         {vars.map((v: any, i: number) => <span key={i} className={`text-xs px-2 py-0.5 rounded-lg border ${v.stok > 0 ? 'bg-white border-slate-200 text-slate-600' : 'bg-red-50 border-red-200 text-red-400 line-through'}`}>{v.deger}: {v.stok}</span>)}
@@ -218,6 +219,19 @@ export default function TedarikciPortal() {
             <p className="text-xs text-slate-400">Satış fiyatı firma tarafından belirlenir. Siz sadece alış fiyatınızı girin.</p>
 
             <div><label className="block text-xs text-slate-500 mb-1">Ürün Adı *</label><input value={form.ad} onChange={(e) => setForm({ ...form, ad: e.target.value })} placeholder="Ürün adı" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
+
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Cinsiyet</label>
+              <select value={form.cinsiyet} onChange={(e) => setForm({ ...form, cinsiyet: e.target.value })} className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white">
+                <option value="">Seçiniz</option>
+                <option value="Kadın">Kadın</option>
+                <option value="Erkek">Erkek</option>
+                <option value="Unisex">Unisex</option>
+                <option value="Çocuk">Çocuk</option>
+              </select>
+            </div>
+
+            <div><label className="block text-xs text-slate-500 mb-1">Açıklama (kalıp / opsiyonel)</label><textarea value={form.aciklama} onChange={(e) => setForm({ ...form, aciklama: e.target.value })} rows={2} placeholder="Kalıp bilgisi, beden notu vb. (opsiyonel)" className="w-full px-3 py-2.5 text-sm border border-slate-200 rounded-xl resize-none" /></div>
 
             <div><label className="block text-xs text-slate-500 mb-1">Görsel</label><ImageDropzone images={form.images} onChange={(imgs) => setForm({ ...form, images: imgs })} max={3} /></div>
 
@@ -261,7 +275,7 @@ export default function TedarikciPortal() {
                 {e.image ? <img src={e.image} className="w-14 h-14 rounded-xl object-cover shrink-0" /> : <div className="w-14 h-14 rounded-xl bg-slate-100 flex items-center justify-center shrink-0"><Package size={18} className="text-slate-300" /></div>}
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-slate-800">{e.ad}</p>
-                  <p className="text-sm text-indigo-600 font-bold mt-0.5">{e.toplam} adet satıldı</p>
+                  <p className="text-sm text-indigo-600 font-bold mt-0.5">{e.toplam} adet satıldı · <span className="text-emerald-600">Ciro {fmt(e.ciro)}</span></p>
                   {Object.keys(e.bedenler || {}).length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {Object.entries(e.bedenler).map(([b, n]: any) => <span key={b} className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">{b}: {n}</span>)}
@@ -273,7 +287,33 @@ export default function TedarikciPortal() {
           </div>
         )}
 
-        {/* Cari / Hesabım */}
+        {/* En Çok Satılanlar */}
+        {tab === 'encok' && (
+          <div className="space-y-3">
+            <div className="bg-amber-50 border border-amber-100 rounded-2xl p-4">
+              <p className="text-xs text-amber-700 font-medium flex items-center gap-1.5"><BarChart3 size={14} /> En çok satılan ürünleriniz adet sırasına göre listelenir.</p>
+            </div>
+            {sales.length === 0 ? (
+              <div className="bg-white rounded-2xl border border-slate-200 flex flex-col items-center justify-center py-16 text-slate-400">
+                <BarChart3 size={32} className="mb-3 text-slate-300" />
+                <p className="font-medium text-slate-500">Henüz satış yok</p>
+              </div>
+            ) : [...sales].sort((a: any, b: any) => (b.toplam || 0) - (a.toplam || 0)).map((e: any, i: number) => (
+              <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4 flex items-center gap-3">
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${i === 0 ? 'bg-amber-400 text-white' : i === 1 ? 'bg-slate-300 text-white' : i === 2 ? 'bg-orange-300 text-white' : 'bg-slate-100 text-slate-500'}`}>{i + 1}</div>
+                {e.image ? <img src={e.image} className="w-12 h-12 rounded-xl object-cover shrink-0" /> : <div className="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center shrink-0"><Package size={16} className="text-slate-300" /></div>}
+                <div className="flex-1 min-w-0">
+                  <p className="font-semibold text-slate-800 truncate">{e.ad}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Ciro {fmt(e.ciro)}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-lg font-bold text-indigo-600">{e.toplam}</p>
+                  <p className="text-[10px] text-slate-400">adet</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
         {tab === 'hesap' && (
           <div className="space-y-3">
             <div className="grid grid-cols-3 gap-2">
@@ -323,6 +363,17 @@ export default function TedarikciPortal() {
           <div className="w-full max-w-md bg-white rounded-2xl p-6 my-auto space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Pencil size={18} className="text-violet-600" /> Ürünü Düzenle</h3><button onClick={() => setEditProd(null)}><X size={20} className="text-slate-400" /></button></div>
             <div><label className="block text-xs text-slate-500 mb-1">Ürün Adı</label><input value={editForm.ad} onChange={(e) => setEditForm({ ...editForm, ad: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Cinsiyet</label>
+              <select value={editForm.cinsiyet} onChange={(e) => setEditForm({ ...editForm, cinsiyet: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white">
+                <option value="">Seçiniz</option>
+                <option value="Kadın">Kadın</option>
+                <option value="Erkek">Erkek</option>
+                <option value="Unisex">Unisex</option>
+                <option value="Çocuk">Çocuk</option>
+              </select>
+            </div>
+            <div><label className="block text-xs text-slate-500 mb-1">Açıklama (opsiyonel)</label><textarea value={editForm.aciklama} onChange={(e) => setEditForm({ ...editForm, aciklama: e.target.value })} rows={2} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg resize-none" /></div>
             <div><label className="block text-xs text-slate-500 mb-1">Görsel</label><ImageDropzone images={editForm.images} onChange={(imgs) => setEditForm({ ...editForm, images: imgs })} max={3} /></div>
             <div>
               <label className="block text-xs text-slate-500 mb-1">Bedenler (virgülle ayır)</label>

@@ -63,7 +63,7 @@ const KatalogPublic = lazy(() => import('./pages/KatalogPublic'));
 const PublicChat = lazy(() => import('./pages/PublicChat'));
 const UyeOl = lazy(() => import('./pages/UyeOl'));
 const Sepet = lazy(() => import('./pages/Sepet'));
-const SerbestSatis = lazy(() => import('./pages/SerbestSatis'));
+const BekleyenSiparisler = lazy(() => import('./pages/BekleyenSiparisler'));
 const SerbestTedarikciler = lazy(() => import('./pages/SerbestTedarikciler'));
 const TedarikciPortal = lazy(() => import('./pages/TedarikciPortal'));
 
@@ -132,7 +132,7 @@ function TenantApp() {
               <Route path="/musterilerim" element={<Musterilerim />} />
               <Route path="/musterilerim/:id" element={<MusteriDetay />} />
               <Route path="/canli-yayin" element={<CanliYayinSatis />} />
-              <Route path="/serbest-satis" element={<SerbestSatis />} />
+              <Route path="/bekleyen-siparisler" element={<BekleyenSiparisler />} />
               <Route path="/serbest-tedarikciler" element={<SerbestTedarikciler />} />
               <Route path="/canli-akis" element={<CanliAkis />} />
               <Route path="/reklam" element={<ReklamYonetimi />} />

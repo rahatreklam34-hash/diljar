@@ -487,10 +487,16 @@ model LiveOrder {
   tutar        Float    @default(0)
   alis         Float    @default(0)
   storeOrderId String?
+  freeProductId String?
+  supplierId   String?
+  drop         Boolean  @default(false)
+  teslimAlindi Boolean  @default(false)
+  gorsel       String?
   createdAt    DateTime @default(now())
 
   @@index([tenantId])
   @@index([streamId])
+  @@index([supplierId])
 }
 
 model BotConfig {
@@ -950,6 +956,8 @@ model FreeProduct {
   supplierId  String?
   ad          String
   salesCode   String?
+  cinsiyet    String?
+  aciklama    String?
   images      Json     @default("[]")
   variations  Json     @default("[]") // [{deger:string, stok:number}]
   alisFiyat   Float    @default(0)

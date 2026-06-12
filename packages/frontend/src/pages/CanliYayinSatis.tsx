@@ -25,6 +25,7 @@ export default function CanliYayinSatis() {
   const { products, customers, categories, campaigns, storeSetting, reload } = useStore();
   const [stream, setStream] = useState<any>(null);
   const [orders, setOrders] = useState<any[]>([]);
+  const [freeProducts, setFreeProducts] = useState<any[]>([]);
   const [text, setText] = useState('');
   const [satici, setSatici] = useState('');
   const [sellers, setSellers] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('cy_sellers') || '[]'); } catch { return []; } });
@@ -88,6 +89,23 @@ export default function CanliYayinSatis() {
     try { const r = await api.get('/store/live/active'); setStream(r.data.stream); setOrders(r.data.orders || []); } catch { /* */ }
   };
   useEffect(() => { loadActive(); }, []);
+
+  // Tedarikçi (drop) ürünlerini yükle — depodan bağımsız geçici stoklu ürünler
+  const loadFree = async () => {
+    try {
+      const r = await api.get('/store/free/products');
+      const list = (r.data || []).map((p: any) => ({
+        ...p,
+        _drop: true,
+        stokAdeti: (p.variations || []).reduce((s: number, v: any) => s + (Number(v.stok) || 0), 0),
+      }));
+      setFreeProducts(list);
+    } catch { /* */ }
+  };
+  useEffect(() => { loadFree(); }, []);
+
+  // Depo + drop ürünleri birleşik liste (arama / barkod / satış bu liste üzerinden)
+  const allProds = useMemo(() => [...freeProducts, ...products], [freeProducts, products]);
 
   // Periyodik yenileme: musteri kaydi/onay durumlarini anlik yansit
   useEffect(() => {
@@ -187,7 +205,7 @@ export default function CanliYayinSatis() {
 
   const findByCode = (code: string) => {
     const c = norm(code); if (!c) return undefined;
-    return products.find((p) => norm(p.salesCode || '') === c || (p.barkod || '') === code.trim());
+    return allProds.find((p) => norm(p.salesCode || '') === c || (p.barkod || '') === code.trim());
   };
 
   const isRegistered = (u: string) => {
@@ -206,7 +224,7 @@ export default function CanliYayinSatis() {
   const openProduct = (p: any) => {
     setBarkodModal(p); setDiscForm({ price: '', dakika: '' });
     setBarHistory((h) => [{ id: Date.now(), productId: p.id, ad: p.ad, kod: p.salesCode || '-', barkod: p.barkod || '-', stok: p.stokAdeti || 0, time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) }, ...h.filter((x) => x.productId !== p.id)].slice(0, 30));
-    api.post('/store/catalog/add', { productId: p.id }).catch(() => {});
+    if (!p._drop) api.post('/store/catalog/add', { productId: p.id }).catch(() => {});
   };
   const openByCode = (code: string) => {
     const p = findByCode(code);
@@ -218,11 +236,11 @@ export default function CanliYayinSatis() {
   // Ürün ara (ad / satış kodu / marka / beden / cinsiyet)
   const araSonuc = useMemo(() => {
     const q = norm(araQ); if (!q) return [];
-    return products.filter((p: any) => {
+    return allProds.filter((p: any) => {
       const hay = [p.ad, p.salesCode, p.barkod, p.marka, p.cinsiyet, ...(p.variations || []).map((v: any) => v.deger)].map((x: any) => norm(String(x || ''))).join(' ');
       return hay.includes(q);
     }).slice(0, 30);
-  }, [araQ, products]);
+  }, [araQ, allProds]);
 
   // Global barkod dinleyici: alan tıklamadan/Enter beklemeden okutulan barkodu yakalar (hızlı tuş + Enter)
   useEffect(() => {
@@ -239,7 +257,7 @@ export default function CanliYayinSatis() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [products]);
+  }, [allProds]);
 
   const setFlashDiscount = () => {
     if (!barkodModal) return;
@@ -269,17 +287,17 @@ export default function CanliYayinSatis() {
         if (v) variation = v.deger;
       }
       try {
-        await api.post('/store/live/order', { streamId: stream.id, user, kod, beden, productId: p?.id, variation, urun: p?.ad || kod, saticiAd: satici || null, fiyatOverride: activeFlash(p?.id) });
+        await api.post('/store/live/order', { streamId: stream.id, user, kod, beden, productId: p?._drop ? undefined : p?.id, freeProductId: p?._drop ? p?.id : undefined, variation, urun: p?.ad || kod, saticiAd: satici || null, fiyatOverride: activeFlash(p?.id) });
       } catch { /* */ }
     }
     setText(''); setBusy(false);
-    await loadActive(); reload();
+    await loadActive(); loadFree(); reload();
     toast.success('İşlendi');
   };
 
   const iptalEt = async (o: any) => {
     if (o.durum === 'iptal') return;
-    try { const r = await api.post(`/store/live/order/${o.id}/iptal`); setOrders(r.data.orders || []); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
+    try { const r = await api.post(`/store/live/order/${o.id}/iptal`); setOrders(r.data.orders || []); loadFree(); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
   };
 
   // İstatistikler (onaylanan = ciro; iptal haric). Ciro/kâr kampanya indirimi düşülmüş NET değerdir.
@@ -534,7 +552,7 @@ export default function CanliYayinSatis() {
                       return (
                         <button key={p.id} onClick={() => { openProduct(p); setAraQ(''); }} className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-indigo-50 text-left">
                           <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0">{(p.images || [])[0] && <img src={p.images[0]} className="w-full h-full object-cover" />}</div>
-                          <div className="min-w-0 flex-1"><p className="text-xs font-medium text-slate-800 truncate">{p.ad}</p><p className="text-[10px] text-slate-400 truncate">{p.salesCode || '-'} · {p.marka || '-'} · {p.cinsiyet || ''}</p></div>
+                          <div className="min-w-0 flex-1"><p className="text-xs font-medium text-slate-800 truncate flex items-center gap-1">{p.ad}{p._drop && <span className="bg-green-500 text-white text-[8px] px-1 py-0.5 rounded-full font-bold shrink-0">drop</span>}</p><p className="text-[10px] text-slate-400 truncate">{p.salesCode || '-'} · {p._drop ? (p.supplierAd || 'Tedarikçi') : (p.marka || '-')} · {p.cinsiyet || ''}</p></div>
                           <div className="text-right shrink-0"><p className="text-xs font-bold text-slate-700">{fmt(fl > 0 ? fl : p.satisFiyat)}</p><p className="text-[9px] text-slate-400">{(p.stokAdeti || 0)} adet</p>{ind > 0 && <span className="text-[8px] text-rose-500">indirimli</span>}</div>
                         </button>
                       );
@@ -551,7 +569,7 @@ export default function CanliYayinSatis() {
                   <div className="flex items-start justify-between">
                     <div className="flex items-center gap-3 min-w-0">
                       <button onClick={() => (barkodModal.images || [])[0] && setImgZoom(barkodModal.images[0])} className="w-14 h-14 rounded-lg bg-white border border-slate-100 overflow-hidden shrink-0 cursor-zoom-in" title="Büyüt">{(barkodModal.images || [])[0] ? <img src={barkodModal.images[0]} className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center text-slate-300"><Package size={18} /></span>}</button>
-                      <div className="min-w-0"><p className="font-semibold text-slate-800 text-sm leading-tight truncate">{barkodModal.ad}</p><p className="text-[10px] text-slate-400 font-mono truncate">Kod: {barkodModal.salesCode || '-'} · Barkod: {barkodModal.barkod || '-'}</p></div>
+                      <div className="min-w-0"><p className="font-semibold text-slate-800 text-sm leading-tight truncate flex items-center gap-1">{barkodModal.ad}{barkodModal._drop && <span className="bg-green-500 text-white text-[8px] px-1 py-0.5 rounded-full font-bold shrink-0">drop</span>}</p><p className="text-[10px] text-slate-400 font-mono truncate">Kod: {barkodModal.salesCode || '-'} · Barkod: {barkodModal.barkod || '-'}</p></div>
                     </div>
                     <button onClick={() => setBarkodModal(null)} className="p-1 hover:bg-white rounded-lg shrink-0" title="Temizle"><X size={16} className="text-slate-400" /></button>
                   </div>
@@ -651,12 +669,12 @@ export default function CanliYayinSatis() {
               <thead className="bg-slate-50 text-slate-500 text-left sticky top-0"><tr><th className="px-3 py-2">Kullanıcı</th><th className="px-3 py-2">Ürün</th><th className="px-3 py-2">Kod</th><th className="px-3 py-2">Beden</th><th className="px-3 py-2">Satıcı</th><th className="px-3 py-2">Tutar</th><th className="px-3 py-2">Durum</th><th className="px-3 py-2">Saat</th><th className="px-3 py-2">İşlem</th></tr></thead>
               <tbody>
                 {filtered.map((o) => {
-                  const img = imgOf(o.productId);
+                  const img = o.gorsel || imgOf(o.productId);
                   const rowBg = o.durum === 'onaylandi' ? 'bg-green-50' : o.durum === 'rezerve' ? 'bg-blue-50' : o.durum === 'stok_yok' ? 'bg-red-50' : o.durum === 'iptal' ? 'opacity-60' : '';
                   return (
                     <tr key={o.id} className={`border-t border-slate-100 ${rowBg}`}>
                       <td className="px-3 py-2 font-medium text-slate-700"><div className="flex items-center gap-1.5">{o.user}{!isRegistered(o.user) && <><span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full" title="Müşterilerimde kayıtlı değil">Kayıt Yok</span><button onClick={() => { setKayitForm({ ad: '', instagram: o.user, telefon: '' }); setKayitModal(true); }} title="Hızlı müşteri kaydı oluştur" className="text-emerald-600 hover:bg-emerald-50 rounded p-0.5"><UserPlus size={14} /></button></>}</div></td>
-                      <td className="px-3 py-2"><div className="flex items-center gap-2"><div className="w-9 h-9 rounded-lg bg-slate-100 overflow-hidden shrink-0 cursor-zoom-in" onClick={() => img && setLightbox(img)}>{img ? <img src={img} className="w-full h-full object-cover" /> : null}</div><div><span className="text-slate-600">{o.urun}</span>{(() => { const ku = kampanyaUygulanan(o); return ku ? <span className="block text-[9px] text-amber-600 font-medium" title={kampKisa(ku)}>🏷 {ku.ad}</span> : null; })()}</div></div></td>
+                      <td className="px-3 py-2"><div className="flex items-center gap-2"><div className="w-9 h-9 rounded-lg bg-slate-100 overflow-hidden shrink-0 cursor-zoom-in" onClick={() => img && setLightbox(img)}>{img ? <img src={img} className="w-full h-full object-cover" /> : null}</div><div><span className="text-slate-600">{o.urun}</span>{o.drop && <span className="ml-1 text-green-500 text-[10px] font-bold align-middle">drop</span>}{(() => { const ku = kampanyaUygulanan(o); return ku ? <span className="block text-[9px] text-amber-600 font-medium" title={kampKisa(ku)}>🏷 {ku.ad}</span> : null; })()}</div></div></td>
                       <td className="px-3 py-2 text-slate-500 font-mono text-xs">{o.kod || '-'}</td>
                       <td className="px-3 py-2 text-slate-500">{o.beden || '-'}</td>
                       <td className="px-3 py-2 text-slate-500">{o.saticiAd || '-'}</td>

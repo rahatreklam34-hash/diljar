@@ -117,7 +117,7 @@ router.get('/history', asyncHandler(async (req: Request, res: Response) => {
 // Yayin siparisi ekle (musteri eslesirse onaylandi, yoksa rezerve) + sepete ekle
 router.post('/order', asyncHandler(async (req: Request, res: Response) => {
   const t = req.tenantId!;
-  const { streamId, user, kod, beden, productId, variation, urun, saticiAd, fiyatOverride } = req.body || {};
+  const { streamId, user, kod, beden, productId, variation, urun, saticiAd, fiyatOverride, freeProductId } = req.body || {};
   if (!streamId) throw new ApiError(400, 'Aktif yayin yok');
 
   const customer = await findCustomerByHandle(t, user || '');
@@ -125,6 +125,7 @@ router.post('/order', asyncHandler(async (req: Request, res: Response) => {
   let logCartId: string | null = null; let logAd = '';
   const lo = await prisma.$transaction(async (tx) => {
     let durum = 'riskli'; let tutar = 0; let alis = 0; let urunAd = urun || kod; let storeOrderId: string | null = null;
+    let drop = false; let supplierId: string | null = null; let gorsel: string | null = null;
     if (productId) {
       const p = await tx.product.findFirst({ where: { id: productId, tenantId: t } });
       if (p) {
@@ -144,15 +145,40 @@ router.post('/order', asyncHandler(async (req: Request, res: Response) => {
           durum = 'stok_yok';
         }
       }
+    } else if (freeProductId) {
+      const fp = await tx.freeProduct.findFirst({ where: { id: freeProductId, tenantId: t } });
+      if (fp) {
+        urunAd = fp.ad; alis = fp.alisFiyat || 0; tutar = fp.satisFiyat || 0;
+        drop = true; supplierId = fp.supplierId || null;
+        const imgs = Array.isArray(fp.images) ? (fp.images as any[]) : [];
+        gorsel = imgs.length ? imgs[0] : null;
+        const vars: any[] = Array.isArray(fp.variations) ? (fp.variations as any[]) : [];
+        const target = variation || beden || null;
+        let okStock = false;
+        if (target) {
+          const idx = vars.findIndex((v) => v.deger === target);
+          if (idx >= 0 && (Number(vars[idx].stok) || 0) >= 1) { vars[idx].stok = (Number(vars[idx].stok) || 0) - 1; okStock = true; }
+        } else if (vars.length === 0) {
+          okStock = true;
+        }
+        const ov = Number(fiyatOverride) || 0;
+        if (ov > 0) tutar = ov;
+        if (okStock) {
+          await tx.freeProduct.update({ where: { id: fp.id }, data: { variations: vars } });
+          durum = customer ? 'onaylandi' : 'rezerve';
+        } else {
+          durum = 'stok_yok';
+        }
+      }
     }
 
-    const lord = await tx.liveOrder.create({ data: { tenantId: t, streamId, user, kod: kod || '', urun: urunAd, beden: beden || null, productId: productId || null, variation: variation || null, saticiAd: saticiAd || null, durum, tutar, alis, storeOrderId: null } });
+    const lord = await tx.liveOrder.create({ data: { tenantId: t, streamId, user, kod: kod || '', urun: urunAd, beden: beden || null, productId: productId || null, variation: variation || null, saticiAd: saticiAd || null, durum, tutar, alis, storeOrderId: null, freeProductId: freeProductId || null, supplierId, drop, gorsel } });
 
     // Onaylandi/rezerve ise sepete ekle
     if (durum === 'onaylandi' || durum === 'rezerve') {
       const cart = await getOrCreateCart(tx, t, customer?.id || null, norm(user || ''));
       const items: any[] = Array.isArray(cart.items) ? (cart.items as any) : [];
-      items.push({ liveOrderId: lord.id, productId, ad: urunAd + (beden ? ` (${beden})` : ''), varyasyon: variation || beden || null, adet: 1, fiyat: tutar, stokDusuldu: true, durum });
+      items.push({ liveOrderId: lord.id, productId, freeProductId: freeProductId || null, drop, gorsel, ad: urunAd + (beden ? ` (${beden})` : ''), varyasyon: variation || beden || null, adet: 1, fiyat: tutar, stokDusuldu: true, durum });
       const tot = await campaignAdjust(tx, t, items);
       await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...tot } });
       storeOrderId = cart.id;
@@ -178,6 +204,13 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
       if (lo.productId) {
         if (lo.variation) { const v = await tx.productVariation.findFirst({ where: { productId: lo.productId, tenantId: t, deger: lo.variation } }); if (v) await tx.productVariation.update({ where: { id: v.id }, data: { stok: { increment: 1 } } }); }
         await tx.product.updateMany({ where: { id: lo.productId, tenantId: t }, data: { stokAdeti: { increment: 1 } } });
+      } else if (lo.freeProductId) {
+        const fp = await tx.freeProduct.findFirst({ where: { id: lo.freeProductId, tenantId: t } });
+        if (fp) {
+          const vars: any[] = Array.isArray(fp.variations) ? (fp.variations as any[]) : [];
+          const target = lo.variation || lo.beden || null;
+          if (target) { const idx = vars.findIndex((v) => v.deger === target); if (idx >= 0) { vars[idx].stok = (Number(vars[idx].stok) || 0) + 1; await tx.freeProduct.update({ where: { id: fp.id }, data: { variations: vars } }); } }
+        }
       }
       // Sepetten cikar
       if (lo.storeOrderId) {
