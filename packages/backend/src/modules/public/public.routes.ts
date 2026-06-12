@@ -160,6 +160,19 @@ async function shopAuth(req: Request, tenantId: string) {
 }
 const digits = (s: string) => (s || '').replace(/\D/g, '');
 
+// Müşteri bu ürünü gerçekten satın almış mı? (değerlendirme yetkisi)
+async function customerBoughtProduct(tenantId: string, customerId: string, productId: string): Promise<boolean> {
+  const orders = await prisma.storeOrder.findMany({
+    where: { tenantId, customerId, durum: { notIn: ['sepet', 'iptal'] } },
+    select: { items: true },
+  });
+  for (const o of orders) {
+    const items: any[] = Array.isArray(o.items) ? (o.items as any) : [];
+    if (items.some((it) => it && it.productId === productId)) return true;
+  }
+  return false;
+}
+
 router.post('/store/:slug/uye-kayit', asyncHandler(async (req: Request, res: Response) => {
   const store = await prisma.storeSetting.findFirst({ where: { slug: req.params.slug, active: true } });
   if (!store) throw new ApiError(404, 'Magaza bulunamadi');
@@ -219,10 +232,15 @@ router.get('/store/:slug/urun/:id', asyncHandler(async (req: Request, res: Respo
   const reviews = await prisma.productReview.findMany({ where: { tenantId: store.tenantId, productId: p.id, onayli: true }, orderBy: { createdAt: 'desc' }, take: 100 });
   const benzer = await prisma.product.findMany({ where: { tenantId: store.tenantId, aktif: true, onlineMagaza: true, kategoriId: p.kategoriId, id: { not: p.id } }, include: { variations: true }, take: 8 });
   const avg = reviews.length ? reviews.reduce((s, r) => s + r.puan, 0) / reviews.length : 0;
+  // Değerlendirme yetkisi: sadece bu ürünü satın almış üye yorum yapabilir
+  const cid = await shopAuth(req, store.tenantId);
+  const satinAldi = cid ? await customerBoughtProduct(store.tenantId, cid, p.id) : false;
+  const zatenYorumladi = cid ? reviews.some((r) => (r as any).customerId === cid) : false;
   res.json({
     magaza: store.logoText || null,
     urun: { id: p.id, ad: p.ad, satisFiyat: p.satisFiyat, eskiFiyat: p.eskiFiyat, images: p.images, aciklama: p.aciklama, marka: p.marka, kategoriAd: kat?.ad || '', stokAdeti: p.stokAdeti, barkod: p.barkod, variations: (p.variations || []).map((v) => ({ ad: v.ad, deger: v.deger, stok: v.stok, ekFiyat: v.ekFiyat })) },
     yorumlar: reviews, puanOrt: Math.round(avg * 10) / 10, yorumSayi: reviews.length,
+    girisYapildi: !!cid, satinAldi, zatenYorumladi,
     benzer: benzer.filter((b) => { const vs = b.variations || []; const st = vs.length > 0 ? vs.reduce((s, v) => s + (v.stok || 0), 0) : (b.stokAdeti || 0); return st > 0; }).map((b) => ({ id: b.id, ad: b.ad, satisFiyat: b.satisFiyat, eskiFiyat: b.eskiFiyat, images: b.images, marka: b.marka })),
   });
 }));
@@ -271,15 +289,31 @@ router.get('/katalog/:slug', asyncHandler(async (req: Request, res: Response) =>
   const cfg: any = store.config || {};
   res.json({ ad: store.logoText || 'Ürün Kataloğu', logo: cfg.logo || store.heroImage || '', slug: store.slug, magazaAktif: store.active, items: list });
 }));
-// Yorum gönder
+// Yorum gönder — SADECE ürünü satın almış üye değerlendirme yapabilir
 router.post('/store/:slug/urun/:id/yorum', asyncHandler(async (req: Request, res: Response) => {
   const store = await prisma.storeSetting.findFirst({ where: { slug: req.params.slug, active: true } });
   if (!store) throw new ApiError(404, 'Magaza bulunamadi');
   const p = await prisma.product.findFirst({ where: { id: req.params.id, tenantId: store.tenantId } });
   if (!p) throw new ApiError(404, 'Ürün bulunamadi');
-  const { ad, puan, yorum, gorsel } = req.body || {};
-  if (!ad || !String(ad).trim()) throw new ApiError(422, 'Ad zorunlu');
-  const r = await prisma.productReview.create({ data: { tenantId: store.tenantId, productId: p.id, ad: String(ad).slice(0, 60), puan: Math.min(5, Math.max(1, Number(puan) || 5)), yorum: yorum ? String(yorum).slice(0, 1000) : null, gorsel: gorsel ? String(gorsel).slice(0, 2_000_000) : null, onayli: true } });
+  const cid = await shopAuth(req, store.tenantId);
+  if (!cid) throw new ApiError(401, 'Değerlendirme yapmak için üye girişi yapmalısınız.');
+  const bought = await customerBoughtProduct(store.tenantId, cid, p.id);
+  if (!bought) throw new ApiError(403, 'Yalnızca bu ürünü satın alan üyeler değerlendirme yapabilir.');
+  const customer = await prisma.customer.findFirst({ where: { id: cid, tenantId: store.tenantId } });
+  const { puan, yorum, gorsel } = req.body || {};
+  const adAuto = String(customer?.ad || 'Üye').slice(0, 60);
+  const payload = {
+    ad: adAuto,
+    puan: Math.min(5, Math.max(1, Number(puan) || 5)),
+    yorum: yorum ? String(yorum).slice(0, 1000) : null,
+    gorsel: gorsel ? String(gorsel).slice(0, 2_000_000) : null,
+    onayli: true,
+  };
+  // Aynı müşteri aynı üründe tek değerlendirme tutar — varsa günceller
+  const existing = await prisma.productReview.findFirst({ where: { tenantId: store.tenantId, productId: p.id, customerId: cid } });
+  const r = existing
+    ? await prisma.productReview.update({ where: { id: existing.id }, data: payload })
+    : await prisma.productReview.create({ data: { tenantId: store.tenantId, productId: p.id, customerId: cid, ...payload } });
   res.status(201).json(r);
 }));
 

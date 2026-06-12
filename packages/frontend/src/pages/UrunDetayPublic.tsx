@@ -27,7 +27,6 @@ export default function UrunDetayPublic() {
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // yorum formu
-  const [yad, setYad] = useState('');
   const [ypuan, setYpuan] = useState(5);
   const [yyorum, setYyorum] = useState('');
   const [ygorsel, setYgorsel] = useState('');
@@ -36,7 +35,7 @@ export default function UrunDetayPublic() {
   // slug yoksa (/urun/:id) birincil mağaza slug'ını çöz
   useEffect(() => { api.get('/public/primary-store').then((r) => { if (!slug) setSlug(r.data?.slug || ''); setStoreName(r.data?.magaza || ''); setStoreTopMenu(Array.isArray(r.data?.topMenu) ? r.data.topMenu : []); }).catch(() => { if (!slug) setSlug(''); }); /* eslint-disable-next-line */ }, []);
   useEffect(() => { try { const c = JSON.parse(localStorage.getItem('wt_cart') || '{}'); setCartCount(Object.values(c).reduce((s: number, x: any) => s + (x.adet || 0), 0)); } catch { /* */ } }, []);
-  const load = () => { if (!slug) return; api.get(`/public/store/${slug}/urun/${id}`).then((r) => { setD(r.data); }).catch((e) => setErr(apiErrorMessage(e))); api.post(`/public/store/${slug}/urun/${id}/view`, {}, { headers: { ...(localStorage.getItem('shopToken_' + slug) ? { Authorization: 'Bearer ' + localStorage.getItem('shopToken_' + slug) } : {}) } }).catch(() => {}); };
+  const load = () => { if (!slug) return; const tok = localStorage.getItem('shopToken_' + slug); const authH = tok ? { Authorization: 'Bearer ' + tok } : {}; api.get(`/public/store/${slug}/urun/${id}`, { headers: authH }).then((r) => { setD(r.data); }).catch((e) => setErr(apiErrorMessage(e))); api.post(`/public/store/${slug}/urun/${id}/view`, {}, { headers: { ...authH } }).catch(() => {}); };
   useEffect(() => { load(); window.scrollTo(0, 0); /* eslint-disable-next-line */ }, [slug, id]);
 
   // ── Canlı ziyaretçi takibi: ürün ekranı ──
@@ -69,9 +68,13 @@ export default function UrunDetayPublic() {
 
   const pickImg = (file: File) => { const reader = new FileReader(); reader.onload = () => { const im = new Image(); im.onload = () => { let { width, height } = im; const max = 900; if (width > max || height > max) { if (width > height) { height = Math.round(height * max / width); width = max; } else { width = Math.round(width * max / height); height = max; } } const c = document.createElement('canvas'); c.width = width; c.height = height; c.getContext('2d')!.drawImage(im, 0, 0, width, height); setYgorsel(c.toDataURL('image/jpeg', 0.7)); }; im.src = reader.result as string; }; reader.readAsDataURL(file); };
   const yorumGonder = async () => {
-    if (!yad.trim()) { alert('Adınızı girin'); return; }
     setYgonder(true);
-    try { await api.post(`/public/store/${slug}/urun/${id}/yorum`, { ad: yad, puan: ypuan, yorum: yyorum, gorsel: ygorsel || undefined }); setYad(''); setYyorum(''); setYgorsel(''); setYpuan(5); load(); }
+    try {
+      const tok = localStorage.getItem('shopToken_' + slug);
+      const authH = tok ? { Authorization: 'Bearer ' + tok } : {};
+      await api.post(`/public/store/${slug}/urun/${id}/yorum`, { puan: ypuan, yorum: yyorum, gorsel: ygorsel || undefined }, { headers: authH });
+      setYyorum(''); setYgorsel(''); setYpuan(5); load();
+    }
     catch (e) { alert(apiErrorMessage(e)); } finally { setYgonder(false); }
   };
 
@@ -123,18 +126,31 @@ export default function UrunDetayPublic() {
         <div className="bg-white rounded-2xl border border-slate-100 p-5">
           <div className="flex items-center justify-between mb-4"><h2 className="font-bold text-slate-800">Değerlendirmeler & Yorumlar</h2><div className="flex items-center gap-2"><Stars value={d.puanOrt} size={16} /><span className="text-sm text-slate-500">{d.puanOrt || 0} / 5 · {d.yorumSayi} yorum</span></div></div>
 
-          {/* Yorum yaz */}
-          <div className="bg-slate-50 rounded-xl p-4 mb-5">
-            <p className="text-sm font-semibold text-slate-700 mb-2">Bu ürünü değerlendir</p>
-            <div className="flex items-center gap-3 mb-2"><Stars value={ypuan} size={22} onPick={setYpuan} /><span className="text-xs text-slate-400">Puanınız: {ypuan}/5</span></div>
-            <div className="grid sm:grid-cols-2 gap-2 mb-2"><input value={yad} onChange={(e) => setYad(e.target.value)} placeholder="Adınız" className="px-3 py-2 text-base border border-slate-200 rounded-lg" /></div>
-            <textarea value={yyorum} onChange={(e) => setYyorum(e.target.value)} rows={3} placeholder="Ürün hakkında düşüncelerinizi paylaşın..." className="w-full px-3 py-2 text-base border border-slate-200 rounded-lg" />
-            <div className="flex items-center gap-3 mt-2">
-              <label className="inline-flex items-center gap-1.5 text-sm text-indigo-600 cursor-pointer"><ImagePlus size={18} /> Fotoğraf Ekle<input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickImg(f); }} /></label>
-              {ygorsel && <div className="relative"><img src={ygorsel} className="w-12 h-12 rounded object-cover" /><button onClick={() => setYgorsel('')} className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-slate-700 text-white rounded-full text-[10px]">×</button></div>}
-              <button onClick={yorumGonder} disabled={ygonder} className="ml-auto bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-1.5 disabled:opacity-50"><Send size={15} /> Gönder</button>
+          {/* Yorum yaz — yalnızca ürünü satın alan üyeler */}
+          {d.satinAldi ? (
+            <div className="bg-slate-50 rounded-xl p-4 mb-5">
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-sm font-semibold text-slate-700">{d.zatenYorumladi ? 'Değerlendirmeni güncelle' : 'Bu ürünü değerlendir'}</p>
+                <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-semibold">Onaylı Alışveriş</span>
+              </div>
+              <div className="flex items-center gap-3 mb-2"><Stars value={ypuan} size={22} onPick={setYpuan} /><span className="text-xs text-slate-400">Puanınız: {ypuan}/5</span></div>
+              <textarea value={yyorum} onChange={(e) => setYyorum(e.target.value)} rows={3} placeholder="Ürün hakkında düşüncelerinizi paylaşın..." className="w-full px-3 py-2 text-base border border-slate-200 rounded-lg" />
+              <div className="flex items-center gap-3 mt-2">
+                <label className="inline-flex items-center gap-1.5 text-sm text-indigo-600 cursor-pointer"><ImagePlus size={18} /> Fotoğraf Ekle<input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) pickImg(f); }} /></label>
+                {ygorsel && <div className="relative"><img src={ygorsel} className="w-12 h-12 rounded object-cover" /><button onClick={() => setYgorsel('')} className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-slate-700 text-white rounded-full text-[10px]">×</button></div>}
+                <button onClick={yorumGonder} disabled={ygonder} className="ml-auto bg-indigo-600 text-white px-4 py-2 rounded-xl text-sm font-semibold inline-flex items-center gap-1.5 disabled:opacity-50"><Send size={15} /> {d.zatenYorumladi ? 'Güncelle' : 'Gönder'}</button>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="bg-slate-50 rounded-xl p-4 mb-5 text-center">
+              <p className="text-sm text-slate-500">
+                {d.girisYapildi
+                  ? 'Yalnızca bu ürünü satın alan üyeler değerlendirme yapabilir.'
+                  : 'Değerlendirme yapabilmek için üye girişi yapmalı ve bu ürünü satın almış olmalısınız.'}
+              </p>
+              {!d.girisYapildi && <Link to="/" className="inline-block mt-2 text-sm font-semibold text-indigo-600">Üye Girişi Yap</Link>}
+            </div>
+          )}
 
           {/* Yorum listesi */}
           <div className="space-y-4">

@@ -579,6 +579,7 @@ model ProductReview {
   id        String   @id @default(cuid())
   tenantId  String
   productId String
+  customerId String?
   ad        String
   puan      Int      @default(5)
   yorum     String?
@@ -588,6 +589,7 @@ model ProductReview {
 
   @@index([tenantId])
   @@index([productId])
+  @@index([customerId])
 }
 
 model TeamMessage {
