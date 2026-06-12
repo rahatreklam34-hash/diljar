@@ -425,7 +425,7 @@ export default function Urunlerim({ autoAdd }: Props) {
           <form onClick={(e) => e.stopPropagation()} onSubmit={save} className="w-full max-w-2xl bg-white rounded-2xl p-6 max-h-[88vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-bold text-slate-800">{edit ? 'Ürünü Düzenle' : 'Yeni Ürün'}</h3><button type="button" onClick={() => setModalOpen(false)}><X size={20} className="text-slate-400" /></button></div>
             <label className="block text-xs text-slate-500 mb-1">Ürün Görseli * (max 5, ilki kapak)</label>
-            <ImageDropzone images={form.images} onChange={(imgs) => set('images', imgs)} max={5} />
+            <ImageDropzone images={form.images} onChange={(imgs) => set('images', imgs)} max={5} onEnhance={async (src) => { const r = await api.post('/store/enhance-image', { image: src }); return r.data.image as string; }} />
             <div className="grid sm:grid-cols-2 gap-3 mt-4">
               <Field label="Ürün Adı *"><input required value={form.ad} onChange={(e) => set('ad', e.target.value)} className={inp} /></Field>
               <Field label="SKU"><input value={form.sku} onChange={(e) => set('sku', e.target.value)} placeholder="ör. PRTS-001-XL-BLK" className={inp} /></Field>

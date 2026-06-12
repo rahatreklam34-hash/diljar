@@ -2,6 +2,7 @@
 import { prisma } from '../../lib/prisma';
 import { asyncHandler, ApiError } from '../../lib/http';
 import { nextOrderNo, logEvent } from './store.routes';
+import { getFbFeed, extractVideoId, clearFbState } from './fbLive';
 
 const router = Router();
 
@@ -114,10 +115,10 @@ router.get('/history', asyncHandler(async (req: Request, res: Response) => {
   res.json(data);
 }));
 
-// Yayin siparisi ekle (musteri eslesirse onaylandi, yoksa rezerve) + sepete ekle
-router.post('/order', asyncHandler(async (req: Request, res: Response) => {
-  const t = req.tenantId!;
-  const { streamId, user, kod, beden, productId, variation, urun, saticiAd, fiyatOverride, freeProductId } = req.body || {};
+// Yayin siparisi olustur (musteri eslesirse onaylandi, yoksa rezerve) + sepete ekle.
+// Hem REST /order ucu hem de Facebook canli yorum poller'i bu fonksiyonu kullanir.
+export async function placeLiveOrder(t: string, payload: any) {
+  const { streamId, user, kod, beden, productId, variation, urun, saticiAd, fiyatOverride, freeProductId } = payload || {};
   if (!streamId) throw new ApiError(400, 'Aktif yayin yok');
 
   const customer = await findCustomerByHandle(t, user || '');
@@ -188,6 +189,11 @@ router.post('/order', asyncHandler(async (req: Request, res: Response) => {
     return lord;
   });
   if (logCartId) await logEvent(t, logCartId, user || 'Canlı Yayın', 'Ürün eklendi (canlı yayın)', logAd);
+  return lo;
+}
+
+router.post('/order', asyncHandler(async (req: Request, res: Response) => {
+  const lo = await placeLiveOrder(req.tenantId!, req.body || {});
   res.status(201).json(lo);
 }));
 
@@ -342,6 +348,52 @@ router.get('/overview', asyncHandler(async (req: Request, res: Response) => {
   for (const e of productEvents) if (e.label) viewMap.set(e.label, (viewMap.get(e.label) || 0) + 1);
   const enCokIncelenen = [...viewMap.entries()].map(([ad, sayi]) => ({ ad, sayi })).sort((a, b) => b.sayi - a.sayi).slice(0, 5);
   res.json({ ziyaretci: visits.length, cihaz, enCokIncelenen });
+}));
+
+// ───────── Facebook Canlı Yayın Yorum Bağlama ─────────
+// Aktif yayını bir Facebook canlı videosuna bağla (videoId/URL + Sayfa erişim token'ı)
+router.post('/fb/connect', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const { videoId, token } = req.body || {};
+  if (!videoId || !token) throw new ApiError(422, 'Video ID/URL ve erişim token gerekli');
+  const stream = await prisma.liveStream.findFirst({ where: { tenantId: t, status: 'active' }, orderBy: { startedAt: 'desc' } });
+  if (!stream) throw new ApiError(400, 'Önce yayını başlatın');
+  const vid = extractVideoId(String(videoId));
+
+  // Token + video doğrulaması (basit erişim testi)
+  try {
+    const test = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(vid)}?fields=id&access_token=${encodeURIComponent(String(token))}`);
+    const tj: any = await test.json();
+    if (tj?.error) throw new ApiError(400, 'Facebook bağlantısı başarısız: ' + (tj.error?.message || 'geçersiz video/token'));
+  } catch (e: any) {
+    if (e instanceof ApiError) throw e;
+    throw new ApiError(502, 'Facebook doğrulaması yapılamadı');
+  }
+
+  clearFbState(stream.id);
+  const updated = await prisma.liveStream.update({
+    where: { id: stream.id },
+    data: { fbVideoId: vid, fbToken: String(token), fbSince: new Date(Date.now() - 60 * 1000) },
+  });
+  res.json({ ok: true, videoId: updated.fbVideoId });
+}));
+
+router.post('/fb/disconnect', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const stream = await prisma.liveStream.findFirst({ where: { tenantId: t, status: 'active' }, orderBy: { startedAt: 'desc' } });
+  if (stream) {
+    clearFbState(stream.id);
+    await prisma.liveStream.update({ where: { id: stream.id }, data: { fbVideoId: null, fbToken: null, fbSince: null } });
+  }
+  res.json({ ok: true });
+}));
+
+// FB bağlantı durumu + son çekilen yorum akışı
+router.get('/fb/status', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const stream = await prisma.liveStream.findFirst({ where: { tenantId: t, status: 'active' }, orderBy: { startedAt: 'desc' } });
+  if (!stream) return res.json({ connected: false, videoId: null, feed: [] });
+  res.json({ connected: !!stream.fbVideoId, videoId: stream.fbVideoId, feed: stream.fbVideoId ? getFbFeed(stream.id) : [] });
 }));
 
 export default router;

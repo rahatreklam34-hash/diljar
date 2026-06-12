@@ -23,5 +23,6 @@ export const env = {
   APP_DOMAIN: process.env.APP_DOMAIN || 'http://localhost:5173',
   UPLOAD_DIR: process.env.UPLOAD_DIR || './uploads',
   MAX_UPLOAD_MB: parseInt(process.env.MAX_UPLOAD_MB || '10', 10),
+  FAL_KEY: process.env.FAL_KEY || '',
   isProd: (process.env.NODE_ENV || 'development') === 'production',
 };

@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { asyncHandler, ApiError } from '../../lib/http';
 import { promoteReserved, campaignAdjust, recalcOpenCarts } from './live.routes';
 import { notifyOrderSms } from '../sms/netgsm.service';
+import { enhanceProductImage } from '../../lib/fal';
 
 const router = Router();
 
@@ -679,6 +680,14 @@ router.put('/paytr', asyncHandler(async (req: Request, res: Response) => {
     create: { scope: 'TENANT', tenantId: req.tenantId!, provider: 'paytr', category: 'PAYMENT', config, mode: mode === 'LIVE' ? 'LIVE' : 'TEST', enabled: !!enabled },
   });
   res.json({ ok: true });
+}));
+
+// Ürün görselini profesyonel stüdyo çekimine dönüştür (Seedream 4.5 / fal.ai)
+router.post('/enhance-image', asyncHandler(async (req: Request, res: Response) => {
+  const { image, prompt } = req.body || {};
+  if (!image || typeof image !== 'string') throw new ApiError(422, 'Görsel gerekli');
+  const out = await enhanceProductImage(image, typeof prompt === 'string' ? prompt : undefined);
+  res.json({ image: out.image });
 }));
 
 export default router;

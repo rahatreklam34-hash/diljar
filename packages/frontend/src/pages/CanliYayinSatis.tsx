@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Clock, TrendingUp, Wallet, ShoppingBag, Users, BarChart3, Radio, Square, Send, X, Filter, Trash2, History, UserCircle, Plus, Search, UserPlus, Tag, Brain, AlertTriangle, Lightbulb, Sparkles, Package, Target, Share2 } from 'lucide-react';
+import { Clock, TrendingUp, Wallet, ShoppingBag, Users, BarChart3, Radio, Square, Send, X, Filter, Trash2, History, UserCircle, Plus, Search, UserPlus, Tag, Brain, AlertTriangle, Lightbulb, Sparkles, Package, Target, Share2, Video, MessageSquare, Link2, Unlink } from 'lucide-react';
 import { Doughnut, Line } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend, Filler } from 'chart.js';
 import toast from 'react-hot-toast';
@@ -35,6 +35,10 @@ export default function CanliYayinSatis() {
   const [barHistory, setBarHistory] = useState<any[]>([]);
   const [barHistModal, setBarHistModal] = useState(false);
   const [araQ, setAraQ] = useState('');
+  const [fbStatus, setFbStatus] = useState<{ connected: boolean; videoId: string | null; feed: any[] }>({ connected: false, videoId: null, feed: [] });
+  const [fbModal, setFbModal] = useState(false);
+  const [fbForm, setFbForm] = useState({ videoId: '', token: '' });
+  const [fbBusy, setFbBusy] = useState(false);
   const [imgZoom, setImgZoom] = useState('');
   const [leftTab, setLeftTab] = useState<'manuel' | 'sohbet'>('manuel');
   const [discForm, setDiscForm] = useState({ price: '', dakika: '' });
@@ -102,13 +106,35 @@ export default function CanliYayinSatis() {
   };
   useEffect(() => { loadFree(); }, []);
 
+  // Facebook canlı yorum durumu + akışı
+  const loadFb = async () => {
+    try { const r = await api.get('/store/live/fb/status'); setFbStatus(r.data); } catch { /* */ }
+  };
+  const fbConnect = async () => {
+    if (!fbForm.videoId.trim() || !fbForm.token.trim()) { toast.error('Video ID/URL ve token gerekli'); return; }
+    setFbBusy(true);
+    try {
+      await api.post('/store/live/fb/connect', { videoId: fbForm.videoId.trim(), token: fbForm.token.trim() });
+      toast.success('Facebook yayını bağlandı — yorumlar otomatik çekilecek');
+      setFbModal(false); setFbForm({ videoId: '', token: '' }); loadFb();
+    } catch (e) { toast.error(apiErrorMessage(e)); }
+    finally { setFbBusy(false); }
+  };
+  const fbDisconnect = async () => {
+    setFbBusy(true);
+    try { await api.post('/store/live/fb/disconnect'); toast.success('Facebook bağlantısı kesildi'); loadFb(); }
+    catch (e) { toast.error(apiErrorMessage(e)); }
+    finally { setFbBusy(false); }
+  };
+
   // Depo + drop ürünleri birleşik liste (arama / barkod / satış bu liste üzerinden)
   const allProds = useMemo(() => [...freeProducts, ...products], [freeProducts, products]);
 
   // Periyodik yenileme: musteri kaydi/onay durumlarini anlik yansit
   useEffect(() => {
     if (!stream) return;
-    const t = setInterval(() => { loadActive(); loadFree(); reload(); }, 4000);
+    loadFb();
+    const t = setInterval(() => { loadActive(); loadFree(); loadFb(); reload(); }, 4000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream]);
@@ -515,6 +541,9 @@ export default function CanliYayinSatis() {
           <button onClick={openHistory} className="inline-flex items-center gap-2 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-200"><History size={16} /> Geçmiş</button>
           <button onClick={() => setKampOpen(true)} className="inline-flex items-center gap-2 bg-amber-100 text-amber-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-amber-200"><Tag size={16} /> Kampanyalar</button>
           <button onClick={() => setReportOpen(true)} className="inline-flex items-center gap-2 bg-slate-100 text-slate-700 px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-200"><BarChart3 size={16} /> Raporlar</button>
+          {stream && (
+            <button onClick={() => setFbModal(true)} className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${fbStatus.connected ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}><Video size={16} /> {fbStatus.connected ? 'FB Bağlı' : 'Facebook'}</button>
+          )}
           {!stream ? (
             <button onClick={startStream} className="inline-flex items-center gap-2 bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"><Radio size={16} /> Yeni Yayın</button>
           ) : (
@@ -606,6 +635,28 @@ export default function CanliYayinSatis() {
               )}
             </div>
           </div>
+
+          {/* Facebook canlı yorum akışı */}
+          {fbStatus.connected && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold text-slate-800 flex items-center gap-2"><Video size={16} className="text-blue-600" /> Facebook Yorumları</h3>
+                <button onClick={fbDisconnect} disabled={fbBusy} className="text-[11px] text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg inline-flex items-center gap-1 disabled:opacity-50"><Unlink size={12} /> Kes</button>
+              </div>
+              <p className="text-[10px] text-slate-400 mb-2">Yorumdaki satış kodu/barkod otomatik siparişe dönüşür. <span className="text-green-600 font-medium">Yeşil</span> = sipariş açıldı.</p>
+              <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                {fbStatus.feed.length === 0 ? <p className="text-[11px] text-slate-400 text-center py-4">Henüz yorum gelmedi…</p> : fbStatus.feed.map((c: any) => (
+                  <div key={c.id} className={`text-xs rounded-lg p-2 border ${c.matched ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-slate-700 truncate">{c.name}</span>
+                      {c.matched ? <span className="text-[9px] bg-green-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">✓ {c.urun ? String(c.urun).slice(0, 14) : 'sipariş'}</span> : <MessageSquare size={11} className="text-slate-300 shrink-0" />}
+                    </div>
+                    <p className="text-slate-500 break-words">{c.message}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Manuel Sipariş / Sohbet — sekmeli */}
           <div className="bg-white rounded-2xl border border-slate-200 p-4">
@@ -812,6 +863,39 @@ export default function CanliYayinSatis() {
         <div className="fixed inset-0 z-[130] flex items-center justify-center p-6 bg-black/80" onClick={() => setImgZoom('')}>
           <img src={imgZoom} className="max-w-full max-h-full rounded-xl object-contain" onClick={(e) => e.stopPropagation()} />
           <button onClick={() => setImgZoom('')} className="absolute top-4 right-4 text-white/80 hover:text-white"><X size={28} /></button>
+        </div>
+      )}
+
+      {/* Facebook canlı yayın bağlama modalı */}
+      {fbModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50" onClick={() => setFbModal(false)}>
+          <div className="w-full max-w-md bg-white rounded-2xl p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Video size={20} className="text-blue-600" /> Facebook Canlı Yayın</h3>
+              <button onClick={() => setFbModal(false)}><X size={20} className="text-slate-400" /></button>
+            </div>
+            {fbStatus.connected ? (
+              <div className="space-y-3">
+                <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700 flex items-center gap-2"><Link2 size={16} /> Bağlı — Video ID: <b className="font-mono">{fbStatus.videoId}</b></div>
+                <p className="text-xs text-slate-500">Yorumlar her 5 saniyede bir otomatik çekiliyor. İçinde satış kodu/barkod geçen yorumlar siparişe dönüşür.</p>
+                <button onClick={fbDisconnect} disabled={fbBusy} className="w-full inline-flex items-center justify-center gap-2 bg-rose-500 text-white py-2.5 rounded-lg font-medium hover:bg-rose-600 disabled:opacity-50"><Unlink size={16} /> Bağlantıyı Kes</button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500">Facebook'ta yayını başlattıktan sonra <b>canlı videonun ID'sini</b> (veya video bağlantısını) ve <b>Sayfa Erişim Token'ınızı</b> yapıştırın.</p>
+                <div>
+                  <label className="text-[11px] font-medium text-slate-600">Canlı Video ID veya URL</label>
+                  <input value={fbForm.videoId} onChange={(e) => setFbForm({ ...fbForm, videoId: e.target.value })} placeholder="örn. 1234567890123456 veya facebook.com/.../videos/123..." className="w-full mt-1 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-300" />
+                </div>
+                <div>
+                  <label className="text-[11px] font-medium text-slate-600">Sayfa Erişim Token (Page Access Token)</label>
+                  <textarea value={fbForm.token} onChange={(e) => setFbForm({ ...fbForm, token: e.target.value })} rows={3} placeholder="EAAB... ile başlayan uzun token" className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-300 font-mono" />
+                </div>
+                <button onClick={fbConnect} disabled={fbBusy} className="w-full inline-flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"><Link2 size={16} /> {fbBusy ? 'Bağlanıyor…' : 'Bağla ve Yorumları Çek'}</button>
+                <p className="text-[10px] text-slate-400">Token'ı Facebook Developer panelinden (Graph API Explorer veya Sayfa ayarları) alabilirsiniz. Gerekli izinler: <span className="font-mono">pages_read_engagement</span>.</p>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
