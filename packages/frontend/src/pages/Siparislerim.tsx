@@ -461,7 +461,7 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
   const exportPDF = () => {
     const esc = (s: any) => String(s ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as any)[c]);
     const rows = items.map((it, i) => {
-      const img = imgOf(it.productId);
+      const img = it.gorsel || imgOf(it.productId);
       const detay = [katOf(it.productId), renkOf(it.productId), prodOf(it.productId)?.barkod].filter(Boolean).join(' · ');
       const brut = (Number(it.fiyat) || 0) * (Number(it.adet) || 0);
       const disc = itemDiscMap.get(i) || 0;
@@ -629,7 +629,7 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
                   <thead className="text-slate-400 text-left text-xs"><tr><th className="py-2">Ürün</th><th className="py-2 w-20">Beden</th><th className="py-2 w-16">Adet</th><th className="py-2 w-24">Fiyat</th><th className="py-2 w-24">Toplam</th><th className="py-2 text-right w-20">İşlem</th></tr></thead>
                   <tbody>
                     {items.map((it, i) => {
-                      const img = imgOf(it.productId);
+                      const img = it.gorsel || imgOf(it.productId);
                       const detay = [katOf(it.productId), renkOf(it.productId), prodOf(it.productId)?.barkod].filter(Boolean).join(' · ');
                       return (
                         <tr key={i} className="border-t border-slate-100 align-top">

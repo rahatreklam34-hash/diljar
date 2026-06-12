@@ -61,6 +61,7 @@ model Tenant {
   freeOrders    FreeOrder[]
   freeProducts  FreeProduct[]
   suppliers     Supplier[]
+  supplierPayments SupplierPayment[]
   botConfig     BotConfig?
   botKnowledge  BotKnowledge[]
   botGaps       BotGap[]
@@ -909,8 +910,23 @@ model Supplier {
 
   freeProducts FreeProduct[]
   freeOrders   FreeOrder[]
+  payments     SupplierPayment[]
 
   @@index([tenantId])
+}
+
+model SupplierPayment {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplierId String
+  supplier   Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  tutar      Float    @default(0)
+  not        String?
+  createdAt  DateTime @default(now())
+
+  @@index([tenantId])
+  @@index([supplierId])
 }
 
 model FreeStream {

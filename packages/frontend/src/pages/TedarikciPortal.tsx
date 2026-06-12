@@ -1,7 +1,7 @@
 // Tedarikçi Portalı — /tedarikci (public, auth gerektirmez)
 // Toptancı: kod+PIN ile giriş → ürün yükle → ürünlerini gör → satışlarını gör (satış fiyatı GİZLİ)
 import { useState, useEffect } from 'react';
-import { Package, X, LogOut, Eye, EyeOff, Upload, BarChart3, Pencil, Trash2, ScanLine } from 'lucide-react';
+import { Package, X, LogOut, Eye, EyeOff, Upload, BarChart3, Pencil, Trash2, ScanLine, Wallet } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from 'axios';
 import ImageDropzone from '../components/ImageDropzone';
@@ -36,7 +36,7 @@ function printBarkod(arr: any[]) {
 export default function TedarikciPortal() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('supplier_token'));
   const [supplier, setSupplier] = useState<any>(null);
-  const [tab, setTab] = useState<'urunler' | 'yukle' | 'satislar'>('urunler');
+  const [tab, setTab] = useState<'urunler' | 'yukle' | 'satislar' | 'hesap'>('urunler');
 
   // Giriş formu
   const [loginCode, setLoginCode] = useState('');
@@ -47,6 +47,7 @@ export default function TedarikciPortal() {
   // Ürünler
   const [products, setProducts] = useState<any[]>([]);
   const [sales, setSales] = useState<any[]>([]);
+  const [account, setAccount] = useState<any | null>(null);
 
   // Yükleme formu
   const [form, setForm] = useState({ ad: '', bedenler: '', alisFiyat: '', images: [] as string[] });
@@ -69,6 +70,7 @@ export default function TedarikciPortal() {
 
   const loadProducts = async () => { try { const r = await sApi.get('/public/supplier/products'); setProducts(r.data || []); } catch { /* */ } };
   const loadSales = async () => { try { const r = await sApi.get('/public/supplier/sales'); setSales(r.data || []); } catch { /* */ } };
+  const loadAccount = async () => { try { const r = await sApi.get('/public/supplier/account'); setAccount(r.data || null); } catch { /* */ } };
 
   useEffect(() => {
     if (!token) return;
@@ -170,6 +172,7 @@ export default function TedarikciPortal() {
           <button onClick={() => setTab('urunler')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'urunler' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>Ürünlerim ({products.length})</button>
           <button onClick={() => setTab('yukle')} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'yukle' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>Ürün Yükle</button>
           <button onClick={() => { setTab('satislar'); loadSales(); }} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'satislar' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>Satışlarım</button>
+          <button onClick={() => { setTab('hesap'); loadAccount(); }} className={`flex-1 py-2 text-sm font-medium rounded-lg transition-colors ${tab === 'hesap' ? 'bg-violet-600 text-white' : 'text-slate-500 hover:text-slate-700'}`}>Cari</button>
         </div>
 
         {/* Ürünlerim */}
@@ -270,13 +273,54 @@ export default function TedarikciPortal() {
           </div>
         )}
 
+        {/* Cari / Hesabım */}
+        {tab === 'hesap' && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center">
+                <p className="text-[11px] text-slate-400 mb-1">Toplam Borç</p>
+                <p className="text-lg font-bold text-slate-800">{fmt(account?.borc || 0)}</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center">
+                <p className="text-[11px] text-slate-400 mb-1">Ödenen</p>
+                <p className="text-lg font-bold text-emerald-600">{fmt(account?.odenen || 0)}</p>
+              </div>
+              <div className="bg-white rounded-2xl border border-slate-200 p-4 text-center">
+                <p className="text-[11px] text-slate-400 mb-1">Kalan</p>
+                <p className="text-lg font-bold text-red-600">{fmt(account?.kalan || 0)}</p>
+              </div>
+            </div>
+            <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4">
+              <p className="text-xs text-violet-700 font-medium flex items-center gap-1.5"><Wallet size={14} /> Borç, satılan ürünlerinizin alış fiyatı toplamıdır. Firma ödeme yaptıkça düşer.</p>
+            </div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4">
+              <p className="font-semibold text-slate-800 mb-3 text-sm">Ödeme Geçmişi</p>
+              {(!account?.payments || account.payments.length === 0) ? (
+                <p className="text-sm text-slate-400 text-center py-6">Henüz ödeme kaydı yok</p>
+              ) : (
+                <div className="space-y-2">
+                  {account.payments.map((p: any) => (
+                    <div key={p.id} className="flex items-center justify-between border-b border-slate-100 pb-2 last:border-0">
+                      <div>
+                        <p className="text-sm font-medium text-emerald-600">{fmt(p.tutar)}</p>
+                        {p.not && <p className="text-[11px] text-slate-400">{p.not}</p>}
+                      </div>
+                      <p className="text-[11px] text-slate-400">{new Date(p.createdAt).toLocaleDateString('tr-TR')}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <div className="h-8" />
       </div>
 
       {/* Ürün Düzenleme Modal */}
       {editProd && (
-        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50" onClick={() => setEditProd(null)}>
-          <div className="w-full max-w-md bg-white rounded-2xl p-6 max-h-[88vh] overflow-y-auto space-y-4" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-[120] overflow-y-auto p-4 flex items-start sm:items-center justify-center bg-black/50" onClick={() => setEditProd(null)}>
+          <div className="w-full max-w-md bg-white rounded-2xl p-6 my-auto space-y-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Pencil size={18} className="text-violet-600" /> Ürünü Düzenle</h3><button onClick={() => setEditProd(null)}><X size={20} className="text-slate-400" /></button></div>
             <div><label className="block text-xs text-slate-500 mb-1">Ürün Adı</label><input value={editForm.ad} onChange={(e) => setEditForm({ ...editForm, ad: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
             <div><label className="block text-xs text-slate-500 mb-1">Görsel</label><ImageDropzone images={editForm.images} onChange={(imgs) => setEditForm({ ...editForm, images: imgs })} max={3} /></div>

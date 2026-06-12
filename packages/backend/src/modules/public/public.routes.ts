@@ -996,6 +996,10 @@ router.post('/tami/callback', express.urlencoded({ extended: false }), asyncHand
 
 // ─── Tedarikçi Portalı (/api/v1/public/supplier) ─────────────────────────────
 
+// Varsayılan kâr çarpanı (alış × 2.10 = otomatik satış fiyatı)
+const SUP_PRICE_MULT = 2.10;
+const supRound2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+
 // Supplier JWT middleware
 function supplierAuth(req: Request, res: Response, next: Function) {
   const auth = req.headers.authorization || '';
@@ -1053,7 +1057,8 @@ router.post('/supplier/products', supplierAuth as any, asyncHandler(async (req: 
   } else if (bedenler) {
     vars = String(bedenler).split(',').map((b: string) => b.trim()).filter(Boolean).map((b: string) => ({ deger: b, stok: 1 }));
   }
-  const p = await prisma.freeProduct.create({ data: { tenantId: t, supplierId: sid, ad, salesCode, images: images || [], variations: vars, alisFiyat: Number(alisFiyat) || 0, satisFiyat: 0 } });
+  const alis = Number(alisFiyat) || 0;
+  const p = await prisma.freeProduct.create({ data: { tenantId: t, supplierId: sid, ad, salesCode, images: images || [], variations: vars, alisFiyat: alis, satisFiyat: supRound2(alis * SUP_PRICE_MULT) } });
   res.status(201).json({ ...p, satisFiyat: undefined });
 }));
 
@@ -1066,7 +1071,11 @@ router.patch('/supplier/products/:id', supplierAuth as any, asyncHandler(async (
   if (ad !== undefined) data.ad = ad;
   if (images !== undefined) data.images = images;
   if (variations !== undefined) data.variations = variations;
-  if (alisFiyat !== undefined) data.alisFiyat = Number(alisFiyat);
+  if (alisFiyat !== undefined) {
+    data.alisFiyat = Number(alisFiyat);
+    // Alış değişince satış fiyatını otomatik yeniden hesapla
+    data.satisFiyat = supRound2((Number(alisFiyat) || 0) * SUP_PRICE_MULT);
+  }
   await prisma.freeProduct.updateMany({ where: { id: req.params.id, tenantId: t, supplierId: sid }, data });
   const p = await prisma.freeProduct.findFirst({ where: { id: req.params.id } });
   res.json(p ? { ...p, satisFiyat: undefined } : { ok: true });
@@ -1089,17 +1098,30 @@ router.get('/supplier/sales', supplierAuth as any, asyncHandler(async (req: Requ
     include: { freeProduct: true },
     orderBy: { createdAt: 'desc' },
   });
-  // Ürün bazlı gruplama — satış fiyatı/tutar dönmez
-  const map = new Map<string, { ad: string; image: string | null; toplam: number; bedenler: Record<string, number> }>();
+  // Ürün bazlı gruplama — satış fiyatı/tutar dönmez; ciro tedarikçinin KENDİ alış fiyatına göre
+  const map = new Map<string, { ad: string; image: string | null; toplam: number; alisFiyat: number; ciro: number; bedenler: Record<string, number> }>();
   for (const o of orders) {
     const key = o.freeProductId || o.urun;
     const img = o.freeProduct ? (Array.isArray(o.freeProduct.images) ? (o.freeProduct.images as any[])[0] || null : null) : null;
-    if (!map.has(key)) map.set(key, { ad: o.urun, image: img, toplam: 0, bedenler: {} });
+    const alis = o.alis || (o.freeProduct?.alisFiyat || 0);
+    if (!map.has(key)) map.set(key, { ad: o.urun, image: img, toplam: 0, alisFiyat: alis, ciro: 0, bedenler: {} });
     const e = map.get(key)!;
     e.toplam++;
+    e.ciro = supRound2(e.ciro + alis);
     if (o.beden) e.bedenler[o.beden] = (e.bedenler[o.beden] || 0) + 1;
   }
   res.json([...map.values()]);
+}));
+
+// Tedarikçi hesap özeti (borç / ödenen / kalan) — okuma amaçlı, tedarikçi kendi hesabını görür
+router.get('/supplier/account', supplierAuth as any, asyncHandler(async (req: Request, res: Response) => {
+  const sid = (req as any).supplierId;
+  const t = (req as any).supplierTenantId;
+  const orders = await prisma.freeOrder.findMany({ where: { tenantId: t, supplierId: sid, durum: { in: ['onaylandi', 'rezerve'] } } });
+  const borc = supRound2(orders.reduce((s, o) => s + (o.alis || 0), 0));
+  const payments = await prisma.supplierPayment.findMany({ where: { tenantId: t, supplierId: sid }, orderBy: { createdAt: 'desc' } });
+  const odenen = supRound2(payments.reduce((s, p) => s + (p.tutar || 0), 0));
+  res.json({ borc, odenen, kalan: supRound2(borc - odenen), adet: orders.length, payments });
 }));
 
 export default router;

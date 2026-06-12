@@ -7,6 +7,10 @@ import bcrypt from 'bcryptjs';
 
 const router = Router();
 
+// Varsayılan kâr çarpanı: alış fiyatı × 2.10 = otomatik satış fiyatı
+export const PRICE_MULT = 2.10;
+const round2 = (n: number) => Math.round((Number(n) || 0) * 100) / 100;
+
 const norm = (s: string) => (s || '').toLowerCase().replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/^@/, '').trim();
 const genToken = () => Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
 const genCode = () => Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -46,7 +50,7 @@ router.delete('/suppliers/:id', asyncHandler(async (req: Request, res: Response)
 // Tedarikçinin ürünleri + satışları (admin görünümü)
 router.get('/suppliers/:id/products', asyncHandler(async (req: Request, res: Response) => {
   const t = req.tenantId!;
-  const prods = await prisma.freeProduct.findMany({ where: { tenantId: t, supplierId: req.params.id }, orderBy: { createdAt: 'desc' } });
+  const prods = await prisma.freeProduct.findMany({ where: { tenantId: t, supplierId: req.params.id, aktif: true }, orderBy: { createdAt: 'desc' } });
   res.json(prods);
 }));
 
@@ -56,12 +60,58 @@ router.get('/suppliers/:id/sales', asyncHandler(async (req: Request, res: Respon
   res.json(orders);
 }));
 
+// Tedarikçi hesap özeti (borç / ödenen / kalan) + ödeme listesi (admin)
+router.get('/suppliers/:id/account', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const sid = req.params.id;
+  const orders = await prisma.freeOrder.findMany({ where: { tenantId: t, supplierId: sid, durum: { in: ['onaylandi', 'rezerve'] } } });
+  const borc = round2(orders.reduce((s, o) => s + (o.alis || 0), 0));
+  const adet = orders.length;
+  const payments = await prisma.supplierPayment.findMany({ where: { tenantId: t, supplierId: sid }, orderBy: { createdAt: 'desc' } });
+  const odenen = round2(payments.reduce((s, p) => s + (p.tutar || 0), 0));
+  res.json({ borc, odenen, kalan: round2(borc - odenen), adet, payments });
+}));
+
+router.post('/suppliers/:id/payments', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const { tutar, not } = req.body || {};
+  const amt = Number(tutar) || 0;
+  if (amt <= 0) throw new ApiError(400, 'Geçerli bir tutar girin');
+  const p = await prisma.supplierPayment.create({ data: { tenantId: t, supplierId: req.params.id, tutar: round2(amt), not: not || null } });
+  res.status(201).json(p);
+}));
+
+router.delete('/suppliers/:id/payments/:pid', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  await prisma.supplierPayment.deleteMany({ where: { id: req.params.pid, tenantId: t, supplierId: req.params.id } });
+  res.json({ ok: true });
+}));
+
 // ─── Geçici Ürün CRUD ────────────────────────────────────────────────────────
 
 router.get('/products', asyncHandler(async (req: Request, res: Response) => {
   const t = req.tenantId!;
-  const prods = await prisma.freeProduct.findMany({ where: { tenantId: t, aktif: true }, orderBy: { createdAt: 'desc' } });
-  res.json(prods);
+  const prods = await prisma.freeProduct.findMany({ where: { tenantId: t, aktif: true }, include: { supplier: { select: { ad: true } } }, orderBy: { createdAt: 'desc' } });
+  res.json(prods.map((p) => ({ ...p, supplierAd: p.supplier?.ad || null })));
+}));
+
+// Toplu fiyat güncelleme (admin): çarpan ile (alış×çarpan) veya sabit satış fiyatı
+router.post('/products/bulk-price', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const { ids, multiplier, satisFiyat } = req.body || {};
+  const where: any = { tenantId: t, aktif: true };
+  if (Array.isArray(ids) && ids.length > 0) where.id = { in: ids };
+  const prods = await prisma.freeProduct.findMany({ where });
+  let count = 0;
+  for (const p of prods) {
+    let nf: number;
+    if (multiplier !== undefined && multiplier !== null && Number(multiplier) > 0) nf = round2((p.alisFiyat || 0) * Number(multiplier));
+    else if (satisFiyat !== undefined && Number(satisFiyat) >= 0) nf = round2(Number(satisFiyat));
+    else continue;
+    await prisma.freeProduct.update({ where: { id: p.id }, data: { satisFiyat: nf } });
+    count++;
+  }
+  res.json({ ok: true, count });
 }));
 
 router.post('/products', asyncHandler(async (req: Request, res: Response) => {
@@ -82,6 +132,10 @@ router.post('/products', asyncHandler(async (req: Request, res: Response) => {
     vars = String(bedenler).split(',').map((b) => b.trim()).filter(Boolean).map((b) => ({ deger: b, stok: 1 }));
   }
 
+  const alis = Number(alisFiyat) || 0;
+  // Satış fiyatı verilmediyse otomatik: alış × 2.10
+  const satis = Number(satisFiyat) > 0 ? round2(Number(satisFiyat)) : round2(alis * PRICE_MULT);
+
   const p = await prisma.freeProduct.create({
     data: {
       tenantId: t,
@@ -90,8 +144,8 @@ router.post('/products', asyncHandler(async (req: Request, res: Response) => {
       salesCode,
       images: images || [],
       variations: vars,
-      alisFiyat: Number(alisFiyat) || 0,
-      satisFiyat: Number(satisFiyat) || 0,
+      alisFiyat: alis,
+      satisFiyat: satis,
     },
   });
   res.status(201).json(p);
@@ -104,8 +158,12 @@ router.patch('/products/:id', asyncHandler(async (req: Request, res: Response) =
   if (ad !== undefined) data.ad = ad;
   if (images !== undefined) data.images = images;
   if (variations !== undefined) data.variations = variations;
-  if (satisFiyat !== undefined) data.satisFiyat = Number(satisFiyat);
-  if (alisFiyat !== undefined) data.alisFiyat = Number(alisFiyat);
+  if (satisFiyat !== undefined) data.satisFiyat = round2(Number(satisFiyat));
+  if (alisFiyat !== undefined) {
+    data.alisFiyat = Number(alisFiyat);
+    // Satış fiyatı açıkça gönderilmediyse alış değişince otomatik yeniden hesapla
+    if (satisFiyat === undefined) data.satisFiyat = round2((Number(alisFiyat) || 0) * PRICE_MULT);
+  }
   if (aktif !== undefined) data.aktif = aktif;
   await prisma.freeProduct.updateMany({ where: { id: req.params.id, tenantId: t }, data });
   const p = await prisma.freeProduct.findFirst({ where: { id: req.params.id, tenantId: t } });
@@ -210,12 +268,14 @@ router.post('/order', asyncHandler(async (req: Request, res: Response) => {
   const fo = await prisma.$transaction(async (tx) => {
     let durum = 'rezerve'; let tutar = 0; let alis = 0; let urunAd = urun || ''; let storeOrderId: string | null = null;
     let supplierId: string | null = null;
+    let gorsel: string | null = null;
 
     if (freeProductId) {
       const fp = await tx.freeProduct.findFirst({ where: { id: freeProductId, tenantId: t } });
       if (fp) {
         urunAd = fp.ad; alis = fp.alisFiyat || 0; tutar = fp.satisFiyat || 0;
         supplierId = fp.supplierId || null;
+        gorsel = Array.isArray(fp.images) ? ((fp.images as any[])[0] || null) : null;
         const ov = Number(fiyatOverride) || 0;
         if (ov > 0) tutar = ov;
 
@@ -246,7 +306,7 @@ router.post('/order', asyncHandler(async (req: Request, res: Response) => {
     if (durum === 'onaylandi' || durum === 'rezerve') {
       const cart = await getFreeOrCreateCart(tx, t, customer?.id || null, norm(user || ''));
       const items: any[] = Array.isArray(cart.items) ? (cart.items as any) : [];
-      items.push({ freeOrderId: fo.id, freeProductId, ad: urunAd + (beden ? ` (${beden})` : ''), varyasyon: beden || null, adet: 1, fiyat: tutar, durum });
+      items.push({ freeOrderId: fo.id, freeProductId, ad: urunAd + (beden ? ` (${beden})` : ''), gorsel, varyasyon: beden || null, adet: 1, fiyat: tutar, durum });
       const tot = await campaignAdjust(tx, t, items);
       await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...tot } });
       storeOrderId = cart.id;
