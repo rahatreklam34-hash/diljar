@@ -1,9 +1,25 @@
 import { useState, useEffect } from 'react';
-import { UserCog, Plus, X, Eye, EyeOff, Trash2, Package, BarChart3, Copy, RefreshCw } from 'lucide-react';
+import { UserCog, Plus, X, Eye, EyeOff, Trash2, Package, BarChart3, Copy, RefreshCw, Pencil, ScanLine } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
 
 const fmt = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Basit barkod yazdırma — Urunlerim.tsx ile aynı stil
+function printBarkod(arr: any[]) {
+  if (!arr.length) { toast.error('Ürün yok'); return; }
+  const bars = (val: string) => Array.from(val || '0000').map((ch) => { const w = (ch.charCodeAt(0) % 3) + 1; return `<span style="display:inline-block;width:${w}px;height:38px;background:#111;margin-right:1px"></span>`; }).join('');
+  const labels = arr.map((p) => `<div style="border:1px solid #ddd;border-radius:6px;padding:8px;text-align:center;width:200px;display:inline-block;margin:4px;vertical-align:top">
+    <div style="font-size:12px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(p.ad || '').replace(/</g, '')}</div>
+    <div style="font-size:10px;color:#888;margin-bottom:4px">${p.salesCode || ''}</div>
+    <div style="line-height:0">${bars(p.salesCode || p.id || '')}</div>
+    <div style="font-family:monospace;font-size:11px;letter-spacing:2px;margin-top:2px">${p.salesCode || '-'}</div>
+    <div style="font-size:11px;font-weight:700;margin-top:2px">${fmt(p.satisFiyat || 0)}</div>
+  </div>`).join('');
+  const w = window.open('', '_blank'); if (!w) { toast.error('Açılır pencere engellendi'); return; }
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Barkod</title></head><body style="font-family:Arial">${labels}<script>window.onload=function(){setTimeout(function(){window.print()},300)}</script></body></html>`);
+  w.document.close();
+}
 
 export default function SerbestTedarikciler() {
   const [list, setList] = useState<any[]>([]);
@@ -17,6 +33,12 @@ export default function SerbestTedarikciler() {
   const [detailSales, setDetailSales] = useState<any[]>([]);
   const [detailTab, setDetailTab] = useState<'urunler' | 'satislar'>('urunler');
   const [showPin, setShowPin] = useState(false);
+
+  // Ürün düzenleme
+  const [editProd, setEditProd] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({ ad: '', bedenler: '', satisFiyat: '', alisFiyat: '' });
+  const [editVars, setEditVars] = useState<{ deger: string; stok: number }[]>([]);
+  const [editBusy, setEditBusy] = useState(false);
 
   const load = async () => { setLoading(true); try { const r = await api.get('/store/free/suppliers'); setList(r.data || []); } catch (e) { toast.error(apiErrorMessage(e)); } setLoading(false); };
   useEffect(() => { load(); }, []);
@@ -38,13 +60,49 @@ export default function SerbestTedarikciler() {
     try { await api.patch(`/store/free/suppliers/${s.id}`, { aktif: !s.aktif }); await load(); } catch (e) { toast.error(apiErrorMessage(e)); }
   };
 
-  const openDetail = async (id: string) => {
-    setDetailId(id);
+  const loadDetail = async (id: string) => {
     try {
       const [pr, sa] = await Promise.all([api.get(`/store/free/suppliers/${id}/products`), api.get(`/store/free/suppliers/${id}/sales`)]);
       setDetailProds(pr.data || []);
       setDetailSales(sa.data || []);
     } catch (e) { toast.error(apiErrorMessage(e)); }
+  };
+
+  const openDetail = async (id: string) => { setDetailId(id); await loadDetail(id); };
+
+  const openEdit = (p: any) => {
+    const vars: any[] = Array.isArray(p.variations) ? p.variations : [];
+    setEditProd(p);
+    setEditForm({ ad: p.ad || '', bedenler: vars.map((v) => v.deger).join(','), satisFiyat: String(p.satisFiyat || ''), alisFiyat: String(p.alisFiyat || '') });
+    setEditVars(vars.map((v) => ({ deger: v.deger, stok: Number(v.stok) || 0 })));
+  };
+
+  const onEditBedenlerChange = (val: string) => {
+    setEditForm((f) => ({ ...f, bedenler: val }));
+    const arr = val.split(',').map((b) => b.trim()).filter(Boolean);
+    setEditVars((prev) => arr.map((deger) => { const ex = prev.find((v) => v.deger === deger); return ex ? ex : { deger, stok: 1 }; }));
+  };
+
+  const saveEdit = async () => {
+    if (!editProd) return;
+    setEditBusy(true);
+    try {
+      await api.patch(`/store/free/products/${editProd.id}`, {
+        ad: editForm.ad,
+        variations: editVars,
+        satisFiyat: Number(editForm.satisFiyat) || 0,
+        alisFiyat: Number(editForm.alisFiyat) || 0,
+      });
+      toast.success('Ürün güncellendi');
+      setEditProd(null);
+      if (detailId) await loadDetail(detailId);
+    } catch (e) { toast.error(apiErrorMessage(e)); }
+    setEditBusy(false);
+  };
+
+  const deleteProd = async (p: any) => {
+    if (!confirm(`"${p.ad}" silinsin mi?`)) return;
+    try { await api.delete(`/store/free/products/${p.id}`); toast.success('Ürün silindi'); if (detailId) await loadDetail(detailId); } catch (e) { toast.error(apiErrorMessage(e)); }
   };
 
   const copy = (text: string) => { navigator.clipboard?.writeText(text); toast.success('Kopyalandı'); };
@@ -153,6 +211,9 @@ export default function SerbestTedarikciler() {
             </div>
             {detailTab === 'urunler' ? (
               <div className="space-y-2">
+                {detailProds.length > 0 && (
+                  <div className="flex justify-end mb-2"><button onClick={() => printBarkod(detailProds)} className="inline-flex items-center gap-1.5 text-xs bg-indigo-100 text-indigo-700 hover:bg-indigo-200 px-3 py-1.5 rounded-lg"><ScanLine size={13} /> Tüm Ürünlerin Barkodunu Yazdır</button></div>
+                )}
                 {detailProds.length === 0 ? <p className="text-slate-400 text-sm text-center py-8">Henüz ürün yüklenmemiş.</p> : detailProds.map((p) => {
                   const vars: any[] = Array.isArray(p.variations) ? p.variations : [];
                   const topStok = vars.reduce((s: number, v: any) => s + (v.stok || 0), 0);
@@ -162,8 +223,13 @@ export default function SerbestTedarikciler() {
                       {img ? <img src={img} className="w-12 h-12 rounded-lg object-cover shrink-0" /> : <div className="w-12 h-12 rounded-lg bg-slate-100 flex items-center justify-center shrink-0"><Package size={16} className="text-slate-300" /></div>}
                       <div className="flex-1 min-w-0">
                         <p className="font-medium text-slate-800 text-sm truncate">{p.ad}</p>
-                        <p className="text-[11px] text-slate-400">Kod: {p.salesCode || '-'} · Alış: {fmt(p.alisFiyat)} · Stok: {topStok}</p>
+                        <p className="text-[11px] text-slate-400">Kod: {p.salesCode || '-'} · Alış: {fmt(p.alisFiyat)} · Satış: {fmt(p.satisFiyat || 0)} · Stok: {topStok}</p>
                         {vars.length > 0 && <div className="flex flex-wrap gap-1 mt-1">{vars.map((v: any, i: number) => <span key={i} className={`text-[9px] px-1.5 py-0.5 rounded border ${v.stok > 0 ? 'border-slate-200 text-slate-500' : 'border-red-200 text-red-400 line-through'}`}>{v.deger}:{v.stok}</span>)}</div>}
+                      </div>
+                      <div className="flex items-center gap-1 shrink-0">
+                        <button onClick={() => openEdit(p)} title="Düzenle" className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg"><Pencil size={14} /></button>
+                        <button onClick={() => printBarkod([p])} title="Barkod Yazdır" className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg"><ScanLine size={14} /></button>
+                        <button onClick={() => deleteProd(p)} title="Sil" className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={14} /></button>
                       </div>
                     </div>
                   );
@@ -179,6 +245,37 @@ export default function SerbestTedarikciler() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+      {/* Ürün Düzenleme Modal */}
+      {editProd && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50" onClick={() => setEditProd(null)}>
+          <div className="w-full max-w-md bg-white rounded-2xl p-6 max-h-[88vh] overflow-y-auto space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Pencil size={18} className="text-indigo-600" /> Ürünü Düzenle</h3><button onClick={() => setEditProd(null)}><X size={20} className="text-slate-400" /></button></div>
+            <div><label className="block text-xs text-slate-500 mb-1">Ürün Adı</label><input value={editForm.ad} onChange={(e) => setEditForm({ ...editForm, ad: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Bedenler (virgülle ayır)</label>
+              <input value={editForm.bedenler} onChange={(e) => onEditBedenlerChange(e.target.value)} placeholder="S,M,L,XL" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
+              {editVars.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  <p className="text-[11px] text-slate-400">Her beden için stok adedi:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {editVars.map((v, i) => (
+                      <div key={i} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                        <span className="text-xs font-medium text-slate-700">{v.deger}</span>
+                        <input type="number" min={0} value={v.stok} onChange={(e) => { const next = [...editVars]; next[i] = { ...next[i], stok: Math.max(0, Number(e.target.value) || 0) }; setEditVars(next); }} className="w-12 text-center text-xs border border-slate-200 rounded px-1 py-0.5" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><label className="block text-xs text-slate-500 mb-1">Satış Fiyatı (₺)</label><input type="number" value={editForm.satisFiyat} onChange={(e) => setEditForm({ ...editForm, satisFiyat: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Alış Fiyatı (₺)</label><input type="number" value={editForm.alisFiyat} onChange={(e) => setEditForm({ ...editForm, alisFiyat: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            </div>
+            <button onClick={saveEdit} disabled={editBusy} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50">{editBusy ? 'Kaydediliyor...' : 'Kaydet'}</button>
           </div>
         </div>
       )}

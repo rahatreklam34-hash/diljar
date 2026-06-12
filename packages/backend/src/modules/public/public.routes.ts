@@ -1072,6 +1072,14 @@ router.patch('/supplier/products/:id', supplierAuth as any, asyncHandler(async (
   res.json(p ? { ...p, satisFiyat: undefined } : { ok: true });
 }));
 
+// Tedarikçi ürün silme (kendi ürünleri — soft delete)
+router.delete('/supplier/products/:id', supplierAuth as any, asyncHandler(async (req: Request, res: Response) => {
+  const sid = (req as any).supplierId;
+  const t = (req as any).supplierTenantId;
+  await prisma.freeProduct.updateMany({ where: { id: req.params.id, tenantId: t, supplierId: sid }, data: { aktif: false } });
+  res.json({ ok: true });
+}));
+
 // Tedarikçi satış raporu (satış fiyatı GİZLİ)
 router.get('/supplier/sales', supplierAuth as any, asyncHandler(async (req: Request, res: Response) => {
   const sid = (req as any).supplierId;

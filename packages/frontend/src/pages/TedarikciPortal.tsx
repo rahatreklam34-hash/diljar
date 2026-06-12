@@ -1,7 +1,7 @@
 // Tedarikçi Portalı — /tedarikci (public, auth gerektirmez)
 // Toptancı: kod+PIN ile giriş → ürün yükle → ürünlerini gör → satışlarını gör (satış fiyatı GİZLİ)
 import { useState, useEffect } from 'react';
-import { Package, Plus, X, LogOut, Eye, EyeOff, Upload, BarChart3 } from 'lucide-react';
+import { Package, X, LogOut, Eye, EyeOff, Upload, BarChart3, Pencil, Trash2, ScanLine } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from 'axios';
 import ImageDropzone from '../components/ImageDropzone';
@@ -17,6 +17,21 @@ sApi.interceptors.request.use((cfg) => {
 });
 
 const fmt = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// Basit barkod yazdırma (satış fiyatı tedarikçide gösterilmez)
+function printBarkod(arr: any[]) {
+  if (!arr.length) { toast.error('Ürün yok'); return; }
+  const bars = (val: string) => Array.from(val || '0000').map((ch) => { const w = (ch.charCodeAt(0) % 3) + 1; return `<span style="display:inline-block;width:${w}px;height:38px;background:#111;margin-right:1px"></span>`; }).join('');
+  const labels = arr.map((p) => `<div style="border:1px solid #ddd;border-radius:6px;padding:8px;text-align:center;width:200px;display:inline-block;margin:4px;vertical-align:top">
+    <div style="font-size:12px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(p.ad || '').replace(/</g, '')}</div>
+    <div style="font-size:10px;color:#888;margin-bottom:4px">${p.salesCode || ''}</div>
+    <div style="line-height:0">${bars(p.salesCode || p.id || '')}</div>
+    <div style="font-family:monospace;font-size:11px;letter-spacing:2px;margin-top:2px">${p.salesCode || '-'}</div>
+  </div>`).join('');
+  const w = window.open('', '_blank'); if (!w) { toast.error('Açılır pencere engellendi'); return; }
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Barkod</title></head><body style="font-family:Arial">${labels}<script>window.onload=function(){setTimeout(function(){window.print()},300)}</script></body></html>`);
+  w.document.close();
+}
 
 export default function TedarikciPortal() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('supplier_token'));
@@ -38,8 +53,19 @@ export default function TedarikciPortal() {
   const [formVars, setFormVars] = useState<{ deger: string; stok: number }[]>([]);
   const [formBusy, setFormBusy] = useState(false);
 
+  // Düzenleme
+  const [editProd, setEditProd] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({ ad: '', bedenler: '', alisFiyat: '', images: [] as string[] });
+  const [editVars, setEditVars] = useState<{ deger: string; stok: number }[]>([]);
+  const [editBusy, setEditBusy] = useState(false);
+
   const parseBedenler = (s: string) => s.split(',').map((b) => b.trim()).filter(Boolean).map((b) => ({ deger: b, stok: 1 }));
   const onBedenlerChange = (val: string) => { setForm((f) => ({ ...f, bedenler: val })); setFormVars(parseBedenler(val)); };
+  const onEditBedenlerChange = (val: string) => {
+    setEditForm((f) => ({ ...f, bedenler: val }));
+    const arr = val.split(',').map((b) => b.trim()).filter(Boolean);
+    setEditVars((prev) => arr.map((deger) => { const ex = prev.find((v) => v.deger === deger); return ex ? ex : { deger, stok: 1 }; }));
+  };
 
   const loadProducts = async () => { try { const r = await sApi.get('/public/supplier/products'); setProducts(r.data || []); } catch { /* */ } };
   const loadSales = async () => { try { const r = await sApi.get('/public/supplier/sales'); setSales(r.data || []); } catch { /* */ } };
@@ -78,6 +104,30 @@ export default function TedarikciPortal() {
       setTab('urunler');
     } catch (e: any) { toast.error(e?.response?.data?.error || 'Hata'); }
     setFormBusy(false);
+  };
+
+  const openEdit = (p: any) => {
+    const vars: any[] = Array.isArray(p.variations) ? p.variations : [];
+    setEditProd(p);
+    setEditForm({ ad: p.ad || '', bedenler: vars.map((v) => v.deger).join(','), alisFiyat: String(p.alisFiyat || ''), images: Array.isArray(p.images) ? p.images : [] });
+    setEditVars(vars.map((v) => ({ deger: v.deger, stok: Number(v.stok) || 0 })));
+  };
+
+  const saveEdit = async () => {
+    if (!editProd) return;
+    setEditBusy(true);
+    try {
+      await sApi.patch(`/public/supplier/products/${editProd.id}`, { ad: editForm.ad, images: editForm.images, variations: editVars, alisFiyat: Number(editForm.alisFiyat) || 0 });
+      toast.success('Ürün güncellendi');
+      setEditProd(null);
+      await loadProducts();
+    } catch (e: any) { toast.error(e?.response?.data?.error || 'Hata'); }
+    setEditBusy(false);
+  };
+
+  const deleteProd = async (p: any) => {
+    if (!confirm(`"${p.ad}" silinsin mi?`)) return;
+    try { await sApi.delete(`/public/supplier/products/${p.id}`); toast.success('Ürün silindi'); await loadProducts(); } catch (e: any) { toast.error(e?.response?.data?.error || 'Hata'); }
   };
 
   // ── Giriş ekranı ──────────────────────────────────────────────────────────
@@ -146,6 +196,11 @@ export default function TedarikciPortal() {
                         {vars.map((v: any, i: number) => <span key={i} className={`text-xs px-2 py-0.5 rounded-lg border ${v.stok > 0 ? 'bg-white border-slate-200 text-slate-600' : 'bg-red-50 border-red-200 text-red-400 line-through'}`}>{v.deger}: {v.stok}</span>)}
                       </div>
                     )}
+                  </div>
+                  <div className="flex flex-col gap-1.5 shrink-0">
+                    <button onClick={() => openEdit(p)} title="Düzenle" className="p-1.5 rounded-lg bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 border border-slate-200"><Pencil size={15} /></button>
+                    <button onClick={() => printBarkod([p])} title="Barkod Yazdır" className="p-1.5 rounded-lg bg-slate-50 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 border border-slate-200"><ScanLine size={15} /></button>
+                    <button onClick={() => deleteProd(p)} title="Sil" className="p-1.5 rounded-lg bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-600 border border-slate-200"><Trash2 size={15} /></button>
                   </div>
                 </div>
               );
@@ -217,6 +272,36 @@ export default function TedarikciPortal() {
 
         <div className="h-8" />
       </div>
+
+      {/* Ürün Düzenleme Modal */}
+      {editProd && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50" onClick={() => setEditProd(null)}>
+          <div className="w-full max-w-md bg-white rounded-2xl p-6 max-h-[88vh] overflow-y-auto space-y-4" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between"><h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Pencil size={18} className="text-violet-600" /> Ürünü Düzenle</h3><button onClick={() => setEditProd(null)}><X size={20} className="text-slate-400" /></button></div>
+            <div><label className="block text-xs text-slate-500 mb-1">Ürün Adı</label><input value={editForm.ad} onChange={(e) => setEditForm({ ...editForm, ad: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            <div><label className="block text-xs text-slate-500 mb-1">Görsel</label><ImageDropzone images={editForm.images} onChange={(imgs) => setEditForm({ ...editForm, images: imgs })} max={3} /></div>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Bedenler (virgülle ayır)</label>
+              <input value={editForm.bedenler} onChange={(e) => onEditBedenlerChange(e.target.value)} placeholder="S,M,L,XL" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
+              {editVars.length > 0 && (
+                <div className="mt-2 space-y-1.5">
+                  <p className="text-[11px] text-slate-400">Her beden için stok adedi:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {editVars.map((v, i) => (
+                      <div key={i} className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-lg px-2 py-1">
+                        <span className="text-xs font-medium text-slate-700">{v.deger}</span>
+                        <input type="number" min={0} value={v.stok} onChange={(e) => { const next = [...editVars]; next[i] = { ...next[i], stok: Math.max(0, Number(e.target.value) || 0) }; setEditVars(next); }} className="w-12 text-center text-xs border border-slate-200 rounded px-1 py-0.5" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+            <div><label className="block text-xs text-slate-500 mb-1">Alış Fiyatı (₺)</label><input type="number" value={editForm.alisFiyat} onChange={(e) => setEditForm({ ...editForm, alisFiyat: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+            <button onClick={saveEdit} disabled={editBusy} className="w-full bg-violet-600 text-white py-2.5 rounded-lg font-medium hover:bg-violet-700 disabled:opacity-50">{editBusy ? 'Kaydediliyor...' : 'Kaydet'}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
