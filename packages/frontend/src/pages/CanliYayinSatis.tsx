@@ -30,17 +30,15 @@ export default function CanliYayinSatis() {
   const [satici, setSatici] = useState('');
   const [sellers, setSellers] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('cy_sellers') || '[]'); } catch { return []; } });
   const [search, setSearch] = useState('');
-  const [barkod, setBarkod] = useState('');
   const [barkodModal, setBarkodModal] = useState<any>(null);
   const [flash, setFlash] = useState<Record<string, { price: number; exp: number }>>({});
   const [barHistory, setBarHistory] = useState<any[]>([]);
   const [barHistModal, setBarHistModal] = useState(false);
-  const [scanTab, setScanTab] = useState<'barkod' | 'ara'>('barkod');
   const [araQ, setAraQ] = useState('');
   const [imgZoom, setImgZoom] = useState('');
   const [leftTab, setLeftTab] = useState<'manuel' | 'sohbet'>('manuel');
   const [discForm, setDiscForm] = useState({ price: '', dakika: '' });
-  const [tab, setTab] = useState<'tumu' | Durum>('tumu');
+  const [tab, setTab] = useState<'tumu' | 'kayit' | Durum>('tumu');
   const [reportOpen, setReportOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [history, setHistory] = useState<any[]>([]);
@@ -110,7 +108,7 @@ export default function CanliYayinSatis() {
   // Periyodik yenileme: musteri kaydi/onay durumlarini anlik yansit
   useEffect(() => {
     if (!stream) return;
-    const t = setInterval(() => { loadActive(); reload(); }, 12000);
+    const t = setInterval(() => { loadActive(); loadFree(); reload(); }, 4000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream]);
@@ -231,8 +229,6 @@ export default function CanliYayinSatis() {
     if (!p) { toast.error('Ürün bulunamadı: ' + code); return; }
     openProduct(p);
   };
-  const scanBarcode = () => { if (!barkod.trim()) return; openByCode(barkod); setBarkod(''); };
-
   // Ürün ara (ad / satış kodu / marka / beden / cinsiyet)
   const araSonuc = useMemo(() => {
     const q = norm(araQ); if (!q) return [];
@@ -275,24 +271,29 @@ export default function CanliYayinSatis() {
     const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
     if (lines.length === 0) { toast.error('Yorum girilmedi'); return; }
     setBusy(true);
+    let islenen = 0; let atlanan = 0;
     for (const line of lines) {
       const parts = line.split(/\s+/);
       const user = parts[0] || 'kullanici';
       const kod = parts[1] || '';
       const beden = parts[2] || '';
       const p = findByCode(kod);
+      // Satışa uygun ürün yoksa satır açma — boş/geçersiz kod phantom sipariş oluşturmasın
+      if (!p) { atlanan++; continue; }
       let variation: string | undefined;
-      if (p && (p.variations || []).length > 0) {
+      if ((p.variations || []).length > 0) {
         const v = p.variations.find((x: any) => norm(x.deger) === norm(beden));
         if (v) variation = v.deger;
       }
       try {
-        await api.post('/store/live/order', { streamId: stream.id, user, kod, beden, productId: p?._drop ? undefined : p?.id, freeProductId: p?._drop ? p?.id : undefined, variation, urun: p?.ad || kod, saticiAd: satici || null, fiyatOverride: activeFlash(p?.id) });
+        await api.post('/store/live/order', { streamId: stream.id, user, kod, beden, productId: p._drop ? undefined : p.id, freeProductId: p._drop ? p.id : undefined, variation, urun: p.ad || kod, saticiAd: satici || null, fiyatOverride: activeFlash(p.id) });
+        islenen++;
       } catch { /* */ }
     }
     setText(''); setBusy(false);
     await loadActive(); loadFree(); reload();
-    toast.success('İşlendi');
+    if (islenen === 0) { toast.error('Satışa uygun ürün bulunamadı — geçerli kod girin'); return; }
+    toast.success(`${islenen} sipariş işlendi${atlanan ? ` · ${atlanan} satır atlandı (geçersiz)` : ''}`);
   };
 
   const iptalEt = async (o: any) => {
@@ -318,10 +319,11 @@ export default function CanliYayinSatis() {
       onaylandi: ona.length,
       stokYok: orders.filter((o) => o.durum === 'stok_yok').length,
       riskli: orders.filter((o) => o.durum === 'riskli').length,
+      kayitGerekli: orders.filter((o) => o.durum !== 'iptal' && !isRegistered(o.user)).length,
       iptal: orders.filter((o) => o.durum === 'iptal').length,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [orders, aktifKampanyalar, products]);
+  }, [orders, aktifKampanyalar, products, customers]);
 
   const series = useMemo(() => {
     const ona = [...orders].filter((o) => o.durum === 'onaylandi').sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -440,7 +442,7 @@ export default function CanliYayinSatis() {
     // ── Kârlılık uyarısı (marj düşüyor mu?) ──
     const karli = ona.filter((o) => typeof o.alis === 'number' && o.tutar > 0);
     let marjGenel = 0;
-    if (karli.length >= 4) {
+    if (karli.length >= 1) {
       const cTop = karli.reduce((s, o) => s + o.tutar, 0);
       const kTop = karli.reduce((s, o) => s + (o.tutar - o.alis), 0);
       marjGenel = cTop > 0 ? (kTop / cTop) * 100 : 0;
@@ -465,6 +467,7 @@ export default function CanliYayinSatis() {
       yeniSon10,
       ortSepet,
       marjGenel,
+      marjVar: karli.length >= 1,
       elapsedMin: Math.round(elapsedMin),
     };
     return { tips, metrik };
@@ -474,13 +477,16 @@ export default function CanliYayinSatis() {
 
   const saticilar = useMemo(() => Array.from(new Set([...sellers, ...orders.map((o) => o.saticiAd).filter(Boolean)])), [sellers, orders]);
   const filtered = useMemo(() => {
-    let list = tab === 'tumu' ? orders : orders.filter((o) => o.durum === tab);
+    let list = tab === 'tumu' ? orders
+      : tab === 'kayit' ? orders.filter((o) => o.durum !== 'iptal' && !isRegistered(o.user))
+      : orders.filter((o) => o.durum === tab);
     if (search.trim()) {
       const q = norm(search);
       list = list.filter((o) => [o.user, o.urun, o.kod, o.beden, o.saticiAd].some((f) => norm(f || '').includes(q)));
     }
     return list;
-  }, [orders, tab, search, sellers]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, tab, search, sellers, customers]);
 
   const Stat = ({ icon: Ic, label, value, color = 'text-slate-800' }: any) => (
     <div className="flex items-center gap-3 px-4">
@@ -529,36 +535,31 @@ export default function CanliYayinSatis() {
                 <button onClick={() => setBarHistModal(true)} className="text-[11px] text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded-lg inline-flex items-center gap-1"><History size={13} /> Geçmiş{barHistory.length > 0 && <span className="bg-indigo-100 text-indigo-700 px-1.5 rounded-full text-[10px]">{barHistory.length}</span>}</button>
               </div>
             </div>
-            {/* Sekmeler */}
-            <div className="flex items-center gap-1 mb-2 bg-slate-100 rounded-lg p-1">
-              <button onClick={() => setScanTab('barkod')} className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${scanTab === 'barkod' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Barkod / Kod</button>
-              <button onClick={() => setScanTab('ara')} className={`flex-1 py-1.5 text-xs font-medium rounded-md transition-colors ${scanTab === 'ara' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>Ürün Ara</button>
+            {/* Tek alan: barkod okut VEYA ürün ara */}
+            <div className="relative">
+              <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
+              <input
+                value={araQ}
+                onChange={(e) => setAraQ(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { const p = findByCode(araQ); if (p) { openProduct(p); setAraQ(''); } else if (araSonuc.length === 1) { openProduct(araSonuc[0]); setAraQ(''); } else if (araSonuc.length === 0 && araQ.trim()) { toast.error('Ürün bulunamadı'); } } }}
+                placeholder="Barkod okut · satış kodu · ürün adı, marka, beden, cinsiyet..."
+                className="w-full pl-8 pr-16 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300"
+                autoFocus
+              />
+              <button onClick={() => { const p = findByCode(araQ); if (p) { openProduct(p); setAraQ(''); } else if (araSonuc.length === 1) { openProduct(araSonuc[0]); setAraQ(''); } else if (araQ.trim()) { toast.error('Ürün bulunamadı'); } }} className="absolute right-1 top-1 bottom-1 bg-slate-800 text-white px-3 rounded-md hover:bg-slate-700 text-xs font-medium">Bul</button>
             </div>
-            {scanTab === 'barkod' ? (
-              <div className="flex gap-2">
-                <input value={barkod} onChange={(e) => setBarkod(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && scanBarcode()} placeholder="Barkod okut veya kod yaz" className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300" autoFocus />
-                <button onClick={scanBarcode} className="bg-slate-800 text-white px-3 rounded-lg hover:bg-slate-700 text-sm">Okut</button>
-              </div>
-            ) : (
-              <div>
-                <div className="relative">
-                  <Search size={14} className="absolute left-2.5 top-2.5 text-slate-400" />
-                  <input value={araQ} onChange={(e) => setAraQ(e.target.value)} placeholder="Ürün adı, satış kodu, marka, beden, cinsiyet..." className="w-full pl-8 pr-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300" autoFocus />
-                </div>
-                {araQ && (
-                  <div className="mt-2 max-h-56 overflow-y-auto space-y-1 border border-slate-100 rounded-lg p-1">
-                    {araSonuc.length === 0 ? <p className="text-[11px] text-slate-400 text-center py-4">Sonuç yok.</p> : araSonuc.map((p: any) => {
-                      const fl = activeFlash(p.id); const ind = fl > 0 ? fl : (p.eskiFiyat && p.eskiFiyat > p.satisFiyat ? p.satisFiyat : 0);
-                      return (
-                        <button key={p.id} onClick={() => { openProduct(p); setAraQ(''); }} className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-indigo-50 text-left">
-                          <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0">{(p.images || [])[0] && <img src={p.images[0]} className="w-full h-full object-cover" />}</div>
-                          <div className="min-w-0 flex-1"><p className="text-xs font-medium text-slate-800 truncate flex items-center gap-1">{p.ad}{p._drop && <span className="bg-green-500 text-white text-[8px] px-1 py-0.5 rounded-full font-bold shrink-0">drop</span>}</p><p className="text-[10px] text-slate-400 truncate">{p.salesCode || '-'} · {p._drop ? (p.supplierAd || 'Tedarikçi') : (p.marka || '-')} · {p.cinsiyet || ''}</p></div>
-                          <div className="text-right shrink-0"><p className="text-xs font-bold text-slate-700">{fmt(fl > 0 ? fl : p.satisFiyat)}</p><p className="text-[9px] text-slate-400">{(p.stokAdeti || 0)} adet</p>{ind > 0 && <span className="text-[8px] text-rose-500">indirimli</span>}</div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
+            {araQ && (
+              <div className="mt-2 max-h-56 overflow-y-auto space-y-1 border border-slate-100 rounded-lg p-1">
+                {araSonuc.length === 0 ? <p className="text-[11px] text-slate-400 text-center py-4">Sonuç yok — barkod okutun veya kod yazıp Enter'a basın.</p> : araSonuc.map((p: any) => {
+                  const fl = activeFlash(p.id); const ind = fl > 0 ? fl : (p.eskiFiyat && p.eskiFiyat > p.satisFiyat ? p.satisFiyat : 0);
+                  return (
+                    <button key={p.id} onClick={() => { openProduct(p); setAraQ(''); }} className="w-full flex items-center gap-2 p-1.5 rounded-lg hover:bg-indigo-50 text-left">
+                      <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0">{(p.images || [])[0] && <img src={p.images[0]} className="w-full h-full object-cover" />}</div>
+                      <div className="min-w-0 flex-1"><p className="text-xs font-medium text-slate-800 truncate flex items-center gap-1">{p.ad}{p._drop && <span className="bg-green-500 text-white text-[8px] px-1 py-0.5 rounded-full font-bold shrink-0">drop</span>}</p><p className="text-[10px] text-slate-400 truncate">{p.salesCode || '-'} · {p._drop ? (p.supplierAd || 'Tedarikçi') : (p.marka || '-')} · {p.cinsiyet || ''}</p></div>
+                      <div className="text-right shrink-0"><p className="text-xs font-bold text-slate-700">{fmt(fl > 0 ? fl : p.satisFiyat)}</p><p className="text-[9px] text-slate-400">{(p.stokAdeti || 0)} adet</p>{ind > 0 && <span className="text-[8px] text-rose-500">indirimli</span>}</div>
+                    </button>
+                  );
+                })}
               </div>
             )}
 
@@ -654,8 +655,8 @@ export default function CanliYayinSatis() {
             </div>
           )}
           <div className="px-3 py-2 border-b border-slate-100 flex flex-wrap items-center gap-1">
-            {([['tumu', `Tümü ${stats.toplam}`], ['onaylandi', `Onaylandı ${stats.onaylandi}`], ['stok_yok', `Stok Yetersiz ${stats.stokYok}`], ['riskli', `Riskli ${stats.riskli}`], ['iptal', `İptal ${stats.iptal}`]] as [any, string][]).map(([t, l]) => (
-              <button key={t} onClick={() => setTab(t)} className={`px-2.5 py-1 rounded-lg text-xs font-medium ${tab === t ? 'bg-indigo-600 text-white' : 'text-slate-500 hover:bg-slate-100'}`}>{l}</button>
+            {([['tumu', `Tümü ${stats.toplam}`], ['onaylandi', `Onaylandı ${stats.onaylandi}`], ['stok_yok', `Stok Yetersiz ${stats.stokYok}`], ['riskli', `Riskli ${stats.riskli}`], ['kayit', `Kayıt Gerekli ${stats.kayitGerekli}`], ['iptal', `İptal ${stats.iptal}`]] as [any, string][]).map(([t, l]) => (
+              <button key={t} onClick={() => setTab(t)} className={`px-2.5 py-1 rounded-lg text-xs font-medium ${tab === t ? (t === 'kayit' ? 'bg-amber-500 text-white' : 'bg-indigo-600 text-white') : (t === 'kayit' && stats.kayitGerekli > 0 ? 'text-amber-600 hover:bg-amber-50' : 'text-slate-500 hover:bg-slate-100')}`}>{l}</button>
             ))}
             <span className="ml-auto flex items-center gap-2">
               <span className="relative">
@@ -720,9 +721,9 @@ export default function CanliYayinSatis() {
                 <p className="text-[8px] text-slate-400 font-medium uppercase tracking-wide">Ort. Sepet</p>
                 <p className="text-[12px] font-bold text-slate-700 leading-tight">{fmt(aiAnaliz.metrik.ortSepet)}</p>
               </div>
-              <div className={`rounded-lg px-2 py-1.5 border text-center ${aiAnaliz.metrik.marjGenel > 0 && aiAnaliz.metrik.marjGenel < 25 ? 'bg-red-50 border-red-100' : 'bg-white border-slate-100'}`}>
+              <div className={`rounded-lg px-2 py-1.5 border text-center ${aiAnaliz.metrik.marjVar && aiAnaliz.metrik.marjGenel < 25 ? 'bg-red-50 border-red-100' : 'bg-white border-slate-100'}`}>
                 <p className="text-[8px] text-slate-400 font-medium uppercase tracking-wide">Kâr Marjı</p>
-                <p className={`text-[12px] font-bold leading-tight ${aiAnaliz.metrik.marjGenel > 0 && aiAnaliz.metrik.marjGenel < 25 ? 'text-red-600' : 'text-green-600'}`}>{aiAnaliz.metrik.marjGenel > 0 ? `%${aiAnaliz.metrik.marjGenel.toFixed(0)}` : '-'}</p>
+                <p className={`text-[12px] font-bold leading-tight ${aiAnaliz.metrik.marjVar && aiAnaliz.metrik.marjGenel < 25 ? 'text-red-600' : 'text-green-600'}`}>{aiAnaliz.metrik.marjVar ? `%${aiAnaliz.metrik.marjGenel.toFixed(0)}` : '-'}</p>
               </div>
               <div className="rounded-lg px-2 py-1.5 border bg-white border-slate-100 text-center">
                 <p className="text-[8px] text-slate-400 font-medium uppercase tracking-wide">Süre</p>
