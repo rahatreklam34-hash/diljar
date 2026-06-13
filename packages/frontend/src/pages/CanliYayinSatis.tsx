@@ -215,25 +215,27 @@ export default function CanliYayinSatis() {
 
   const imgOf = (productId?: string) => (products.find((p) => p.id === productId)?.images || [])[0] || '';
   const aktifKampanyalar = useMemo(() => (campaigns || []).filter((k: any) => k.aktif), [campaigns]);
-  const kampanyaOf = (productId?: string) => {
-    if (!productId) return null;
-    const p = products.find((x) => x.id === productId); if (!p) return null;
-    return aktifKampanyalar.find((k: any) => k.kapsam === 'hepsi' || (k.kapsam === 'urun' && k.productId === productId) || (k.kapsam === 'kategori' && k.kategoriId === p.kategoriId)) || null;
+  const kampanyaOf = (o: any) => {
+    const pid = o?.productId || null; const fpid = o?.freeProductId || null;
+    if (!pid && !fpid) return null;
+    const p = pid ? products.find((x) => x.id === pid) : null;
+    return aktifKampanyalar.find((k: any) => k.kapsam === 'hepsi' || (k.kapsam === 'urun' && (k.productId === pid || k.productId === fpid)) || (k.kapsam === 'kategori' && !!p && k.kategoriId === p.kategoriId)) || null;
   };
   const kampKisa = (k: any) => `${k.ad}: ${k.tip === 'urun_adet' ? `${k.minAdet}+ adet` : `${fmt(k.minTutar)} üzeri`} → ${k.indirimTip === 'yuzde' ? '%' + k.indirimDeger : fmt(k.indirimDeger)}`;
-  const kampInScope = (k: any, productId?: string) => {
-    if (!productId) return false;
-    const p = products.find((x) => x.id === productId); if (!p) return false;
-    return k.kapsam === 'hepsi' || (k.kapsam === 'urun' && k.productId === productId) || (k.kapsam === 'kategori' && k.kategoriId === p.kategoriId);
+  const kampInScope = (k: any, o: any) => {
+    const pid = o?.productId || null; const fpid = o?.freeProductId || null;
+    if (!pid && !fpid) return false;
+    const p = pid ? products.find((x) => x.id === pid) : null;
+    return k.kapsam === 'hepsi' || (k.kapsam === 'urun' && (k.productId === pid || k.productId === fpid)) || (k.kapsam === 'kategori' && !!p && k.kategoriId === p.kategoriId);
   };
   // Etiket SADECE kampanya şartı gerçekten sağlandığında gösterilir (müşterinin onaylı siparişleri baz alınır).
   const kampanyaUygulanan = (o: any) => {
     if (o.durum !== 'onaylandi') return null;
-    const k = kampanyaOf(o.productId);
+    const k = kampanyaOf(o);
     if (!k) return null;
     const userOnayli = orders.filter((x) => x.durum === 'onaylandi' && x.user === o.user);
     if (k.tip === 'urun_adet') {
-      const adet = userOnayli.filter((x) => kampInScope(k, x.productId)).reduce((s, x) => s + (x.adet || 1), 0);
+      const adet = userOnayli.filter((x) => kampInScope(k, x)).reduce((s, x) => s + (x.adet || 1), 0);
       return adet >= (k.minAdet || 1) ? k : null;
     }
     if (k.tip === 'sepet_tutar') {
@@ -252,7 +254,7 @@ export default function CanliYayinSatis() {
       if (k.tip === 'sepet_tutar') {
         if ((k.minTutar || 0) > 0 && ara >= (k.minTutar || 0)) kInd = k.indirimTip === 'yuzde' ? ara * k.indirimDeger / 100 : k.indirimDeger;
       } else if (k.tip === 'urun_adet') {
-        const scoped = list.filter((o) => kampInScope(k, o.productId));
+        const scoped = list.filter((o) => kampInScope(k, o));
         const tutar = scoped.reduce((s, o) => s + (o.tutar || 0), 0);
         const adetTop = scoped.reduce((s, o) => s + (o.adet || 1), 0);
         if (adetTop >= (k.minAdet || 1) && adetTop > 0) kInd = k.indirimTip === 'yuzde' ? tutar * k.indirimDeger / 100 : k.indirimDeger;
@@ -266,7 +268,7 @@ export default function CanliYayinSatis() {
     const k = kampanyaUygulanan(o);
     if (!k) return 0;
     if (k.indirimTip === 'yuzde') return Math.round((o.tutar || 0) * k.indirimDeger) / 100;
-    const userScoped = orders.filter((x) => x.durum === 'onaylandi' && x.user === o.user && kampInScope(k, x.productId));
+    const userScoped = orders.filter((x) => x.durum === 'onaylandi' && x.user === o.user && kampInScope(k, x));
     const toplam = userScoped.reduce((s, x) => s + (x.tutar || 0), 0);
     if (toplam <= 0) return 0;
     return Math.round(((o.tutar || 0) / toplam) * k.indirimDeger * 100) / 100;
