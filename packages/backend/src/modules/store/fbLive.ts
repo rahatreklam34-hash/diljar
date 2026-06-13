@@ -351,3 +351,31 @@ export async function pollInstagramComments() {
     igRunning = false;
   }
 }
+
+// Kayıtlı Instagram token'larını periyodik yeniler → uzun ömürlü token süresi (60 gün)
+// her seferinde sıfırlanır, böylece token KALICI kalır ve bir daha "sıfırlanmaz".
+// Hata olsa bile kayıtlı token ASLA silinmez (kullanıcı tekrar girmek zorunda kalmasın).
+let igRefreshRunning = false;
+export async function refreshSavedIgTokens() {
+  if (igRefreshRunning) return;
+  igRefreshRunning = true;
+  try {
+    const settings = await prisma.storeSetting.findMany({ where: { NOT: { igTokenSaved: null } }, select: { tenantId: true, igTokenSaved: true } });
+    for (const ss of settings) {
+      const tok = ss.igTokenSaved;
+      if (!tok) continue;
+      try {
+        const r = await fetch(`https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(tok)}`);
+        const j: any = await r.json();
+        if (j?.access_token) {
+          await prisma.storeSetting.updateMany({ where: { tenantId: ss.tenantId }, data: { igTokenSaved: j.access_token } });
+          await prisma.liveStream.updateMany({ where: { tenantId: ss.tenantId, status: 'active', NOT: { igUserId: null } }, data: { igToken: j.access_token } });
+          console.log('[ig] token yenilendi tenant=' + ss.tenantId);
+        }
+        // j.error olsa bile token'ı silme; mevcut token geçerliliğini sürdürür
+      } catch (e: any) { console.error('[ig] refresh', e?.message); }
+    }
+  } finally {
+    igRefreshRunning = false;
+  }
+}

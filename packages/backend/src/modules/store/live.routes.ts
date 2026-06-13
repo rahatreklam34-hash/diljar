@@ -116,6 +116,28 @@ router.post('/end', asyncHandler(async (req: Request, res: Response) => {
   res.json({ ok: true });
 }));
 
+// Biten bir yayına geri dön / kaldığı yerden devam et
+router.post('/resume/:id', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const target = await prisma.liveStream.findFirst({ where: { id: req.params.id, tenantId: t } });
+  if (!target) throw new ApiError(404, 'Yayin bulunamadi');
+  // Tek anda yalnız bir aktif yayın olabilir → diğer aktifleri kapat
+  await prisma.liveStream.updateMany({ where: { tenantId: t, status: 'active', NOT: { id: target.id } }, data: { status: 'ended', endedAt: new Date() } });
+  // Hedef yayını yeniden aktifleştir (sipariş/sepet geçmişi korunur)
+  await prisma.liveStream.update({ where: { id: target.id }, data: { status: 'active', endedAt: null } });
+  // Kayıtlı Instagram token varsa yeniden bağla (yeni yorumları işlemeye devam)
+  try {
+    const ss = await prisma.storeSetting.findUnique({ where: { tenantId: t }, select: { igTokenSaved: true, igUserIdSaved: true } });
+    if (ss?.igTokenSaved && ss?.igUserIdSaved) {
+      clearIgState(target.id);
+      await prisma.liveStream.update({ where: { id: target.id }, data: { igUserId: ss.igUserIdSaved, igToken: ss.igTokenSaved, igSince: new Date(Date.now() - 60 * 1000) } });
+    }
+  } catch { /* yoksa devam */ }
+  const stream = await prisma.liveStream.findUnique({ where: { id: target.id } });
+  const orders = await prisma.liveOrder.findMany({ where: { tenantId: t, streamId: target.id }, orderBy: { createdAt: 'desc' } });
+  res.json({ stream, orders });
+}));
+
 router.get('/history', asyncHandler(async (req: Request, res: Response) => {
   const streams = await prisma.liveStream.findMany({ where: { tenantId: req.tenantId!, status: 'ended' }, orderBy: { endedAt: 'desc' }, include: { orders: true }, take: 50 });
   const data = streams.map((s) => {

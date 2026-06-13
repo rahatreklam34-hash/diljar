@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Clock, TrendingUp, Wallet, ShoppingBag, Users, BarChart3, Radio, Square, Send, X, Filter, Trash2, History, UserCircle, Plus, Search, UserPlus, Tag, Brain, AlertTriangle, Lightbulb, Sparkles, Package, Target, Share2, Video, MessageSquare, Link2, Unlink } from 'lucide-react';
+import { Clock, TrendingUp, Wallet, ShoppingBag, Users, BarChart3, Radio, Square, Send, X, Filter, Trash2, History, UserCircle, Plus, Search, UserPlus, Tag, Brain, AlertTriangle, Lightbulb, Sparkles, Package, Target, Share2, Video, MessageSquare, Link2, Unlink, Play } from 'lucide-react';
 import { Doughnut, Line } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend, Filler } from 'chart.js';
 import toast from 'react-hot-toast';
@@ -276,6 +276,14 @@ export default function CanliYayinSatis() {
     try { await api.post('/store/live/end', {}); setStream(null); setOrders([]); toast.success('Yayın sonlandırıldı'); } catch (e) { toast.error(apiErrorMessage(e)); }
   };
   const openHistory = async () => { try { const r = await api.get('/store/live/history'); setHistory(r.data); setHistoryOpen(true); } catch (e) { toast.error(apiErrorMessage(e)); } };
+  const resumeStream = async (id: string) => {
+    if (stream && !confirm('Aktif yayın bu yayınla değiştirilecek. Devam edilsin mi?')) return;
+    try {
+      const r = await api.post(`/store/live/resume/${id}`, {});
+      setStream(r.data.stream); setOrders(r.data.orders || []); setHistoryOpen(false);
+      toast.success('Yayına kaldığı yerden devam ediliyor');
+    } catch (e) { toast.error(apiErrorMessage(e)); }
+  };
 
   const findByCode = (code: string) => {
     const c = codeKey(code); if (!c) return undefined;
@@ -1174,6 +1182,7 @@ export default function CanliYayinSatis() {
                   <div><p className="text-[10px] text-slate-400">Ciro</p><p className="font-bold text-green-600">{fmt(h.ciro)}</p></div>
                   <div><p className="text-[10px] text-slate-400">Kâr</p><p className="font-bold text-indigo-600">{fmt(h.kar)}</p></div>
                 </div>
+                <button onClick={() => resumeStream(h.id)} className="mt-3 w-full inline-flex items-center justify-center gap-2 bg-emerald-600 text-white py-2 rounded-lg text-sm font-medium hover:bg-emerald-700"><Play size={15} /> Kaldığı yerden devam et</button>
               </div>
             ))}
           </div>
