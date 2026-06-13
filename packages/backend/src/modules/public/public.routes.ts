@@ -640,9 +640,12 @@ router.post('/uye/:slug', asyncHandler(async (req: Request, res: Response) => {
     await promoteReserved(tenantId, cust);
     return res.status(200).json({ ok: true, existed: true });
   }
-  // Yeni kayıt -> Instagram gerçekten var mı kontrol et
-  const igState = await instagramKullaniciVarMi(igClean);
-  if (igState === 'missing') throw new ApiError(422, `"${igClean}" adlı Instagram kullanıcısı bulunamadı. Lütfen kullanıcı adınızı kontrol edip tekrar deneyin.`);
+  // Yeni kayıt -> Instagram kullanıcı adı format kontrolü
+  // (3. parti scraper ile "gerçekten var mı" kontrolü kaldırıldı: geçerli kullanıcıları
+  //  yanlışlıkla "bulunamadı" diye engelliyor ve kayda 9 sn'ye kadar gecikme ekliyordu)
+  const igFmt = igClean.toLowerCase().replace(/^@+/, '').trim();
+  const igFormatGecerli = /^[a-z0-9._]{1,30}$/.test(igFmt) && !/\.\./.test(igFmt) && !igFmt.startsWith('.') && !igFmt.endsWith('.');
+  if (!igFormatGecerli) throw new ApiError(422, `"${igClean}" geçerli bir Instagram kullanıcı adı değil. Sadece harf, rakam, nokta ve alt çizgi kullanın (örn. kullanici_adi).`);
   const customer = await prisma.customer.create({ data: { tenantId, musteriNo: 1000 + mevcutlar.length + 1, ad, instagram: igClean, telefon, adres: adres || null, not: 'Üyelik formu' } });
   await promoteReserved(tenantId, customer);
   res.status(201).json({ ok: true });
