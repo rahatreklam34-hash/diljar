@@ -626,15 +626,8 @@ router.post('/canli-order/:id/iptal', asyncHandler(async (req: Request, res: Res
     const o = await tx.storeOrder.findFirst({ where: { id: req.params.id, tenantId: req.tenantId! } });
     if (!o) return;
     const items: any[] = Array.isArray(o.items) ? (o.items as any) : [];
-    for (const it of items) {
-      if (!it.productId) continue;
-      const adet = it.adet || 1;
-      if (it.varyasyon) {
-        const v = await tx.productVariation.findFirst({ where: { productId: it.productId, tenantId: req.tenantId!, deger: it.varyasyon } });
-        if (v) await tx.productVariation.update({ where: { id: v.id }, data: { stok: { increment: adet } } });
-      }
-      await tx.product.updateMany({ where: { id: it.productId, tenantId: req.tenantId! }, data: { stokAdeti: { increment: adet } } });
-    }
+    // Sahip olunan + drop (freeProduct) stoklarını iade et ve bağlı canlı yayın satırlarını iptal et
+    await returnStock(tx, req.tenantId!, items);
     await tx.storeOrder.delete({ where: { id: o.id } });
   });
   res.json({ ok: true });

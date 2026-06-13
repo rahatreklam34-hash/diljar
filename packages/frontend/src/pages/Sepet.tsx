@@ -399,7 +399,6 @@ export default function Sepet() {
             <h3 className="font-bold text-slate-800 text-sm mb-2">Sipariş Özeti</h3>
             <div className="bg-white rounded-2xl border border-slate-100 p-3.5 space-y-1.5 text-sm">
               <div className="flex justify-between text-slate-500"><span>Ara Toplam</span><span className="text-slate-700">{fmt(data.araToplam)}</span></div>
-              <div className="flex justify-between text-slate-500"><span>Kargo</span>{data.kargoEtiket === 'ucretsiz' ? <span className="text-green-600 font-medium">Ücretsiz</span> : <span className="text-amber-600 font-medium">Alıcı Ödemeli</span>}</div>
               {data.indirim > 0 && <div className="flex justify-between text-green-600"><span>İndirim{data.indirimKodu ? ` (${data.indirimKodu})` : ''}</span><span>-{fmt(data.indirim)}</span></div>}
               <div className="flex justify-between font-extrabold text-slate-900 text-base pt-2 border-t border-slate-100 mt-1"><span>TOPLAM</span><span>{fmt(data.toplam)}</span></div>
             </div>
