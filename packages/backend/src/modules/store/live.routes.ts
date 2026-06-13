@@ -42,8 +42,8 @@ export async function campaignAdjust(tx: any, tenantId: string, items: any[]) {
     if (c.tip === 'sepet_tutar') {
       if ((c.minTutar || 0) > 0 && validAra >= (c.minTutar || 0)) kIndirim = c.indirimTip === 'yuzde' ? validAra * c.indirimDeger / 100 : c.indirimDeger;
     } else if (c.tip === 'urun_adet') {
-      // kapsamdaki onaylanmış kalemlerin toplam adedi ve tutarı
-      const scoped = valid.filter((it: any) => it.productId && inScope(c, it));
+      // kapsamdaki onaylanmış kalemlerin toplam adedi ve tutarı (drop/freeProduct kalemleri de sayılır)
+      const scoped = valid.filter((it: any) => (it.productId || it.freeProductId) && inScope(c, it));
       const toplamAdet = scoped.reduce((s: number, it: any) => s + (Number(it.adet) || 1), 0);
       const toplamTutar = scoped.reduce((s: number, it: any) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 1), 0);
       if (toplamAdet >= (c.minAdet || 1) && scoped.length > 0) {
@@ -367,6 +367,7 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
   let logCartId: string | null = null; let logAd = '';
   let cancelSms: { user: string; urun: string; beden: string; kod: string } | null = null;
   let promoteSms: { user: string; urun: string; beden: string; kod: string; token: string; no: string; tutar: number } | null = null;
+  let promoteFreeId: string | null = null;
   await prisma.$transaction(async (tx) => {
     const lo = await tx.liveOrder.findFirst({ where: { id: req.params.id, tenantId: t } });
     if (!lo) return;
@@ -382,6 +383,8 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
           const target = lo.variation || lo.beden || null;
           if (target) { const idx = vars.findIndex((v) => v.deger === target); if (idx >= 0) { vars[idx].stok = (Number(vars[idx].stok) || 0) + 1; await tx.freeProduct.update({ where: { id: fp.id }, data: { variations: vars } }); } }
         }
+        // Drop stoğu iade edildi -> bekleyen stok_yok drop taliplisi tx sonrası onaylanacak
+        promoteFreeId = lo.freeProductId;
       }
       // Sepetten cikar
       if (lo.storeOrderId) {
@@ -430,6 +433,8 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
       }
     }
   });
+  // Drop (freeProduct) iptalinde iade edilen stokla bekleyen taliplileri onayla (kendi ürünler tx içinde yapıldı)
+  if (promoteFreeId) await promoteWaitingStock(t, { freeProductId: promoteFreeId }).catch((e) => console.error('[promoteWaitingStock]', String(e?.message || e)));
   if (logCartId) await logEvent(t, logCartId, req.body?.user || 'Canlı Yayın', 'Ürün iptal edildi (canlı yayın)', logAd);
   // İptal SMS'i (iptal edilen siparisin musterisine) — sessiz
   if (cancelSms) {

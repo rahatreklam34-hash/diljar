@@ -105,11 +105,7 @@ export default function Sepet() {
   const items: any[] = data?.items || [];
   const adet = items.reduce((s, it) => s + (it.adet || 1), 0);
   const puanOrani = Number(data?.puanOrani) || 0;
-  const freeShip = Number(data?.freeShipThreshold) || 0;
-  const malToplam = Math.max(0, (Number(data?.araToplam) || 0) - (Number(data?.indirim) || 0));
   const puan = Math.round((data?.toplam || 0) * puanOrani / 100);
-  const ucretsizKargo = freeShip > 0 && malToplam >= freeShip;
-  const kalanKargo = Math.max(0, freeShip - malToplam);
 
   const kalan = useMemo(() => {
     if (!data?.createdAt) return null;
@@ -266,15 +262,6 @@ export default function Sepet() {
               </div>
             ) : <span className="text-[10px] text-amber-300 shrink-0">Süre doldu</span>}
           </div>
-
-          {/* Ücretsiz kargo — yalnızca eşik tanımlıysa */}
-          {freeShip > 0 && (
-          <div className={`rounded-xl px-3 py-2 flex items-center gap-2 text-[12px] ${ucretsizKargo ? 'bg-green-50 text-green-700' : 'bg-amber-50 text-amber-700'}`}>
-            <Truck size={15} className="shrink-0" />
-            <span className="flex-1 truncate">{ucretsizKargo ? 'Tebrikler, ücretsiz kargo kazandınız! 🎉' : <>Ücretsiz kargo için <b>{fmt(kalanKargo)}</b> daha ekleyin.</>}</span>
-            {!ucretsizKargo && <span className="w-16 h-1.5 bg-white rounded-full overflow-hidden shrink-0"><span className="block h-full bg-amber-500 rounded-full" style={{ width: `${Math.min(100, (malToplam / freeShip) * 100)}%` }} /></span>}
-          </div>
-          )}
 
           {/* WEB: iki kolonlu duzen (mobilde tek kolon, sira korunur) */}
           <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-5 lg:items-start">
