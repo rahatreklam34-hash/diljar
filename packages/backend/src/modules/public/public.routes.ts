@@ -719,7 +719,7 @@ router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => 
   const ids = items.map((it) => it.productId).filter(Boolean);
   const prods = ids.length ? await prisma.product.findMany({ where: { tenantId: cart.tenantId, id: { in: ids } }, select: { id: true, images: true, barkod: true, salesCode: true, sku: true } }) : [];
   const pMap = new Map(prods.map((p) => [p.id, p]));
-  const itemsWithImg = items.map((it) => { const p: any = pMap.get(it.productId); return { ...it, img: (Array.isArray(p?.images) ? (p.images as any)[0] : '') || '', barkod: p?.barkod || '', salesCode: p?.salesCode || '', sku: p?.sku || '' }; });
+  const itemsWithImg = items.map((it) => { const p: any = pMap.get(it.productId); return { ...it, img: (Array.isArray(p?.images) ? (p.images as any)[0] : '') || it.gorsel || it.img || '', barkod: p?.barkod || '', salesCode: p?.salesCode || '', sku: p?.sku || '' }; });
   // Öneriler (canlı yayına özel fırsatlar) — admin'den aç/kapa + elle seçim
   const oneriCfg: any = (setting?.config as any) || {};
   const oneriEnabled = oneriCfg.oneriEnabled !== false; // varsayılan açık
