@@ -197,7 +197,13 @@ export async function placeLiveOrder(t: string, payload: any) {
           okStock = true;
         }
         const ov = Number(fiyatOverride) || 0;
-        if (ov > 0) tutar = ov;
+        if (ov > 0) {
+          tutar = ov;
+        } else {
+          // Drop ürünü için katalog süreli (flash) indirimi sunucu tarafı uygular
+          const ci = await tx.catalogItem.findFirst({ where: { tenantId: t, productId: freeProductId } });
+          if (ci?.flashFiyat && ci.flashBitis && ci.flashBitis.getTime() > Date.now()) tutar = ci.flashFiyat;
+        }
         if (okStock) {
           await tx.freeProduct.update({ where: { id: fp.id }, data: { variations: vars } });
           durum = customer ? 'onaylandi' : 'rezerve';

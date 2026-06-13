@@ -285,9 +285,23 @@ router.get('/katalog/:slug', asyncHandler(async (req: Request, res: Response) =>
   const items = await prisma.catalogItem.findMany({ where: { tenantId: store.tenantId }, orderBy: { updatedAt: 'desc' }, take: 200 });
   const prods = await prisma.product.findMany({ where: { tenantId: store.tenantId, id: { in: items.map((i) => i.productId) }, aktif: true }, include: { variations: { select: { ad: true, deger: true, stok: true, ekFiyat: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } } });
   const pMap = new Map(prods.map((p) => [p.id, p]));
+  // Katalog item'larında Product bulunamayanlar drop (freeProduct) olabilir — onları da çöz
+  const missingIds = items.map((i) => i.productId).filter((id) => !pMap.has(id));
+  const freeProds = missingIds.length
+    ? await prisma.freeProduct.findMany({ where: { tenantId: store.tenantId, aktif: true, id: { in: missingIds } } })
+    : [];
+  const fMap = new Map(freeProds.map((fp) => {
+    const vars: any[] = Array.isArray(fp.variations) ? (fp.variations as any[]) : [];
+    const stokTop = vars.length ? vars.reduce((s, v) => s + (Number(v.stok) || 0), 0) : 1;
+    return [fp.id, {
+      id: fp.id, ad: fp.ad, salesCode: fp.salesCode, marka: null, cinsiyet: fp.cinsiyet, images: fp.images,
+      satisFiyat: fp.satisFiyat, eskiFiyat: null, stokAdeti: stokTop,
+      variations: vars.map((v) => ({ ad: v.ad || 'Beden', deger: v.deger, stok: Number(v.stok) || 0, ekFiyat: Number(v.ekFiyat) || 0 })),
+    }];
+  }));
   const now = Date.now();
   const list = items.map((i) => {
-    const p: any = pMap.get(i.productId); if (!p) return null;
+    const p: any = pMap.get(i.productId) || fMap.get(i.productId); if (!p) return null;
     const flashAktif = !!(i.flashFiyat && i.flashBitis && new Date(i.flashBitis).getTime() > now);
     return { id: i.id, productId: p.id, ad: p.ad, salesCode: p.salesCode, marka: p.marka, cinsiyet: p.cinsiyet, images: p.images, satisFiyat: p.satisFiyat, eskiFiyat: p.eskiFiyat, stokAdeti: p.stokAdeti, variations: p.variations, flashFiyat: flashAktif ? i.flashFiyat : null, flashBitis: flashAktif ? i.flashBitis : null };
   }).filter(Boolean);

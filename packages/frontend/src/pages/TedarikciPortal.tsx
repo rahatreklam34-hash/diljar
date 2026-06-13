@@ -5,6 +5,7 @@ import { Package, X, LogOut, Eye, EyeOff, Upload, BarChart3, Pencil, Trash2, Sca
 import toast from 'react-hot-toast';
 import axios from 'axios';
 import ImageDropzone from '../components/ImageDropzone';
+import { printBarkodLabels } from '../lib/barkod';
 
 const BASE = (import.meta as any).env?.VITE_API_URL || '/api/v1';
 
@@ -18,19 +19,10 @@ sApi.interceptors.request.use((cfg) => {
 
 const fmt = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// Basit barkod yazdırma (satış fiyatı tedarikçide gösterilmez)
+// Barkod yazdırma (satış fiyatı tedarikçide gösterilmez) — gerçek taranabilir Code128 SVG
 function printBarkod(arr: any[]) {
   if (!arr.length) { toast.error('Ürün yok'); return; }
-  const bars = (val: string) => Array.from(val || '0000').map((ch) => { const w = (ch.charCodeAt(0) % 3) + 1; return `<span style="display:inline-block;width:${w}px;height:38px;background:#111;margin-right:1px"></span>`; }).join('');
-  const labels = arr.map((p) => `<div style="border:1px solid #ddd;border-radius:6px;padding:8px;text-align:center;width:200px;display:inline-block;margin:4px;vertical-align:top">
-    <div style="font-size:12px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(p.ad || '').replace(/</g, '')}</div>
-    <div style="font-size:10px;color:#888;margin-bottom:4px">${p.salesCode || ''}</div>
-    <div style="line-height:0">${bars(p.salesCode || p.id || '')}</div>
-    <div style="font-family:monospace;font-size:11px;letter-spacing:2px;margin-top:2px">${p.salesCode || '-'}</div>
-  </div>`).join('');
-  const w = window.open('', '_blank'); if (!w) { toast.error('Açılır pencere engellendi'); return; }
-  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Barkod</title></head><body style="font-family:Arial">${labels}<script>window.onload=function(){setTimeout(function(){window.print()},300)}</script></body></html>`);
-  w.document.close();
+  if (!printBarkodLabels(arr, { showPrice: false })) toast.error('Açılır pencere engellendi');
 }
 
 export default function TedarikciPortal() {

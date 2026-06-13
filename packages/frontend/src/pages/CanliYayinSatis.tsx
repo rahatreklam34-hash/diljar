@@ -335,7 +335,8 @@ export default function CanliYayinSatis() {
   const openProduct = (p: any, preBeden?: string) => {
     setBarkodModal({ ...p, _preBeden: preBeden || null }); setDiscForm({ price: '', dakika: '' });
     setBarHistory((h) => [{ id: Date.now(), productId: p.id, ad: p.ad, kod: p.salesCode || '-', barkod: p.barkod || '-', stok: p.stokAdeti || 0, time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) }, ...h.filter((x) => x.productId !== p.id)].slice(0, 30));
-    if (!p._drop) api.post('/store/catalog/add', { productId: p.id }).catch(() => {});
+    // Hem normal hem drop (tedarikçi) ürünleri katalogda gösterilir; backend katalog endpoint'i her iki tabloyu çözer
+    api.post('/store/catalog/add', { productId: p.id }).catch(() => {});
   };
   const openByCode = (code: string) => {
     const { product, beden } = resolveCodeBeden(code);
