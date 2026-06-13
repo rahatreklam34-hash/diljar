@@ -33,7 +33,7 @@ export async function campaignAdjust(tx: any, tenantId: string, items: any[]) {
   const pids = [...new Set(valid.map((i: any) => i.productId).filter(Boolean))] as string[];
   const prods = pids.length ? await tx.product.findMany({ where: { tenantId, id: { in: pids } }, select: { id: true, kategoriId: true } }) : [];
   const catOf = new Map(prods.map((p: any) => [p.id, p.kategoriId]));
-  const inScope = (c: any, it: any) => c.kapsam === 'hepsi' || (c.kapsam === 'urun' && it.productId === c.productId) || (c.kapsam === 'kategori' && catOf.get(it.productId) === c.kategoriId);
+  const inScope = (c: any, it: any) => c.kapsam === 'hepsi' || (c.kapsam === 'urun' && (it.productId === c.productId || it.freeProductId === c.productId)) || (c.kapsam === 'kategori' && catOf.get(it.productId) === c.kategoriId);
   const validAra = valid.reduce((s: number, it: any) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 1), 0);
   let indirim = 0;
   const kampanyalar: any[] = [];

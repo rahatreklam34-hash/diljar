@@ -63,6 +63,9 @@ export default function OnlineMagaza() {
   const [urunQ, setUrunQ] = useState('');
   const [kampModal, setKampModal] = useState(false);
   const [kampForm, setKampForm] = useState<any>({ ad: '', tip: 'sepet_tutar', minAdet: '', minTutar: '', indirimTip: 'yuzde', indirimDeger: '', kapsam: 'hepsi', kategoriId: '', productId: '' });
+  // Tedarikçi deposu (drop) ürünleri — kampanya kapsam seçiminde de listelensin
+  const [freeProducts, setFreeProducts] = useState<any[]>([]);
+  useEffect(() => { api.get('/store/free/products').then((r) => setFreeProducts(r.data || [])).catch(() => {}); }, []);
   // Mağazadaki ürünler — filtre & düzenleme
   const [uFilters, setUFilters] = useState(false);
   const [uMarka, setUMarka] = useState('');
@@ -884,7 +887,7 @@ export default function OnlineMagaza() {
               <div key={c.id} className="bg-white rounded-2xl border border-slate-200 p-4">
                 <div className="flex items-start justify-between gap-2"><div className="flex items-center gap-2"><span className="w-9 h-9 rounded-lg bg-fuchsia-100 text-fuchsia-600 flex items-center justify-center"><Megaphone size={17} /></span><div><p className="font-semibold text-slate-800 text-sm leading-tight">{c.ad}</p><span className={`text-[10px] px-1.5 py-0.5 rounded-full ${c.aktif ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}>{c.aktif ? 'Aktif' : 'Pasif'}</span></div></div><button onClick={() => delKamp(c.id)} className="text-slate-300 hover:text-red-500"><Trash2 size={15} /></button></div>
                 <p className="text-xs text-slate-500 mt-2.5">{c.tip === 'urun_adet' ? `${c.minAdet} adet alana` : `${fmt(c.minTutar)} üzeri sepete`} <b className="text-slate-700">{c.indirimTip === 'yuzde' ? `%${c.indirimDeger}` : fmt(c.indirimDeger)}</b> indirim</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">Kapsam: {c.kapsam === 'hepsi' ? 'Tüm ürünler' : c.kapsam === 'kategori' ? (categories.find((k) => k.id === c.kategoriId)?.ad || 'Kategori') : (products.find((p) => p.id === c.productId)?.ad || 'Ürün')}</p>
+                <p className="text-[11px] text-slate-400 mt-0.5">Kapsam: {c.kapsam === 'hepsi' ? 'Tüm ürünler' : c.kapsam === 'kategori' ? (categories.find((k) => k.id === c.kategoriId)?.ad || 'Kategori') : (products.find((p) => p.id === c.productId)?.ad || freeProducts.find((p) => p.id === c.productId)?.ad || 'Ürün')}</p>
                 <button onClick={() => toggleKamp(c)} className={`w-full mt-3 py-2 rounded-lg text-xs font-medium border ${c.aktif ? 'border-slate-200 text-slate-500 hover:bg-slate-50' : 'border-green-200 text-green-600 hover:bg-green-50'}`}>{c.aktif ? 'Pasifleştir' : 'Aktifleştir'}</button>
               </div>
             ))}</div>
@@ -975,7 +978,7 @@ export default function OnlineMagaza() {
             </div>
             <div><label className="text-[11px] text-slate-400">Kapsam</label><select value={kampForm.kapsam} onChange={(e) => setKampForm({ ...kampForm, kapsam: e.target.value })} className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg"><option value="hepsi">Tüm ürünler</option><option value="kategori">Kategori</option><option value="urun">Tek ürün</option></select></div>
             {kampForm.kapsam === 'kategori' && <select value={kampForm.kategoriId} onChange={(e) => setKampForm({ ...kampForm, kategoriId: e.target.value })} className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg"><option value="">Kategori seç</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.ad}</option>)}</select>}
-            {kampForm.kapsam === 'urun' && <select value={kampForm.productId} onChange={(e) => setKampForm({ ...kampForm, productId: e.target.value })} className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg"><option value="">Ürün seç</option>{onlineProducts.map((p) => <option key={p.id} value={p.id}>{p.ad}</option>)}</select>}
+            {kampForm.kapsam === 'urun' && <select value={kampForm.productId} onChange={(e) => setKampForm({ ...kampForm, productId: e.target.value })} className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg"><option value="">Ürün seç</option><optgroup label="Kendi Ürünlerim">{onlineProducts.map((p) => <option key={p.id} value={p.id}>{p.ad}</option>)}</optgroup>{freeProducts.length > 0 && <optgroup label="Tedarikçi Deposu">{freeProducts.map((p) => <option key={p.id} value={p.id}>{p.ad}{p.supplierAd ? ` — ${p.supplierAd}` : ''}</option>)}</optgroup>}</select>}
             <button onClick={saveKamp} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700">Kampanyayı Oluştur</button>
           </div>
         </div>
