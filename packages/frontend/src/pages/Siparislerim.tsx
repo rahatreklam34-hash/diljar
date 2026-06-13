@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
-import { Plus, Trash2, X, Link2, MessageCircle, Wallet, TrendingUp, Users, Receipt, Search, MoreVertical, FileText, Pencil, Truck, Ticket, Check, CreditCard, Banknote, Building2, Clock, Tag } from 'lucide-react';
+import { Plus, Trash2, X, Link2, MessageCircle, Wallet, TrendingUp, Users, Receipt, Search, MoreVertical, FileText, Pencil, Truck, Ticket, Check, CreditCard, Banknote, Building2, Clock, Tag, MapPin } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
 import { useStore } from '../context/StoreContext';
@@ -329,7 +329,7 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
   const [kargoModal, setKargoModal] = useState(false);
   const [kargoBusy, setKargoBusy] = useState(false);
   const [cargoSt, setCargoSt] = useState<any>(null);
-  const [kForm, setKForm] = useState({ provider: '', odeme: 'gonderici', desi: '1', kg: '1', il: '', ilce: '', adres: order.adres || '', manualTracking: '' });
+  const [kForm, setKForm] = useState({ provider: '', odeme: 'gonderici', desi: '1', kg: '1', il: order.il || '', ilce: order.ilce || '', adres: order.adres || '', manualTracking: '' });
   useEffect(() => {
     api.get('/cargo/status').then((r) => { setCargoSt(r.data); if (r.data?.carriers?.[0]) setKForm((f) => ({ ...f, provider: f.provider || r.data.carriers[0].provider })); }).catch(() => setCargoSt({ carriers: [], gondericiTanimli: false }));
   }, []);
@@ -635,6 +635,7 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
                     <button onClick={sohbet} title="Sohbet" className="ml-auto p-1.5 rounded-lg text-indigo-600 hover:bg-indigo-50"><MessageCircle size={16} /></button>
                   </div>
                   <textarea value={adres} onChange={(e) => setAdres(e.target.value)} onBlur={() => persist()} rows={2} placeholder="Teslimat adresi..." className="w-full text-sm text-slate-600 border border-slate-200 rounded-lg px-2 py-1.5 resize-none" />
+                  {(order.il || order.ilce) && <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1"><MapPin size={11} className="text-slate-400 shrink-0" /> {[order.ilce, order.il].filter(Boolean).join(' / ')}</p>}
                   {customer && ((customer.bakiye || 0) !== 0 || (customer.indirimYuzde || 0) > 0) && (
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       {(customer.bakiye || 0) !== 0 && <span className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${customer.bakiye > 0 ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>Bakiye: {fmt(customer.bakiye)}</span>}

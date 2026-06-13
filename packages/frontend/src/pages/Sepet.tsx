@@ -387,6 +387,7 @@ export default function Sepet() {
             <div className="bg-white rounded-2xl border border-slate-100 p-3.5 space-y-1.5 text-sm">
               <div className="flex justify-between text-slate-500"><span>Ara Toplam</span><span className="text-slate-700">{fmt(data.araToplam)}</span></div>
               {data.indirim > 0 && <div className="flex justify-between text-green-600"><span>İndirim{data.indirimKodu ? ` (${data.indirimKodu})` : ''}</span><span>-{fmt(data.indirim)}</span></div>}
+              <div className="flex justify-between text-slate-500"><span className="flex items-center gap-1"><Truck size={13} className="text-slate-400" /> Kargo</span>{data.kargoEtiket === 'ucretsiz' ? <span className="text-green-600 font-semibold">Ücretsiz</span> : <span className="text-amber-600 font-semibold">Alıcı Ödemeli</span>}</div>
               <div className="flex justify-between font-extrabold text-slate-900 text-base pt-2 border-t border-slate-100 mt-1"><span>TOPLAM</span><span>{fmt(data.toplam)}</span></div>
             </div>
           </div>
