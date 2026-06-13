@@ -504,7 +504,10 @@ router.post('/paytr/callback', express.urlencoded({ extended: false }), asyncHan
 
 // ───── Chatbot (public) ─────
 async function tenantBySlug(slug: string): Promise<string | null> {
-  const s = await prisma.storeSetting.findFirst({ where: { slug } });
+  const raw = (slug || '').trim();
+  if (!raw) return null;
+  let s = await prisma.storeSetting.findFirst({ where: { slug: raw } });
+  if (!s) s = await prisma.storeSetting.findFirst({ where: { slug: { equals: raw, mode: 'insensitive' } } });
   return s?.tenantId || null;
 }
 
@@ -617,7 +620,7 @@ const igNorm = (s: string) => (s || '').toLowerCase().replace(/ı/g, 'i').replac
 
 router.post('/uye/:slug', asyncHandler(async (req: Request, res: Response) => {
   const tenantId = await tenantBySlug(req.params.slug);
-  if (!tenantId) throw new ApiError(404, 'Bulunamadi');
+  if (!tenantId) throw new ApiError(404, `Mağaza linki geçersiz (adres: "${req.params.slug}"). Lütfen mağaza panelindeki güncel "Üyelik formu linki" ile açın.`);
   const { ad, instagram, telefon, adres } = req.body || {};
   if (!ad || !instagram || !telefon) throw new ApiError(422, 'Ad soyad, Instagram ve telefon zorunludur');
   const igClean = String(instagram).trim().replace(/^@+/, '');
