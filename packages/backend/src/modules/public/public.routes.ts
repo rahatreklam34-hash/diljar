@@ -736,15 +736,21 @@ router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => 
     }
   }
   const oneriler = oneriRaw.map((p) => ({ id: p.id, ad: p.ad, fiyat: p.satisFiyat, eskiFiyat: p.eskiFiyat, img: (Array.isArray(p.images) ? (p.images as any)[0] : '') || '', stok: p.stokAdeti, bedenler: (p.variations || []).filter((v: any) => v.stok > 0).map((v: any) => v.deger) }));
-  // Kargo ücreti: admin panel eşiğine göre dinamik (mal toplamı eşiği geçerse ücretsiz)
+  // Kargo etiketi: Siparişlerim'de kargo ücreti girildiyse VEYA eşik üstündeyse ücretsiz; aksi halde alıcı ödemeli
   let cfgObj: any = setting?.config || {};
   if (typeof cfgObj === 'string') { try { cfgObj = JSON.parse(cfgObj); } catch { cfgObj = {}; } }
-  const parseNum = (v: any) => { const n = Number(String(v ?? '').replace(/[^0-9.,]/g, '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
   const malToplam = cart.toplam || 0; // araToplam - indirim
   const freeShip = setting?.freeShipThreshold || 0;
-  const stdKargo = parseNum(cfgObj.kargoUcret);
-  const kargoUcreti = (freeShip > 0 && malToplam >= freeShip) ? 0 : stdKargo;
-  const toplamWithKargo = malToplam + kargoUcreti;
+  const kargoUcretsiz = (cart.kargoUcreti || 0) > 0 || (freeShip > 0 && malToplam >= freeShip);
+  const kargoEtiket = kargoUcretsiz ? 'ucretsiz' : 'alici_odemeli';
+  const kargoUcreti = 0; // sepet toplamına kargo eklenmez (alıcı ödemeli teslimatta tahsil edilir)
+  const banka = {
+    ad: setting?.bankaAd || '',
+    iban: setting?.iban || '',
+    hesapSahibi: setting?.hesapSahibi || '',
+    not: cfgObj.bankaNot || '',
+  };
+  const oneriGoster = cfgObj.oneriEnabled !== false;
   res.json({
     magaza: setting?.logoText || tenant?.name || 'Mağaza',
     slug: setting?.slug || null,
@@ -755,17 +761,22 @@ router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => 
     indirim: cart.indirim,
     indirimKodu: cart.indirimKodu || null,
     kargoUcreti,
+    kargoEtiket,
     freeShipThreshold: setting?.freeShipThreshold || 0,
     puanOrani: setting?.puanOrani || 0,
     odemeLinki: cart.odemeLinki || null,
     odemeLinkiSon: cart.odemeLinkiSon || null,
-    toplam: toplamWithKargo,
+    toplam: malToplam,
     createdAt: cart.createdAt,
     adres: cart.adres || cart.customer?.adres || '',
+    il: cart.il || '',
+    ilce: cart.ilce || '',
+    odemeBildirim: cart.odemeBildirim || null,
+    banka,
     musteri: cart.customer?.ad || cart.musteriHandle || '',
     telefon: cart.customer?.telefon || '',
     instagram: cart.customer?.instagram || '',
-    oneriler,
+    oneriler: oneriGoster ? oneriler : [],
   });
 }));
 
@@ -773,7 +784,13 @@ router.patch('/sepet/:token', asyncHandler(async (req: Request, res: Response) =
   const cart = await prisma.storeOrder.findFirst({ where: { token: req.params.token } });
   if (!cart) throw new ApiError(404, 'Sepet bulunamadi');
   const adres = req.body?.adres !== undefined ? String(req.body.adres).slice(0, 500) : undefined;
-  if (adres !== undefined) await prisma.storeOrder.update({ where: { id: cart.id }, data: { adres } });
+  const il = req.body?.il !== undefined ? String(req.body.il).slice(0, 60) : undefined;
+  const ilce = req.body?.ilce !== undefined ? String(req.body.ilce).slice(0, 60) : undefined;
+  const upd: any = {};
+  if (adres !== undefined) upd.adres = adres;
+  if (il !== undefined) upd.il = il;
+  if (ilce !== undefined) upd.ilce = ilce;
+  if (Object.keys(upd).length) await prisma.storeOrder.update({ where: { id: cart.id }, data: upd });
   if (cart.customerId && (req.body?.telefon !== undefined || req.body?.musteri !== undefined || adres !== undefined)) {
     const cd: any = {};
     if (req.body?.telefon !== undefined) cd.telefon = String(req.body.telefon).slice(0, 30);
@@ -1003,7 +1020,9 @@ router.post('/sepet/:token/item', asyncHandler(async (req: Request, res: Respons
 router.post('/sepet/:token/odeme-bildir', asyncHandler(async (req: Request, res: Response) => {
   const cart = await prisma.storeOrder.findFirst({ where: { token: req.params.token } });
   if (!cart) throw new ApiError(404, 'Sepet bulunamadi');
-  if (cart.durum === 'sepet') await prisma.storeOrder.update({ where: { id: cart.id }, data: { durum: 'yeni' } });
+  const data: any = { odemeBildirim: 'bekliyor' };
+  if (cart.durum === 'sepet') data.durum = 'yeni';
+  await prisma.storeOrder.update({ where: { id: cart.id }, data });
   try { await prisma.orderEvent.create({ data: { tenantId: cart.tenantId, orderId: cart.id, kullanici: 'Müşteri', islem: 'Ödeme bildirimi yapıldı', detay: `Tutar: ${(cart.toplam || 0).toLocaleString('tr-TR')}₺` } }); } catch { /* */ }
   res.json({ ok: true });
 }));

@@ -1,8 +1,11 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Menu, ShoppingBag, Search, Clock, Trash2, Plus, Minus, MapPin, Phone, User, Flame, Truck, CreditCard, CheckCircle2, Pencil, X, MessageCircle, Barcode, Send, Zap, ImagePlus, Home, Sparkles, Gift, HelpCircle, Radio, LogOut, Crown, Star, ChevronRight, Package, Timer, Filter } from 'lucide-react';
+import { Menu, ShoppingBag, Search, Clock, Trash2, Plus, Minus, MapPin, Phone, User, Flame, Truck, CreditCard, CheckCircle2, Pencil, X, MessageCircle, Barcode, Send, Zap, ImagePlus, Home, Sparkles, Gift, HelpCircle, Radio, LogOut, Crown, Star, ChevronRight, Package, Timer, Filter, Building2, Copy } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
+import { IL_ILCE } from '../lib/turkiye';
+
+const ILLER = Object.keys(IL_ILCE);
 
 const fmt = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -15,7 +18,8 @@ export default function Sepet() {
   const [err, setErr] = useState('');
   const [edit, setEdit] = useState(false);
   const [teslimat, setTeslimat] = useState(false);
-  const [tForm, setTForm] = useState({ musteri: '', telefon: '', adres: '' });
+  const [tForm, setTForm] = useState({ musteri: '', telefon: '', adres: '', il: '', ilce: '' });
+  const [odemeOnay, setOdemeOnay] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [bildirildi, setBildirildi] = useState(false);
   const [paytrUrl, setPaytrUrl] = useState('');
@@ -86,7 +90,7 @@ export default function Sepet() {
   const DESTEK_DURUM: Record<string, { t: string; c: string }> = { acik: { t: 'Beklemede', c: 'bg-amber-100 text-amber-700' }, islemde: { t: 'İşlemde', c: 'bg-blue-100 text-blue-700' }, yanitlandi: { t: 'Yanıtlandı', c: 'bg-green-100 text-green-700' }, cozuldu: { t: 'Çözüldü', c: 'bg-green-100 text-green-700' }, kapatildi: { t: 'Kapatıldı', c: 'bg-slate-100 text-slate-500' } };
 
   const load = useCallback(async () => {
-    try { const r = await api.get(`/public/sepet/${token}`); setData(r.data); setTForm({ musteri: r.data.musteri || '', telefon: r.data.telefon || '', adres: r.data.adres || '' }); }
+    try { const r = await api.get(`/public/sepet/${token}`); setData(r.data); setTForm({ musteri: r.data.musteri || '', telefon: r.data.telefon || '', adres: r.data.adres || '', il: r.data.il || '', ilce: r.data.ilce || '' }); }
     catch (e) { setErr(apiErrorMessage(e)); }
   }, [token]);
   useEffect(() => { load(); }, [load]);
@@ -145,7 +149,14 @@ export default function Sepet() {
     </div>
   );
   const saveTeslimat = async () => { try { await api.patch(`/public/sepet/${token}`, tForm); toast.success('Bilgiler kaydedildi'); setTeslimat(false); load(); } catch (e) { toast.error(apiErrorMessage(e)); } };
-  const odemeBildir = async () => { try { await api.post(`/public/sepet/${token}/odeme-bildir`); setBildirildi(true); toast.success('Ödeme bildiriminiz alındı!'); load(); } catch (e) { toast.error(apiErrorMessage(e)); } };
+  const odemeBildir = async () => { try { await api.post(`/public/sepet/${token}/odeme-bildir`); setBildirildi(true); setOdemeOnay(false); toast.success('Ödeme bildiriminiz alındı!'); load(); } catch (e) { toast.error(apiErrorMessage(e)); } };
+  const copyIban = async () => {
+    const v = (data?.banka?.iban || '').replace(/\s+/g, '');
+    if (!v) return;
+    try { await navigator.clipboard.writeText(v); toast.success('IBAN kopyalandı'); }
+    catch { toast.error('Kopyalanamadı'); }
+  };
+  const onOdemeBildirClick = () => { setOdemeOnay(true); };
   // Kredi kartı ile öde (PayTR iframe)
   const kartlaOde = async () => {
     if (items.length === 0) { toast.error('Sepetiniz boş'); return; }
@@ -361,16 +372,34 @@ export default function Sepet() {
             <div className="bg-white rounded-2xl border border-slate-100 p-3.5 space-y-2 text-sm">
               <div className="flex items-center gap-2 text-slate-700"><User size={15} className="text-slate-400" /> {data.musteri || 'İsim belirtilmedi'}</div>
               <div className="flex items-center gap-2 text-slate-700"><Phone size={15} className="text-slate-400" /> {data.telefon || 'Telefon belirtilmedi'}</div>
-              <div className="flex items-start gap-2 text-slate-700"><MapPin size={15} className="text-slate-400 mt-0.5 shrink-0" /> <span>{data.adres || 'Teslimat adresi belirtilmedi'}</span></div>
+              <div className="flex items-start gap-2 text-slate-700"><MapPin size={15} className="text-slate-400 mt-0.5 shrink-0" /> <span>{data.adres || 'Teslimat adresi belirtilmedi'}{(data.ilce || data.il) ? <span className="block text-[12px] text-slate-500 mt-0.5">{[data.ilce, data.il].filter(Boolean).join(' / ')}</span> : null}</span></div>
             </div>
           </div>
+
+          {/* Banka Bilgileri (Havale/EFT) */}
+          {(data.banka?.iban || data.banka?.ad || data.banka?.not) && (
+          <div id="banka">
+            <h3 className="font-bold text-slate-800 text-sm mb-2 flex items-center gap-1.5"><Building2 size={15} className="text-indigo-600" /> Banka Bilgileri</h3>
+            <div className="bg-white rounded-2xl border border-slate-100 p-3.5 space-y-2 text-sm">
+              {data.banka?.ad && <div className="flex justify-between gap-2"><span className="text-slate-500">Banka</span><span className="text-slate-800 font-medium text-right">{data.banka.ad}</span></div>}
+              {data.banka?.hesapSahibi && <div className="flex justify-between gap-2"><span className="text-slate-500">Hesap Sahibi</span><span className="text-slate-800 font-medium text-right">{data.banka.hesapSahibi}</span></div>}
+              {data.banka?.iban && (
+                <div className="flex items-center justify-between gap-2 bg-slate-50 rounded-xl px-3 py-2">
+                  <span className="font-mono text-[13px] text-slate-800 break-all">{data.banka.iban}</span>
+                  <button onClick={copyIban} className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 border border-indigo-200 rounded-lg px-2 py-1 hover:bg-indigo-50"><Copy size={13} /> Kopyala</button>
+                </div>
+              )}
+              {data.banka?.not && <p className="text-[12px] text-slate-500 whitespace-pre-wrap pt-1 border-t border-slate-100">{data.banka.not}</p>}
+            </div>
+          </div>
+          )}
 
           {/* Sipariş Özeti */}
           <div id="ozet">
             <h3 className="font-bold text-slate-800 text-sm mb-2">Sipariş Özeti</h3>
             <div className="bg-white rounded-2xl border border-slate-100 p-3.5 space-y-1.5 text-sm">
               <div className="flex justify-between text-slate-500"><span>Ara Toplam</span><span className="text-slate-700">{fmt(data.araToplam)}</span></div>
-              <div className="flex justify-between text-slate-500"><span>Kargo</span><span className={data.kargoUcreti > 0 ? 'text-slate-700' : 'text-green-600 font-medium'}>{data.kargoUcreti > 0 ? fmt(data.kargoUcreti) : 'Ücretsiz'}</span></div>
+              <div className="flex justify-between text-slate-500"><span>Kargo</span>{data.kargoEtiket === 'ucretsiz' ? <span className="text-green-600 font-medium">Ücretsiz</span> : <span className="text-amber-600 font-medium">Alıcı Ödemeli</span>}</div>
               {data.indirim > 0 && <div className="flex justify-between text-green-600"><span>İndirim{data.indirimKodu ? ` (${data.indirimKodu})` : ''}</span><span>-{fmt(data.indirim)}</span></div>}
               <div className="flex justify-between font-extrabold text-slate-900 text-base pt-2 border-t border-slate-100 mt-1"><span>TOPLAM</span><span>{fmt(data.toplam)}</span></div>
             </div>
@@ -388,7 +417,7 @@ export default function Sepet() {
                 <span className="text-sm inline-flex items-center gap-1.5"><CreditCard size={16} /> SEPETİ ÖDE</span>
                 <span className="text-[10px] font-medium text-white/80">{odemeKalan ? `Ödeme için kalan süre: ${odemeKalan}` : 'Güvenli ödeme'}</span>
               </button>
-              <button onClick={odemeBildir} disabled={items.length === 0} className="shrink-0 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-2xl px-3 py-2.5 font-semibold hover:bg-indigo-100 disabled:opacity-50 flex flex-col items-center leading-tight">
+              <button onClick={onOdemeBildirClick} disabled={items.length === 0} className="shrink-0 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-2xl px-3 py-2.5 font-semibold hover:bg-indigo-100 disabled:opacity-50 flex flex-col items-center leading-tight">
                 <span className="text-[12px]">{bildirildi ? 'Bildirildi ✓' : 'Havale/EFT'}</span>
                 <span className="text-[9px] font-medium text-indigo-400">Ödemeni Bildir</span>
               </button>
@@ -399,7 +428,7 @@ export default function Sepet() {
                 <span className="text-sm inline-flex items-center gap-1.5"><CreditCard size={16} /> {payBusy ? 'Yönlendiriliyor...' : 'Kredi Kartı ile Öde'}</span>
                 <span className="text-[10px] font-medium text-white/80">256-bit SSL · Güvenli Ödeme</span>
               </button>
-              <button onClick={odemeBildir} disabled={items.length === 0} className="shrink-0 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-2xl px-3 py-2.5 font-semibold hover:bg-indigo-100 disabled:opacity-50 flex flex-col items-center leading-tight">
+              <button onClick={onOdemeBildirClick} disabled={items.length === 0} className="shrink-0 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-2xl px-3 py-2.5 font-semibold hover:bg-indigo-100 disabled:opacity-50 flex flex-col items-center leading-tight">
                 <span className="text-[12px]">{bildirildi ? 'Bildirildi ✓' : 'Havale/EFT'}</span>
                 <span className="text-[9px] font-medium text-indigo-400">Ödemeni Bildir</span>
               </button>
@@ -435,8 +464,41 @@ export default function Sepet() {
             <div className="flex items-center justify-between"><h3 className="font-bold text-slate-800">Teslimat Bilgileri</h3><button onClick={() => setTeslimat(false)}><X size={20} className="text-slate-400" /></button></div>
             <div><label className="text-xs text-slate-500">Ad Soyad</label><input value={tForm.musteri} onChange={(e) => setTForm({ ...tForm, musteri: e.target.value })} className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl mt-1" /></div>
             <div><label className="text-xs text-slate-500">Telefon</label><input value={tForm.telefon} onChange={(e) => setTForm({ ...tForm, telefon: e.target.value })} className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl mt-1" /></div>
-            <div><label className="text-xs text-slate-500">Teslimat Adresi</label><textarea rows={3} value={tForm.adres} onChange={(e) => setTForm({ ...tForm, adres: e.target.value })} className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl mt-1" /></div>
+            <div><label className="text-xs text-slate-500">Teslimat Adresi (mahalle, sokak, no)</label><textarea rows={3} value={tForm.adres} onChange={(e) => setTForm({ ...tForm, adres: e.target.value })} className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl mt-1" /></div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs text-slate-500">İl</label>
+                <select value={tForm.il} onChange={(e) => setTForm({ ...tForm, il: e.target.value, ilce: '' })} className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl mt-1 bg-white">
+                  <option value="">Seçiniz</option>
+                  {ILLER.map((il) => <option key={il} value={il}>{il}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="text-xs text-slate-500">İlçe</label>
+                <select value={tForm.ilce} onChange={(e) => setTForm({ ...tForm, ilce: e.target.value })} disabled={!tForm.il} className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl mt-1 bg-white disabled:bg-slate-50 disabled:text-slate-400">
+                  <option value="">Seçiniz</option>
+                  {(IL_ILCE[tForm.il] || []).map((ic) => <option key={ic} value={ic}>{ic}</option>)}
+                </select>
+              </div>
+            </div>
             <button onClick={saveTeslimat} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700">Kaydet</button>
+          </div>
+        </div>
+      )}
+
+      {/* Ödeme bildirimi onay modalı */}
+      {odemeOnay && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-5" onClick={() => setOdemeOnay(false)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-white rounded-3xl p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-full bg-indigo-50 flex items-center justify-center mx-auto"><CreditCard size={26} className="text-indigo-600" /></div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-lg">Ödemenizi yaptınız mı?</h3>
+              <p className="text-sm text-slate-500 mt-1">Havale/EFT ödemenizi tamamladıysanız bildirin. Henüz ödemediyseniz banka bilgilerini görüntüleyin.</p>
+            </div>
+            <div className="flex gap-2.5">
+              <button onClick={() => { setOdemeOnay(false); setTimeout(() => document.getElementById('banka')?.scrollIntoView({ behavior: 'smooth' }), 60); }} className="flex-1 bg-white border border-slate-200 text-slate-600 rounded-2xl py-3 font-semibold hover:bg-slate-50">Hayır</button>
+              <button onClick={odemeBildir} className="flex-1 bg-indigo-600 text-white rounded-2xl py-3 font-bold hover:bg-indigo-700">Evet, Ödedim</button>
+            </div>
           </div>
         </div>
       )}

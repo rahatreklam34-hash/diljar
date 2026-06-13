@@ -71,12 +71,14 @@ export default function Siparislerim({ kanalFilter }: { kanalFilter?: 'online' |
     const m: Record<string, number> = { tumu: channelOrders.length };
     STATUSES.forEach((s) => { m[s.key] = channelOrders.filter((o) => o.durum === s.key).length; });
     m['odeme_bekliyor'] = channelOrders.filter((o) => o.durum !== 'iptal' && ((o.toplam || 0) - (o.tahsilat || 0)) > 0.5).length;
+    m['odeme_bildirim'] = channelOrders.filter((o) => (o as any).odemeBildirim === 'bekliyor').length;
     return m;
   }, [channelOrders]);
 
   const filtered = useMemo(() => {
     let list = tab === 'tumu' ? channelOrders
       : tab === 'odeme_bekliyor' ? channelOrders.filter((o) => o.durum !== 'iptal' && ((o.toplam || 0) - (o.tahsilat || 0)) > 0.5)
+      : tab === 'odeme_bildirim' ? channelOrders.filter((o) => (o as any).odemeBildirim === 'bekliyor')
       : channelOrders.filter((o) => o.durum === tab);
     if (search.trim()) {
       const q = search.toLowerCase();
@@ -95,6 +97,10 @@ export default function Siparislerim({ kanalFilter }: { kanalFilter?: 'online' |
     try { await api.patch(`/store/orders/${o.id}`, body); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
   };
   const del = async (id: string) => { setMenuId(null); if (!confirm('Sipariş silinsin mi?')) return; try { await api.delete(`/store/orders/${id}`); reload(); } catch (e) { toast.error(apiErrorMessage(e)); } };
+  const setOdemeBildirim = async (o: any, val: 'onaylandi' | 'red') => {
+    try { await api.patch(`/store/orders/${o.id}`, { odemeBildirim: val }); toast.success(val === 'onaylandi' ? 'Ödeme onaylandı' : 'Ödeme bildirimi reddedildi'); reload(); setDetail((d: any) => d && d.id === o.id ? { ...d, odemeBildirim: val } : d); }
+    catch (e) { toast.error(apiErrorMessage(e)); }
+  };
   const copyLink = (o: any) => { if (!o.token) { toast.error('Bu siparişin paylaşım linki yok'); return; } navigator.clipboard.writeText(`${window.location.origin}/sepet/${o.token}`); toast.success('Sepet linki kopyalandı'); };
   const odemeTalep = (o: any) => {
     const link = o.token ? `${window.location.origin}/sepet/${o.token}` : '';
@@ -146,6 +152,7 @@ export default function Siparislerim({ kanalFilter }: { kanalFilter?: 'online' |
       <div className="flex items-center gap-1 border-b border-slate-200 mb-4 overflow-x-auto">
         <TabBtn active={tab === 'tumu'} onClick={() => { setTab('tumu'); setPage(1); }} label="Tümü" count={counts.tumu} />
         <TabBtn active={tab === 'odeme_bekliyor'} onClick={() => { setTab('odeme_bekliyor'); setPage(1); }} label="Ödeme Bekleniyor" count={counts['odeme_bekliyor']} />
+        <TabBtn active={tab === 'odeme_bildirim'} onClick={() => { setTab('odeme_bildirim'); setPage(1); }} label="Ödeme Bildirimi" count={counts['odeme_bildirim']} />
         {STATUSES.map((s) => <TabBtn key={s.key} active={tab === s.key} onClick={() => { setTab(s.key); setPage(1); }} label={s.t} count={counts[s.key]} />)}
       </div>
 
@@ -180,13 +187,17 @@ export default function Siparislerim({ kanalFilter }: { kanalFilter?: 'online' |
                     </div>
                   </td>
                   <td className="px-4 py-3 text-center text-slate-600">{adet}</td>
-                  <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full font-medium ${st.c}`}>{st.short}</span></td>
+                  <td className="px-4 py-3"><span className={`text-xs px-2 py-1 rounded-full font-medium ${st.c}`}>{st.short}</span>{(o as any).odemeBildirim && <span className={`block mt-1 text-[10px] px-2 py-0.5 rounded-full font-medium w-fit ${(o as any).odemeBildirim === 'onaylandi' ? 'bg-green-100 text-green-700' : (o as any).odemeBildirim === 'red' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-700'}`}>{(o as any).odemeBildirim === 'onaylandi' ? 'Ödeme Onaylı' : (o as any).odemeBildirim === 'red' ? 'Ödeme Red' : 'Ödeme Bildirildi'}</span>}</td>
                   <td className="px-4 py-3 font-semibold text-slate-800">{fmt(o.toplam)}</td>
                   <td className="px-4 py-3 font-medium text-green-600">{fmt(o.tahsilat || 0)}</td>
                   <td className={`px-4 py-3 font-medium ${kalan > 0 ? 'text-red-500' : 'text-slate-400'}`}>{fmt(kalan)}</td>
                   <td className="px-4 py-3 text-xs text-slate-400">{new Date(o.createdAt).toLocaleString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-1">
+                      {(o as any).odemeBildirim === 'bekliyor' && <>
+                        <ActBtn onClick={() => setOdemeBildirim(o, 'onaylandi')} icon={Check} label="Ödemeyi Onayla" cls="text-green-600 border-green-300 bg-green-50" />
+                        <ActBtn onClick={() => setOdemeBildirim(o, 'red')} icon={X} label="Ödemeyi Reddet" cls="text-red-600 border-red-300 bg-red-50" />
+                      </>}
                       <ActBtn onClick={() => setDetail(o)} icon={FileText} label="Sepet Detayı" cls="text-slate-600 border-slate-200" />
                       <ActBtn onClick={() => sohbet(o)} icon={MessageCircle} label="Sohbet" cls="text-blue-600 border-blue-200" />
                       <ActBtn onClick={() => copyLink(o)} icon={Link2} label="Link" cls="text-slate-600 border-slate-200" />

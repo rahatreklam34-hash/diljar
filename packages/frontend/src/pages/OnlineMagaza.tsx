@@ -469,6 +469,7 @@ export default function OnlineMagaza() {
               <div><label className="block text-xs text-slate-500 mb-1">IBAN</label><input value={s.iban} onChange={(e) => setS({ ...s, iban: e.target.value })} placeholder="TR.." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
               <div><label className="block text-xs text-slate-500 mb-1">Hesap Sahibi</label><input value={s.hesapSahibi} onChange={(e) => setS({ ...s, hesapSahibi: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
             </div>
+            <div><label className="block text-xs text-slate-500 mb-1">Ödeme Açıklaması / Banka Notu</label><textarea rows={3} value={cfg.bankaNot || ''} onChange={(e) => setCfg('bankaNot', e.target.value)} placeholder="ör. Açıklama kısmına sipariş numaranızı yazınız. Ödeme sonrası 'Ödemeni Bildir' butonuna basınız." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[11px] text-slate-400 mt-1">Sepet linkinde banka bilgileri kartında müşteriye gösterilir.</p></div>
             <div>
               <label className="block text-xs text-slate-500 mb-1.5">Kabul Edilen Ödeme Yöntemleri</label>
               <div className="flex flex-wrap gap-2">

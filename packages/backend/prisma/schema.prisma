@@ -810,6 +810,9 @@ model StoreOrder {
   musteriHandle String?
   token      String?   @unique
   adres      String?
+  il         String?
+  ilce       String?
+  odemeBildirim String? // null | bekliyor | onaylandi | red
   kanal      String    @default("manuel") // online | canli | manuel | asistan
   botSatis   Boolean   @default(false)
   durum      String    @default("yeni") // sepet | yeni | hazirlaniyor | kargoda | tamamlandi | iptal
