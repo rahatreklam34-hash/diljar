@@ -105,7 +105,7 @@ export default function Pazarlama() {
 function SmsBildirimAyar() {
   const [s, setS] = useState<any>(null);
   const [busy, setBusy] = useState(false);
-  useEffect(() => { api.get('/sms/settings').then((r) => setS(r.data)).catch(() => setS({ configured: false, notify_new: false, notify_approved: false, notify_shipped: false, tpl_new: '', tpl_approved: '', tpl_shipped: '' })); }, []);
+  useEffect(() => { api.get('/sms/settings').then((r) => setS(r.data)).catch(() => setS({ configured: false, notify_new: false, notify_approved: false, notify_shipped: false, notify_cancel: false, notify_lowstock: false, tpl_new: '', tpl_approved: '', tpl_shipped: '', tpl_cancel: '', tpl_lowstock: '' })); }, []);
   if (!s) return null;
   const set = (k: string, v: any) => setS((x: any) => ({ ...x, [k]: v }));
   const save = async () => {
@@ -118,6 +118,8 @@ function SmsBildirimAyar() {
     { k: 'notify_new', tk: 'tpl_new', label: 'Sipariş Alındı', desc: 'Yeni sipariş oluşturulduğunda' },
     { k: 'notify_approved', tk: 'tpl_approved', label: 'Onaylandı / Hazırlanıyor', desc: 'Sipariş durumu hazırlanıyor olunca' },
     { k: 'notify_shipped', tk: 'tpl_shipped', label: 'Kargoya Verildi', desc: 'Kargoda durumuna geçince veya takip no girilince' },
+    { k: 'notify_cancel', tk: 'tpl_cancel', label: 'Sipariş İptal Edildi', desc: 'Sipariş iptal durumuna geçince' },
+    { k: 'notify_lowstock', tk: 'tpl_lowstock', label: 'Yetersiz Stok', desc: 'Sipariş, yetersiz stok nedeniyle iptal edildiğinde' },
   ];
   return (
     <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-4">
@@ -126,7 +128,7 @@ function SmsBildirimAyar() {
           <div className="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center"><Bell size={18} className="text-indigo-600" /></div>
           <div>
             <h3 className="font-bold text-slate-800 text-sm">Sipariş Bildirimleri (SMS)</h3>
-            <p className="text-[11px] text-slate-400">Sipariş durumu değişince müşteriye otomatik SMS gönderilir. Değişkenler: <code className="text-indigo-500">{'{ad} {no} {tutar} {kargo} {takip} {firma}'}</code></p>
+            <p className="text-[11px] text-slate-400">Sipariş durumu değişince müşteriye otomatik SMS gönderilir. Değişkenler: <code className="text-indigo-500">{'{ad} {no} {tutar} {kargo} {takip} {firma} {kullaniciadi} {durum} {beden} {urun} {instagram}'}</code></p>
           </div>
         </div>
         <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${s.configured ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{s.configured ? 'NetGSM bağlı' : 'NetGSM bilgileri eksik'}</span>

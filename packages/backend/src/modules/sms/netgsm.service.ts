@@ -10,15 +10,21 @@ export interface NetgsmConfig {
   notify_new?: boolean;
   notify_approved?: boolean;
   notify_shipped?: boolean;
+  notify_cancel?: boolean;
+  notify_lowstock?: boolean;
   tpl_new?: string;
   tpl_approved?: string;
   tpl_shipped?: string;
+  tpl_cancel?: string;
+  tpl_lowstock?: string;
 }
 
 export const DEFAULT_TEMPLATES = {
   tpl_new: 'Sayin {ad}, {no} numarali siparisiniz alindi. Tesekkur ederiz. {firma}',
   tpl_approved: 'Sayin {ad}, {no} numarali siparisiniz onaylandi. Tutar: {tutar} TL. {firma}',
   tpl_shipped: 'Sayin {ad}, {no} numarali siparisiniz kargoya verildi. {kargo} Takip No: {takip}',
+  tpl_cancel: 'Sayin {ad}, {no} numarali siparisiniz iptal edilmistir. {firma}',
+  tpl_lowstock: 'Sayin {ad}, {urun} {beden} urunu icin stok yetersiz oldugundan {no} numarali siparisiniz olusturulamadi. {firma}',
 };
 
 // NetGSM hata kodlari -> Turkce aciklama
@@ -43,9 +49,12 @@ async function loadConfig(tenantId: string, requireCreds = true): Promise<Netgsm
     password: (c.password || '').toString().trim(),
     msgheader: (c.msgheader || '').toString().trim(),
     notify_new: !!c.notify_new, notify_approved: !!c.notify_approved, notify_shipped: !!c.notify_shipped,
+    notify_cancel: !!c.notify_cancel, notify_lowstock: !!c.notify_lowstock,
     tpl_new: c.tpl_new || DEFAULT_TEMPLATES.tpl_new,
     tpl_approved: c.tpl_approved || DEFAULT_TEMPLATES.tpl_approved,
     tpl_shipped: c.tpl_shipped || DEFAULT_TEMPLATES.tpl_shipped,
+    tpl_cancel: c.tpl_cancel || DEFAULT_TEMPLATES.tpl_cancel,
+    tpl_lowstock: c.tpl_lowstock || DEFAULT_TEMPLATES.tpl_lowstock,
   };
   if (requireCreds && (!cfg.usercode || !cfg.password || !cfg.msgheader)) {
     throw new ApiError(400, 'NetGSM kullanici kodu, sifre ve gonderici basligi (msgheader) zorunludur.');
@@ -64,9 +73,13 @@ export async function getNetgsmSettings(tenantId: string) {
     notify_new: !!c.notify_new,
     notify_approved: !!c.notify_approved,
     notify_shipped: !!c.notify_shipped,
+    notify_cancel: !!c.notify_cancel,
+    notify_lowstock: !!c.notify_lowstock,
     tpl_new: c.tpl_new || DEFAULT_TEMPLATES.tpl_new,
     tpl_approved: c.tpl_approved || DEFAULT_TEMPLATES.tpl_approved,
     tpl_shipped: c.tpl_shipped || DEFAULT_TEMPLATES.tpl_shipped,
+    tpl_cancel: c.tpl_cancel || DEFAULT_TEMPLATES.tpl_cancel,
+    tpl_lowstock: c.tpl_lowstock || DEFAULT_TEMPLATES.tpl_lowstock,
   };
 }
 
@@ -74,7 +87,7 @@ export async function getNetgsmSettings(tenantId: string) {
 export async function saveNetgsmPrefs(tenantId: string, prefs: Partial<NetgsmConfig>) {
   const existing = await prisma.integrationSetting.findFirst({ where: { scope: 'TENANT', tenantId, provider: 'netgsm' } });
   const cur: any = (existing?.config as any) || {};
-  const keys: (keyof NetgsmConfig)[] = ['notify_new', 'notify_approved', 'notify_shipped', 'tpl_new', 'tpl_approved', 'tpl_shipped'];
+  const keys: (keyof NetgsmConfig)[] = ['notify_new', 'notify_approved', 'notify_shipped', 'notify_cancel', 'notify_lowstock', 'tpl_new', 'tpl_approved', 'tpl_shipped', 'tpl_cancel', 'tpl_lowstock'];
   const merged: any = { ...cur };
   for (const k of keys) if (prefs[k] !== undefined) merged[k] = prefs[k];
   if (existing) {
@@ -182,17 +195,17 @@ function renderTpl(tpl: string, vars: Record<string, string>): string {
 // Siparis bildirimi gonder (sessiz: hata firlatmaz, sadece loglar)
 export async function notifyOrderSms(
   tenantId: string,
-  event: 'new' | 'approved' | 'shipped',
-  data: { phone?: string | null; ad?: string | null; no?: string; tutar?: number; kargo?: string; takip?: string; firma?: string }
+  event: 'new' | 'approved' | 'shipped' | 'cancel' | 'lowstock',
+  data: { phone?: string | null; ad?: string | null; no?: string; tutar?: number; kargo?: string; takip?: string; firma?: string; kullaniciadi?: string; durum?: string; beden?: string; urun?: string; instagram?: string }
 ): Promise<void> {
   try {
     if (!data.phone) return;
     const cfg = await loadConfig(tenantId, false).catch(() => null);
     if (!cfg) return;
-    const enabledMap = { new: cfg.notify_new, approved: cfg.notify_approved, shipped: cfg.notify_shipped };
+    const enabledMap = { new: cfg.notify_new, approved: cfg.notify_approved, shipped: cfg.notify_shipped, cancel: cfg.notify_cancel, lowstock: cfg.notify_lowstock };
     if (!enabledMap[event]) return;
     if (!cfg.usercode || !cfg.password || !cfg.msgheader) return;
-    const tplMap = { new: cfg.tpl_new, approved: cfg.tpl_approved, shipped: cfg.tpl_shipped };
+    const tplMap = { new: cfg.tpl_new, approved: cfg.tpl_approved, shipped: cfg.tpl_shipped, cancel: cfg.tpl_cancel, lowstock: cfg.tpl_lowstock };
     const msg = renderTpl(tplMap[event] || '', {
       ad: data.ad || 'Musterimiz',
       no: data.no || '',
@@ -200,6 +213,11 @@ export async function notifyOrderSms(
       kargo: data.kargo || '',
       takip: data.takip || '',
       firma: data.firma || '',
+      kullaniciadi: data.kullaniciadi || data.instagram || '',
+      durum: data.durum || '',
+      beden: data.beden || '',
+      urun: data.urun || '',
+      instagram: data.instagram || '',
     }).trim();
     if (!msg) return;
     await sendSms(tenantId, [data.phone], msg).catch((e) => console.error('[SMS notify]', String(e?.message || e)));

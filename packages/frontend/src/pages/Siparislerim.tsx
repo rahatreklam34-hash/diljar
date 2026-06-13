@@ -85,7 +85,12 @@ export default function Siparislerim({ kanalFilter }: { kanalFilter?: 'online' |
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const pageItems = filtered.slice((page - 1) * perPage, page * perPage);
 
-  const setDurum = async (o: any, durum: string) => { setMenuId(null); try { await api.patch(`/store/orders/${o.id}`, { durum }); reload(); } catch (e) { toast.error(apiErrorMessage(e)); } };
+  const setDurum = async (o: any, durum: string) => {
+    setMenuId(null);
+    const body: any = { durum };
+    if (durum === 'iptal') body.iptalNedeni = confirm('Sipariş yetersiz stok nedeniyle mi iptal ediliyor?\n\nTamam = Yetersiz stok (stok SMS\'i gönderilir)\nİptal = Normal iptal') ? 'yetersiz_stok' : 'diger';
+    try { await api.patch(`/store/orders/${o.id}`, body); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
+  };
   const del = async (id: string) => { setMenuId(null); if (!confirm('Sipariş silinsin mi?')) return; try { await api.delete(`/store/orders/${id}`); reload(); } catch (e) { toast.error(apiErrorMessage(e)); } };
   const copyLink = (o: any) => { if (!o.token) { toast.error('Bu siparişin paylaşım linki yok'); return; } navigator.clipboard.writeText(`${window.location.origin}/sepet/${o.token}`); toast.success('Sepet linki kopyalandı'); };
   const odemeTalep = (o: any) => {

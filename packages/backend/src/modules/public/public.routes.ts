@@ -660,8 +660,10 @@ router.post('/uye/:slug/kod-gonder', asyncHandler(async (req: Request, res: Resp
 router.post('/uye/:slug', asyncHandler(async (req: Request, res: Response) => {
   const tenantId = await tenantBySlug(req.params.slug);
   if (!tenantId) throw new ApiError(404, `Mağaza linki geçersiz (adres: "${req.params.slug}"). Lütfen mağaza panelindeki güncel "Üyelik formu linki" ile açın.`);
-  const { ad, instagram, telefon, adres, kod } = req.body || {};
+  const { ad, instagram, telefon, adres, kod, cinsiyet } = req.body || {};
   if (!ad || !instagram || !telefon) throw new ApiError(422, 'Ad soyad, Instagram ve telefon zorunludur');
+  const cinsiyetClean = String(cinsiyet || '').trim();
+  if (!['Kadın', 'Erkek'].includes(cinsiyetClean)) throw new ApiError(422, 'Cinsiyet seçimi zorunludur.');
   const igClean = String(instagram).trim().replace(/^@+/, '');
   // Mükerrer kontrol: aynı Instagram (veya telefon) zaten kayıtlıysa yeni kayıt AÇMA.
   const igN = igNorm(igClean);
@@ -686,6 +688,7 @@ router.post('/uye/:slug', asyncHandler(async (req: Request, res: Response) => {
     // Otomatik oluşmuş kayıt (canlı yayın/online sipariş) -> üyeliği tamamla, mükerrer kayıt açma.
     const patch: any = { not: 'Üyelik formu' };
     if (igClean) patch.instagram = igClean;
+    if (!existing.cinsiyet && cinsiyetClean) patch.cinsiyet = cinsiyetClean;
     if (!existing.telefon && telefon) patch.telefon = telefon;
     if ((!existing.ad || igNorm(existing.ad) === igNorm(existing.instagram || '')) && ad) patch.ad = ad;
     if (!existing.adres && adres) patch.adres = adres;
@@ -699,7 +702,7 @@ router.post('/uye/:slug', asyncHandler(async (req: Request, res: Response) => {
   const igFmt = igClean.toLowerCase().replace(/^@+/, '').trim();
   const igFormatGecerli = /^[a-z0-9._]{1,30}$/.test(igFmt) && !/\.\./.test(igFmt) && !igFmt.startsWith('.') && !igFmt.endsWith('.');
   if (!igFormatGecerli) throw new ApiError(422, `"${igClean}" geçerli bir Instagram kullanıcı adı değil. Sadece harf, rakam, nokta ve alt çizgi kullanın (örn. kullanici_adi).`);
-  const customer = await prisma.customer.create({ data: { tenantId, musteriNo: 1000 + mevcutlar.length + 1, ad, instagram: igClean, telefon, adres: adres || null, not: 'Üyelik formu' } });
+  const customer = await prisma.customer.create({ data: { tenantId, musteriNo: 1000 + mevcutlar.length + 1, ad, instagram: igClean, telefon, cinsiyet: cinsiyetClean, adres: adres || null, not: 'Üyelik formu' } });
   await promoteReserved(tenantId, customer);
   res.status(201).json({ ok: true });
 }));
@@ -717,9 +720,22 @@ router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => 
   const prods = ids.length ? await prisma.product.findMany({ where: { tenantId: cart.tenantId, id: { in: ids } }, select: { id: true, images: true, barkod: true, salesCode: true, sku: true } }) : [];
   const pMap = new Map(prods.map((p) => [p.id, p]));
   const itemsWithImg = items.map((it) => { const p: any = pMap.get(it.productId); return { ...it, img: (Array.isArray(p?.images) ? (p.images as any)[0] : '') || '', barkod: p?.barkod || '', salesCode: p?.salesCode || '', sku: p?.sku || '' }; });
-  // Öneriler (canlı yayına özel fırsatlar)
-  const oneriRaw = await prisma.product.findMany({ where: { tenantId: cart.tenantId, aktif: true, stokAdeti: { gt: 0 }, id: { notIn: ids.length ? ids : ['_'] } }, orderBy: [{ oneCikan: 'desc' }, { createdAt: 'desc' }], take: 8, include: { variations: true } });
-  const oneriler = oneriRaw.map((p) => ({ id: p.id, ad: p.ad, fiyat: p.satisFiyat, eskiFiyat: p.eskiFiyat, img: (Array.isArray(p.images) ? (p.images as any)[0] : '') || '', stok: p.stokAdeti, bedenler: (p.variations || []).filter((v) => v.stok > 0).map((v) => v.deger) }));
+  // Öneriler (canlı yayına özel fırsatlar) — admin'den aç/kapa + elle seçim
+  const oneriCfg: any = (setting?.config as any) || {};
+  const oneriEnabled = oneriCfg.oneriEnabled !== false; // varsayılan açık
+  const oneriSecili: string[] = Array.isArray(oneriCfg.oneriProductIds) ? oneriCfg.oneriProductIds.filter(Boolean) : [];
+  let oneriRaw: any[] = [];
+  if (oneriEnabled) {
+    if (oneriSecili.length) {
+      const seciliIds = oneriSecili.filter((id) => !ids.includes(id));
+      oneriRaw = seciliIds.length
+        ? await prisma.product.findMany({ where: { tenantId: cart.tenantId, aktif: true, stokAdeti: { gt: 0 }, id: { in: seciliIds } }, include: { variations: true } })
+        : [];
+    } else {
+      oneriRaw = await prisma.product.findMany({ where: { tenantId: cart.tenantId, aktif: true, stokAdeti: { gt: 0 }, id: { notIn: ids.length ? ids : ['_'] } }, orderBy: [{ oneCikan: 'desc' }, { createdAt: 'desc' }], take: 8, include: { variations: true } });
+    }
+  }
+  const oneriler = oneriRaw.map((p) => ({ id: p.id, ad: p.ad, fiyat: p.satisFiyat, eskiFiyat: p.eskiFiyat, img: (Array.isArray(p.images) ? (p.images as any)[0] : '') || '', stok: p.stokAdeti, bedenler: (p.variations || []).filter((v: any) => v.stok > 0).map((v: any) => v.deger) }));
   res.json({
     magaza: setting?.logoText || tenant?.name || 'Mağaza',
     slug: setting?.slug || null,

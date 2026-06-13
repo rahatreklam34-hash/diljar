@@ -16,9 +16,13 @@ router.put('/settings', asyncHandler(async (req: Request, res: Response) => {
     notify_new: !!b.notify_new,
     notify_approved: !!b.notify_approved,
     notify_shipped: !!b.notify_shipped,
+    notify_cancel: !!b.notify_cancel,
+    notify_lowstock: !!b.notify_lowstock,
     tpl_new: typeof b.tpl_new === 'string' ? b.tpl_new : undefined,
     tpl_approved: typeof b.tpl_approved === 'string' ? b.tpl_approved : undefined,
     tpl_shipped: typeof b.tpl_shipped === 'string' ? b.tpl_shipped : undefined,
+    tpl_cancel: typeof b.tpl_cancel === 'string' ? b.tpl_cancel : undefined,
+    tpl_lowstock: typeof b.tpl_lowstock === 'string' ? b.tpl_lowstock : undefined,
   };
   res.json(await saveNetgsmPrefs(req.tenantId!, prefs));
 }));

@@ -739,6 +739,7 @@ model Customer {
   telefon   String?
   email     String?
   instagram String?
+  cinsiyet  String?
   adres     String?
   not       String?
   bakiye    Float    @default(0)

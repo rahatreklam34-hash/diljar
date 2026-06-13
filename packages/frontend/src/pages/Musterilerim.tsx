@@ -24,7 +24,7 @@ export default function Musterilerim() {
   const [perPage, setPerPage] = useState(10);
   const [modal, setModal] = useState(false);
   const [edit, setEdit] = useState<any | null>(null);
-  const [form, setForm] = useState({ ad: '', telefon: '', email: '', instagram: '', adres: '', not: '' });
+  const [form, setForm] = useState({ ad: '', telefon: '', email: '', instagram: '', cinsiyet: '', adres: '', not: '' });
   const set = (k: string, v: string) => setForm((f) => ({ ...f, [k]: v }));
 
   // Müşteri başına istatistik
@@ -84,7 +84,7 @@ export default function Musterilerim() {
   const from = filtered.length ? (page - 1) * perPage + 1 : 0;
   const to = Math.min(page * perPage, filtered.length);
 
-  const open = (c?: any) => { setEdit(c || null); setForm(c ? { ad: c.ad, telefon: c.telefon || '', email: c.email || '', instagram: c.instagram || '', adres: c.adres || '', not: c.not || '' } : { ad: '', telefon: '', email: '', instagram: '', adres: '', not: '' }); setModal(true); };
+  const open = (c?: any) => { setEdit(c || null); setForm(c ? { ad: c.ad, telefon: c.telefon || '', email: c.email || '', instagram: c.instagram || '', cinsiyet: c.cinsiyet || '', adres: c.adres || '', not: c.not || '' } : { ad: '', telefon: '', email: '', instagram: '', cinsiyet: '', adres: '', not: '' }); setModal(true); };
   const save = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.ad.trim()) { toast.error('Ad zorunlu'); return; }
@@ -94,7 +94,7 @@ export default function Musterilerim() {
 
   const raporIndir = () => {
     const rows = filtered.map(({ c, s }) => ({
-      'Müşteri': c.ad, 'Kullanıcı Adı': c.instagram || '', 'Telefon': c.telefon || '', 'E-posta': c.email || '',
+      'Müşteri': c.ad, 'Kullanıcı Adı': c.instagram || '', 'Cinsiyet': c.cinsiyet || '', 'Telefon': c.telefon || '', 'E-posta': c.email || '',
       'Toplam Alışveriş': s.ciro || 0, 'Sipariş': s.siparis || 0, 'İade Oranı %': Number((s.iadeOrani || 0).toFixed(1)),
       'Bakiye': c.bakiye || 0, 'Risk Grubu': RISK[s.risk || 'dusuk']?.t || '', 'Son Alışveriş': s.sonTarih ? new Date(s.sonTarih).toLocaleString('tr-TR') : '',
     }));
@@ -172,6 +172,7 @@ export default function Musterilerim() {
                           <p className="font-semibold text-slate-800 truncate">{c.ad}</p>
                           {s.vip && <span className="text-[9px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 font-bold">VIP</span>}
                           {isYeni(c) && <span className="text-[9px] px-1.5 py-0.5 rounded bg-sky-100 text-sky-700 font-bold">Yeni</span>}
+                          {c.cinsiyet && <span className={`text-[9px] px-1.5 py-0.5 rounded font-bold ${c.cinsiyet === 'Kadın' ? 'bg-pink-100 text-pink-700' : 'bg-blue-100 text-blue-700'}`}>{c.cinsiyet}</span>}
                         </div>
                         {c.instagram && <p className="text-xs text-slate-400 truncate">{String(c.instagram).replace(/^@/, '')}</p>}
                       </div>
@@ -234,6 +235,12 @@ export default function Musterilerim() {
               <input value={form.instagram} onChange={(e) => set('instagram', e.target.value)} placeholder="Instagram / Kullanıcı adı" className="px-3 py-2 text-sm border border-slate-200 rounded-lg" />
             </div>
             <input value={form.email} onChange={(e) => set('email', e.target.value)} placeholder="E-posta" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-slate-500">Cinsiyet:</span>
+              {(['Kadın', 'Erkek'] as const).map((c) => (
+                <button key={c} type="button" onClick={() => set('cinsiyet', form.cinsiyet === c ? '' : c)} className={`px-3 py-1.5 rounded-lg border text-sm font-medium ${form.cinsiyet === c ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 text-slate-600 hover:border-indigo-400'}`}>{c}</button>
+              ))}
+            </div>
             <input value={form.adres} onChange={(e) => set('adres', e.target.value)} placeholder="Adres" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
             <textarea rows={2} value={form.not} onChange={(e) => set('not', e.target.value)} placeholder="Not" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
             <button type="submit" className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700">Kaydet</button>

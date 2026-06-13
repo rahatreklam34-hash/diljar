@@ -326,9 +326,11 @@ router.patch('/orders/:id', asyncHandler(async (req: Request, res: Response) => 
   const who = await actorName(req.auth?.userId);
   const customLog = typeof req.body?._log === 'string' ? req.body._log : '';
   const manuelIndirim = req.body?.manuelIndirim === true;
+  const iptalNedeni = typeof req.body?.iptalNedeni === 'string' ? req.body.iptalNedeni : '';
   const body = clean(req.body);
   delete (body as any)._log;
   delete (body as any).manuelIndirim;
+  delete (body as any).iptalNedeni;
   // Tahsilat artışında otomatik gelir kaydı (çift kayıt önlenir: gelirKaydedilen takibi)
   let gelirDelta = 0;
   if (body.tahsilat !== undefined) {
@@ -381,16 +383,20 @@ router.patch('/orders/:id', asyncHandler(async (req: Request, res: Response) => 
   }
   // Sipariş bildirimi (NetGSM SMS) — durum/kargo değişiminde, sessiz
   try {
-    let event: 'approved' | 'shipped' | null = null;
+    let event: 'approved' | 'shipped' | 'cancel' | 'lowstock' | null = null;
     const yeni = updated.durum;
     if ((yeni === 'hazirlaniyor' || yeni === 'onaylandi') && yeni !== found.durum) event = 'approved';
     if (yeni === 'kargoda' && yeni !== found.durum) event = 'shipped';
     if (updated.kargoTakip && updated.kargoTakip !== (found as any).kargoTakip) event = 'shipped';
+    if (yeni === 'iptal' && yeni !== found.durum) event = (iptalNedeni === 'yetersiz_stok') ? 'lowstock' : 'cancel';
     if (event && updated.customerId) {
-      const cst = await prisma.customer.findFirst({ where: { id: updated.customerId, tenantId: req.tenantId! }, select: { telefon: true, ad: true } });
+      const cst = await prisma.customer.findFirst({ where: { id: updated.customerId, tenantId: req.tenantId! }, select: { telefon: true, ad: true, instagram: true } });
       const tnt = await prisma.tenant.findUnique({ where: { id: req.tenantId! }, select: { name: true } });
       const no2 = updated.orderNo ? `${updated.orderYil}-${String(updated.orderNo).padStart(3, '0')}` : updated.id.slice(-5);
-      void notifyOrderSms(req.tenantId!, event, { phone: cst?.telefon, ad: cst?.ad, no: no2, tutar: updated.toplam, kargo: (updated as any).kargoFirmasi || '', takip: (updated as any).kargoTakip || '', firma: tnt?.name || '' });
+      const oItems: any[] = Array.isArray(updated.items) ? (updated.items as any[]) : [];
+      const ilk = oItems[0] || {};
+      const durumMap: Record<string, string> = { onaylandi: 'Onaylandı', hazirlaniyor: 'Hazırlanıyor', kargoda: 'Kargoda', iptal: 'İptal' };
+      void notifyOrderSms(req.tenantId!, event, { phone: cst?.telefon, ad: cst?.ad, no: no2, tutar: updated.toplam, kargo: (updated as any).kargoFirmasi || '', takip: (updated as any).kargoTakip || '', firma: tnt?.name || '', kullaniciadi: cst?.instagram || '', instagram: cst?.instagram || '', durum: durumMap[yeni] || yeni, urun: ilk.ad || '', beden: ilk.beden || ilk.varyasyon || '' });
     }
   } catch { /* SMS hatasi siparisi etkilemez */ }
   res.json(updated);

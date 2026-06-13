@@ -5,11 +5,11 @@ import api, { apiErrorMessage } from '../lib/api';
 
 export default function UyeOl() {
   const { slug } = useParams();
-  const [form, setForm] = useState({ ad: '', instagram: '', telefon: '', kod: '' });
+  const [form, setForm] = useState({ ad: '', instagram: '', telefon: '', cinsiyet: '', kod: '' });
   const [done, setDone] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [errField, setErrField] = useState<'ad' | 'instagram' | 'telefon' | 'kod' | ''>('');
+  const [errField, setErrField] = useState<'ad' | 'instagram' | 'telefon' | 'cinsiyet' | 'kod' | ''>('');
   const [step, setStep] = useState<'form' | 'kod'>('form');
   const [info, setInfo] = useState('');
   const [bekle, setBekle] = useState(0); // tekrar gönderme sayacı (sn)
@@ -38,6 +38,7 @@ export default function UyeOl() {
     if (!form.ad.trim()) { setErr('Ad soyad zorunludur.'); setErrField('ad'); return; }
     if (!form.instagram.trim()) { setErr('Instagram kullanıcı adı zorunludur.'); setErrField('instagram'); return; }
     if (!form.telefon.trim()) { setErr('Telefon zorunludur.'); setErrField('telefon'); return; }
+    if (!form.cinsiyet) { setErr('Cinsiyet seçimi zorunludur.'); setErrField('cinsiyet'); return; }
     setBusy(true);
     try {
       const { data } = await api.post(`/public/uye/${slug}/kod-gonder`, { telefon: form.telefon, instagram: form.instagram });
@@ -125,6 +126,23 @@ export default function UyeOl() {
           <label className="block text-sm text-slate-600 mb-1">Telefon *</label>
           <input type="tel" value={form.telefon} onChange={(e) => set('telefon', e.target.value)} disabled={step === 'kod'} placeholder="05XX XXX XX XX" className={inputCls('telefon')} />
           {errField === 'telefon' && <p className="flex items-center gap-1 text-[12px] text-red-600 mt-1"><AlertCircle size={13} /> {err}</p>}
+        </div>
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">Cinsiyet *</label>
+          <div className="grid grid-cols-2 gap-2">
+            {(['Kadın', 'Erkek'] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                disabled={step === 'kod'}
+                onClick={() => set('cinsiyet', c)}
+                className={`py-2.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-60 ${form.cinsiyet === c ? 'bg-indigo-600 text-white border-indigo-600' : (errField === 'cinsiyet' ? 'border-red-400 bg-red-50/40 text-slate-600' : 'border-slate-200 text-slate-600 hover:border-indigo-400')}`}
+              >
+                {c}
+              </button>
+            ))}
+          </div>
+          {errField === 'cinsiyet' && <p className="flex items-center gap-1 text-[12px] text-red-600 mt-1"><AlertCircle size={13} /> {err}</p>}
         </div>
 
         {step === 'kod' && (

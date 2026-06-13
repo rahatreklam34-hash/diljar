@@ -728,10 +728,28 @@ export default function OnlineMagaza() {
                 <input type="checkbox" checked={!!cfg[k]} onChange={(e) => setCfg(k, e.target.checked)} className="w-4 h-4" />
               </label>
             ))}
+            <div className="mt-4 pt-4 border-t border-slate-100 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <span><span className="block text-sm font-medium text-slate-700">Sepette ürün önerisi göster</span><span className="block text-[11px] text-slate-400">Müşterinin sepet/yayın sayfasında "Bunlar da ilgini çekebilir" önerileri</span></span>
+                <input type="checkbox" checked={cfg.oneriEnabled !== false} onChange={(e) => setCfg('oneriEnabled', e.target.checked)} className="w-4 h-4" />
+              </div>
+              {cfg.oneriEnabled !== false && (
+                <div>
+                  <label className="block text-xs text-slate-500 mb-1.5">Önerilecek ürünler (boş = otomatik çok satanlar)</label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {(cfg.oneriProductIds || []).map((id: string) => { const p = onlineProducts.find((x) => x.id === id); if (!p) return null; return (
+                      <span key={id} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-xs px-2 py-1 rounded-lg">{p.ad}<button onClick={() => setCfg('oneriProductIds', (cfg.oneriProductIds || []).filter((x: string) => x !== id))}><X size={12} /></button></span>
+                    ); })}
+                  </div>
+                  <select value="" onChange={(e) => { const v = e.target.value; if (v && !(cfg.oneriProductIds || []).includes(v)) setCfg('oneriProductIds', [...(cfg.oneriProductIds || []), v]); }} className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg">
+                    <option value="">+ Ürün ekle...</option>
+                    {onlineProducts.filter((p) => !(cfg.oneriProductIds || []).includes(p.id)).map((p) => <option key={p.id} value={p.id}>{p.ad}</option>)}
+                  </select>
+                </div>
+              )}
+            </div>
           </div>
           )}
-
-          {/* ── Politikalar ── */}
           {aTab === 'politika' && (
           <div className="space-y-5">
           <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-3">
