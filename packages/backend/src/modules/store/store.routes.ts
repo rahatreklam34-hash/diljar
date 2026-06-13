@@ -4,6 +4,7 @@ import { asyncHandler, ApiError } from '../../lib/http';
 import { promoteReserved, campaignAdjust, recalcOpenCarts } from './live.routes';
 import { notifyOrderSms } from '../sms/netgsm.service';
 import { enhanceProductImage } from '../../lib/fal';
+import { env } from '../../config/env';
 
 const router = Router();
 
@@ -314,7 +315,7 @@ router.post('/orders', asyncHandler(async (req: Request, res: Response) => {
       const cst = await prisma.customer.findFirst({ where: { id: created.customerId, tenantId: req.tenantId! }, select: { telefon: true, ad: true } });
       const tnt = await prisma.tenant.findUnique({ where: { id: req.tenantId! }, select: { name: true } });
       const no2 = `${created.orderYil}-${String(created.orderNo).padStart(3, '0')}`;
-      void notifyOrderSms(req.tenantId!, 'new', { phone: cst?.telefon, ad: cst?.ad, no: no2, tutar: created.toplam, firma: tnt?.name || '' });
+      void notifyOrderSms(req.tenantId!, 'new', { phone: cst?.telefon, ad: cst?.ad, no: no2, tutar: created.toplam, firma: tnt?.name || '', sepetLink: created.token ? `${env.APP_DOMAIN}/sepet/${created.token}` : undefined });
     }
   } catch { /* */ }
   res.status(201).json(created);
@@ -396,7 +397,7 @@ router.patch('/orders/:id', asyncHandler(async (req: Request, res: Response) => 
       const oItems: any[] = Array.isArray(updated.items) ? (updated.items as any[]) : [];
       const ilk = oItems[0] || {};
       const durumMap: Record<string, string> = { onaylandi: 'Onaylandı', hazirlaniyor: 'Hazırlanıyor', kargoda: 'Kargoda', iptal: 'İptal' };
-      void notifyOrderSms(req.tenantId!, event, { phone: cst?.telefon, ad: cst?.ad, no: no2, tutar: updated.toplam, kargo: (updated as any).kargoFirmasi || '', takip: (updated as any).kargoTakip || '', firma: tnt?.name || '', kullaniciadi: cst?.instagram || '', instagram: cst?.instagram || '', durum: durumMap[yeni] || yeni, urun: ilk.ad || '', beden: ilk.beden || ilk.varyasyon || '' });
+      void notifyOrderSms(req.tenantId!, event, { phone: cst?.telefon, ad: cst?.ad, no: no2, tutar: updated.toplam, kargo: (updated as any).kargoFirmasi || '', takip: (updated as any).kargoTakip || '', firma: tnt?.name || '', kullaniciadi: cst?.instagram || '', instagram: cst?.instagram || '', durum: durumMap[yeni] || yeni, urun: ilk.ad || '', beden: ilk.beden || ilk.varyasyon || '', sepetLink: updated.token ? `${env.APP_DOMAIN}/sepet/${updated.token}` : undefined });
     }
   } catch { /* SMS hatasi siparisi etkilemez */ }
   res.json(updated);

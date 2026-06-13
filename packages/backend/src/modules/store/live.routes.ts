@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { asyncHandler, ApiError } from '../../lib/http';
 import { nextOrderNo, logEvent } from './store.routes';
 import { getFbFeed, extractVideoId, clearFbState, getIgFeed, clearIgState } from './fbLive';
+import { notifyOrderSms } from '../sms/netgsm.service';
 import { env } from '../../config/env';
 
 const router = Router();
@@ -133,6 +134,7 @@ export async function placeLiveOrder(t: string, payload: any) {
   const customer = await findCustomerByHandle(t, user || '');
 
   let logCartId: string | null = null; let logAd = '';
+  let smsInfo: { token: string; no: string; tutar: number; urun: string; beden: string } | null = null;
   const lo = await prisma.$transaction(async (tx) => {
     let durum = 'riskli'; let tutar = 0; let alis = 0; let urunAd = urun || kod; let storeOrderId: string | null = null;
     let drop = false; let supplierId: string | null = null; let gorsel: string | null = null;
@@ -194,10 +196,27 @@ export async function placeLiveOrder(t: string, payload: any) {
       storeOrderId = cart.id;
       await tx.liveOrder.update({ where: { id: lord.id }, data: { storeOrderId } });
       logCartId = cart.id; logAd = urunAd + (beden ? ` (${beden})` : '');
+      // Sadece kayitli musteri eslesip onaylandiginda onay SMS'i hazirla
+      if (durum === 'onaylandi' && customer?.telefon) {
+        const cno = (cart.orderNo != null) ? `${cart.orderYil}-${String(cart.orderNo).padStart(3, '0')}` : String(cart.id).slice(-5);
+        smsInfo = { token: cart.token, no: cno, tutar: tutar, urun: urunAd, beden: beden || variation || '' };
+      }
     }
     return lord;
   });
   if (logCartId) await logEvent(t, logCartId, user || 'Canlı Yayın', 'Ürün eklendi (canlı yayın)', logAd);
+  // Onay SMS'i (sepet linki ile) — transaction disinda, sessiz
+  if (smsInfo && customer?.telefon) {
+    try {
+      const tnt = await prisma.tenant.findUnique({ where: { id: t }, select: { name: true } });
+      const link = `${env.APP_DOMAIN}/sepet/${(smsInfo as any).token}`;
+      void notifyOrderSms(t, 'approved', {
+        phone: customer.telefon, ad: customer.ad, no: (smsInfo as any).no, tutar: (smsInfo as any).tutar,
+        firma: tnt?.name || '', kullaniciadi: customer.instagram || '', instagram: customer.instagram || '',
+        durum: 'Onaylandı', urun: (smsInfo as any).urun, beden: (smsInfo as any).beden, sepetLink: link,
+      });
+    } catch (e: any) { console.error('[live SMS]', String(e?.message || e)); }
+  }
   return lo;
 }
 
@@ -344,6 +363,7 @@ export async function promoteReserved(tenantId: string, customer: { id: string; 
   const handles = [customer.instagram, customer.ad].filter(Boolean).map((x) => norm(x as string));
   const tel = (customer.telefon || '').replace(/\D/g, '');
   const reserved = await prisma.liveOrder.findMany({ where: { tenantId, durum: 'rezerve' } });
+  const promotedCarts = new Set<string>();
   for (const lo of reserved) {
     const h = norm(lo.user);
     if (handles.includes(h) || (tel.length >= 7 && lo.user.replace(/\D/g, '') === tel)) {
@@ -355,9 +375,29 @@ export async function promoteReserved(tenantId: string, customer: { id: string; 
           const items = (Array.isArray(cart.items) ? (cart.items as any) : []).map((it: any) => it.liveOrderId === lo.id ? { ...it, durum: 'onaylandi' } : it);
           const adj = await campaignAdjust(prisma, tenantId, items);
           await prisma.storeOrder.update({ where: { id: cart.id }, data: { items, araToplam: adj.araToplam, indirim: adj.indirim, kampanyalar: adj.kampanyalar, toplam: Math.max(0, adj.toplam + (cart.kargoUcreti || 0)), customerId: customer.id } });
+          promotedCarts.add(cart.id);
         }
       }
     }
+  }
+  // Onaylanan her sepet icin tek bir onay SMS'i (sepet linki ile) — sessiz
+  if (promotedCarts.size && customer.telefon) {
+    try {
+      const tnt = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+      for (const cid of promotedCarts) {
+        const cart = await prisma.storeOrder.findFirst({ where: { id: cid, tenantId } });
+        if (!cart) continue;
+        const no = (cart.orderNo != null) ? `${cart.orderYil}-${String(cart.orderNo).padStart(3, '0')}` : String(cart.id).slice(-5);
+        const oItems: any[] = Array.isArray(cart.items) ? (cart.items as any[]) : [];
+        const ilk = oItems[0] || {};
+        void notifyOrderSms(tenantId, 'approved', {
+          phone: customer.telefon, ad: customer.ad, no, tutar: cart.toplam, firma: tnt?.name || '',
+          kullaniciadi: customer.instagram || '', instagram: customer.instagram || '', durum: 'Onaylandı',
+          urun: ilk.ad || '', beden: ilk.beden || ilk.varyasyon || '',
+          sepetLink: cart.token ? `${env.APP_DOMAIN}/sepet/${cart.token}` : undefined,
+        });
+      }
+    } catch (e: any) { console.error('[promote SMS]', String(e?.message || e)); }
   }
 }
 

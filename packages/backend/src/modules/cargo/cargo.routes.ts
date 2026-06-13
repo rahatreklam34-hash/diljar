@@ -3,6 +3,7 @@ import { prisma } from '../../lib/prisma';
 import { asyncHandler, ApiError } from '../../lib/http';
 import { createShipment, getGonderici, trackingUrl } from './cargo.service';
 import { notifyOrderSms } from '../sms/netgsm.service';
+import { env } from '../../config/env';
 
 const router = Router();
 
@@ -61,7 +62,7 @@ router.post('/shipment', asyncHandler(async (req: Request, res: Response) => {
   try {
     const tnt = await prisma.tenant.findUnique({ where: { id: req.tenantId! }, select: { name: true } });
     const no2 = order.orderNo ? `${order.orderYil}-${String(order.orderNo).padStart(3, '0')}` : order.id.slice(-5);
-    void notifyOrderSms(req.tenantId!, 'shipped', { phone: order.customer?.telefon, ad: order.customer?.ad, no: no2, tutar: order.toplam, kargo: firmaLabel, takip: result.trackingNo, firma: tnt?.name || '' });
+    void notifyOrderSms(req.tenantId!, 'shipped', { phone: order.customer?.telefon, ad: order.customer?.ad, no: no2, tutar: order.toplam, kargo: firmaLabel, takip: result.trackingNo, firma: tnt?.name || '', sepetLink: (order as any).token ? `${env.APP_DOMAIN}/sepet/${(order as any).token}` : undefined });
   } catch { /* */ }
 
   res.json({ ok: true, trackingNo: result.trackingNo, trackingUrl: result.trackingUrl || trackingUrl(provider, result.trackingNo), manual: result.manual, durum: updated.durum, kargoFirmasi: firmaLabel });

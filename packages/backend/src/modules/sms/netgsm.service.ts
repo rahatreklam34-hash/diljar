@@ -196,7 +196,7 @@ function renderTpl(tpl: string, vars: Record<string, string>): string {
 export async function notifyOrderSms(
   tenantId: string,
   event: 'new' | 'approved' | 'shipped' | 'cancel' | 'lowstock',
-  data: { phone?: string | null; ad?: string | null; no?: string; tutar?: number; kargo?: string; takip?: string; firma?: string; kullaniciadi?: string; durum?: string; beden?: string; urun?: string; instagram?: string }
+  data: { phone?: string | null; ad?: string | null; no?: string; tutar?: number; kargo?: string; takip?: string; firma?: string; kullaniciadi?: string; durum?: string; beden?: string; urun?: string; instagram?: string; sepetLink?: string }
 ): Promise<void> {
   try {
     if (!data.phone) return;
@@ -218,9 +218,13 @@ export async function notifyOrderSms(
       beden: data.beden || '',
       urun: data.urun || '',
       instagram: data.instagram || '',
+      sepet: data.sepetLink || '',
     }).trim();
     if (!msg) return;
-    await sendSms(tenantId, [data.phone], msg).catch((e) => console.error('[SMS notify]', String(e?.message || e)));
+    // Her SMS altina sepet linki ekle (sablonda zaten yoksa)
+    let finalMsg = msg;
+    if (data.sepetLink && !finalMsg.includes(data.sepetLink)) finalMsg += `\nSepetiniz: ${data.sepetLink}`;
+    await sendSms(tenantId, [data.phone], finalMsg).catch((e) => console.error('[SMS notify]', String(e?.message || e)));
   } catch (e: any) {
     console.error('[SMS notify error]', String(e?.message || e));
   }
