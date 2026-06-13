@@ -25,6 +25,10 @@ export default function UyeOl() {
     if (errField === k) { setErr(''); setErrField(''); }
   };
 
+  // Kayıt sonrası açılacak WhatsApp linki (kaydolan IG kullanıcı adı + telefon ile)
+  const WA_NUMARA = '905334413472';
+  const waUrl = () => `https://wa.me/${WA_NUMARA}?text=${encodeURIComponent(`Kayıt oldum ✅\nInstagram: @${form.instagram}\nTelefon: ${form.telefon}`)}`;
+
   // Instagram kullanıcı adı: küçük harf, Türkçe karakter yok, @ yok, sadece a-z 0-9 . _
   const cleanIg = (v: string) => v
     .toLowerCase()
@@ -58,10 +62,16 @@ export default function UyeOl() {
     setErr(''); setErrField('');
     if (!form.kod.trim()) { setErr('Doğrulama kodunu girin.'); setErrField('kod'); return; }
     setBusy(true);
+    // Popup engelini aşmak için WhatsApp sekmesini gesture anında aç, başarıda yönlendir
+    const waWin = window.open('', '_blank');
     try {
       await api.post(`/public/uye/${slug}`, form);
       setDone(true);
+      // Kayıt başarılı → WhatsApp'ı kayıt bilgisiyle otomatik aç
+      const url = waUrl();
+      if (waWin) { waWin.location.href = url; } else { window.location.href = url; }
     } catch (e) {
+      if (waWin) { try { waWin.close(); } catch { /* */ } }
       const msg = apiErrorMessage(e);
       setErr(msg);
       if (/kod|doğrulama|dogrulama/i.test(msg)) setErrField('kod');
@@ -76,6 +86,15 @@ export default function UyeOl() {
         <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4"><CheckCircle2 className="text-green-600" size={30} /></div>
         <h1 className="text-xl font-bold text-slate-800">Üyeliğiniz oluşturuldu!</h1>
         <p className="text-slate-500 mt-2 text-sm">Artık canlı yayında verdiğiniz siparişler otomatik onaylanacaktır. Teşekkürler 🙏</p>
+        <a
+          href={waUrl()}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-5 inline-flex items-center justify-center gap-2 w-full bg-green-500 text-white py-2.5 rounded-lg font-medium hover:bg-green-600"
+        >
+          WhatsApp ile bildir
+        </a>
+        <p className="text-[11px] text-slate-400 mt-2">WhatsApp otomatik açılmadıysa bu butona dokunun.</p>
       </div>
     </div>
   );
