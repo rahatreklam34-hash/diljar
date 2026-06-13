@@ -146,19 +146,30 @@ export async function sendSms(tenantId: string, rawNumbers: string[], message: s
   };
 }
 
-// Kredi/bakiye + kimlik dogrulama testi
+// Kimlik dogrulama testi — REST v2 msgheader ucu (SMS gondermeden dogrular)
 export async function checkNetgsm(tenantId: string): Promise<{ ok: boolean; balance?: string; message: string }> {
   const cfg = await loadConfig(tenantId, true);
-  const path = `/balance/list/get?usercode=${encodeURIComponent(cfg.usercode)}&password=${encodeURIComponent(cfg.password)}`;
+  const auth = Buffer.from(`${cfg.usercode}:${cfg.password}`).toString('base64');
   try {
-    const r = await httpsReq({ method: 'GET', host: 'api.netgsm.com.tr', path });
-    const t = (r.text || '').trim();
-    if (r.status !== 200) return { ok: false, message: `NetGSM kimlik dogrulama basarisiz (HTTP ${r.status}). Kullanici kodu/sifre hatali olabilir.` };
-    // Hata kodu donduyse (30/40/70...) basariz
-    const first = t.split(/\s+/)[0];
-    if (CODE_MSG[first] && first !== '00') return { ok: false, message: CODE_MSG[first] };
-    if (/^(30|40|60|70|100)$/.test(first)) return { ok: false, message: CODE_MSG[first] || `Hata kodu: ${first}` };
-    return { ok: true, balance: t.slice(0, 120), message: 'NetGSM baglantisi basarili.' };
+    const r = await httpsReq({
+      method: 'GET', host: 'api.netgsm.com.tr', path: '/sms/rest/v2/msgheader',
+      headers: { Authorization: `Basic ${auth}` },
+    });
+    let j: any = null; try { j = JSON.parse(r.text); } catch { j = null; }
+    const code = (j && (j.code ?? j.Code))?.toString() || (r.status === 200 ? '00' : String(r.status));
+    if (code !== '00') {
+      return { ok: false, message: CODE_MSG[code] || (j?.description || `NetGSM kimlik dogrulama basarisiz (kod: ${code}).`) };
+    }
+    const headers: string[] = Array.isArray(j?.msgheaders) ? j.msgheaders : [];
+    // Kayitli gonderici basligi sistemde tanimli mi?
+    if (cfg.msgheader && headers.length && !headers.some((h) => (h || '').trim().toLowerCase() === cfg.msgheader.toLowerCase())) {
+      return { ok: false, message: `Gonderici basligi "${cfg.msgheader}" sisteminizde tanimli degil. Tanimli basliklar: ${headers.join(', ')}` };
+    }
+    return {
+      ok: true,
+      balance: headers.length ? `Basliklar: ${headers.join(', ')}` : undefined,
+      message: 'NetGSM baglantisi basarili.',
+    };
   } catch (e: any) {
     return { ok: false, message: e?.message || 'NetGSM baglantisi kurulamadi.' };
   }
