@@ -53,6 +53,7 @@ export default function CanliYayinSatis() {
   const [flash, setFlash] = useState<Record<string, { price: number; exp: number }>>({});
   const [barHistory, setBarHistory] = useState<any[]>([]);
   const [barHistModal, setBarHistModal] = useState(false);
+  const [iptalAday, setIptalAday] = useState<any>(null);
   const katalogGoster = ((storeSetting?.config as any)?.canliKatalogGoster) !== false; // varsayılan açık
   const setKatalogGoster = async (val: boolean) => {
     try { await api.put('/store/settings', { config: { ...((storeSetting?.config as any) || {}), canliKatalogGoster: val } }); toast.success(val ? 'Yayındaki ürünler katalogda gösterilecek' : 'Yayındaki ürünler katalogda gizlenecek'); reload(); }
@@ -406,9 +407,14 @@ export default function CanliYayinSatis() {
     toast.success(`${islenen} sipariş işlendi${atlanan ? ` · ${atlanan} satır atlandı (geçersiz)` : ''}`);
   };
 
-  const iptalEt = async (o: any) => {
+  const iptalEt = (o: any) => {
     if (o.durum === 'iptal') return;
-    try { const r = await api.post(`/store/live/order/${o.id}/iptal`); setOrders(r.data.orders || []); loadFree(); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
+    setIptalAday(o);
+  };
+  const confirmIptal = async () => {
+    const o = iptalAday; if (!o) return;
+    setIptalAday(null);
+    try { const r = await api.post(`/store/live/order/${o.id}/iptal`); setOrders(r.data.orders || []); loadFree(); reload(); toast.success('Sipariş iptal edildi'); } catch (e) { toast.error(apiErrorMessage(e)); }
   };
 
   // İstatistikler (onaylanan = ciro; iptal haric). Ciro/kâr kampanya indirimi düşülmüş NET değerdir.
@@ -923,6 +929,23 @@ export default function CanliYayinSatis() {
       </div>
 
       {/* Barkod ürün bilgisi artık barkod kutusunun altında inline gösteriliyor (popup kaldırıldı) */}
+
+      {/* Sipariş iptal onay modalı */}
+      {iptalAday && (
+        <div className="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 p-5" onClick={() => setIptalAday(null)}>
+          <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-white rounded-3xl p-6 text-center space-y-4">
+            <div className="w-14 h-14 rounded-full bg-rose-50 flex items-center justify-center mx-auto"><Trash2 size={24} className="text-rose-500" /></div>
+            <div>
+              <h3 className="font-bold text-slate-800 text-lg">İptal etmek istediğinize emin misiniz?</h3>
+              <p className="text-sm text-slate-500 mt-1"><b>{iptalAday.user}</b> · {iptalAday.urun}{iptalAday.beden ? ` (${iptalAday.beden})` : ''} siparişi iptal edilecek ve müşterinin sepetinden de çıkarılacak.</p>
+            </div>
+            <div className="flex gap-2.5">
+              <button onClick={() => setIptalAday(null)} className="flex-1 bg-white border border-slate-200 text-slate-600 rounded-2xl py-3 font-semibold hover:bg-slate-50">Hayır</button>
+              <button onClick={confirmIptal} className="flex-1 bg-rose-500 text-white rounded-2xl py-3 font-bold hover:bg-rose-600">Evet, İptal Et</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Okutulan barkod geçmişi — stok kartları modalı */}
       {barHistModal && (

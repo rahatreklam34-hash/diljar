@@ -81,14 +81,29 @@ export async function logEvent(tenantId: string, orderId: string, kullanici: str
 // Iptal/silmede stoga geri don (sadece stogu dusurulmus kalemler)
 async function returnStock(tx: any, tenantId: string, items: any[]) {
   for (const it of items || []) {
-    if (!it?.productId || !it?.stokDusuldu) continue;
+    // 1) Bağlı canlı yayın satırını HER DURUMDA iptal et (drop/stoksuz/productId'siz dahil)
+    if (it?.liveOrderId) await tx.liveOrder.updateMany({ where: { id: it.liveOrderId, tenantId }, data: { durum: 'iptal', storeOrderId: null } });
+    if (!it?.stokDusuldu) continue;
     const adet = Number(it.adet) || 1;
-    if (it.varyasyon) {
-      const v = await tx.productVariation.findFirst({ where: { productId: it.productId, tenantId, deger: it.varyasyon } });
-      if (v) await tx.productVariation.update({ where: { id: v.id }, data: { stok: { increment: adet } } });
+    // 2) Sahip olunan ürün stoğunu iade et
+    if (it.productId) {
+      if (it.varyasyon) {
+        const v = await tx.productVariation.findFirst({ where: { productId: it.productId, tenantId, deger: it.varyasyon } });
+        if (v) await tx.productVariation.update({ where: { id: v.id }, data: { stok: { increment: adet } } });
+      }
+      await tx.product.updateMany({ where: { id: it.productId, tenantId }, data: { stokAdeti: { increment: adet } } });
+    } else if (it.freeProductId) {
+      // 3) Drop (freeProduct) stoğunu iade et — canlı iptal ile simetrik
+      const fp = await tx.freeProduct.findFirst({ where: { id: it.freeProductId, tenantId } });
+      if (fp) {
+        const vars: any[] = Array.isArray(fp.variations) ? (fp.variations as any[]) : [];
+        const target = it.varyasyon || null;
+        if (target) {
+          const idx = vars.findIndex((v) => v.deger === target);
+          if (idx >= 0) { vars[idx].stok = (Number(vars[idx].stok) || 0) + adet; await tx.freeProduct.update({ where: { id: fp.id }, data: { variations: vars } }); }
+        }
+      }
     }
-    await tx.product.updateMany({ where: { id: it.productId, tenantId }, data: { stokAdeti: { increment: adet } } });
-    if (it.liveOrderId) await tx.liveOrder.updateMany({ where: { id: it.liveOrderId, tenantId }, data: { durum: 'iptal', storeOrderId: null } });
   }
 }
 
