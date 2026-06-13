@@ -470,6 +470,11 @@ model LiveStream {
   fbToken   String?
   fbSince   DateTime?
 
+  // Instagram canlı yayın yorum entegrasyonu
+  igUserId  String?
+  igToken   String?
+  igSince   DateTime?
+
   orders LiveOrder[]
 
   @@index([tenantId])

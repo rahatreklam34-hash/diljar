@@ -39,6 +39,10 @@ export default function CanliYayinSatis() {
   const [fbModal, setFbModal] = useState(false);
   const [fbForm, setFbForm] = useState({ videoId: '', token: '' });
   const [fbBusy, setFbBusy] = useState(false);
+  const [igStatus, setIgStatus] = useState<{ connected: boolean; igUserId: string | null; feed: any[] }>({ connected: false, igUserId: null, feed: [] });
+  const [igModal, setIgModal] = useState(false);
+  const [igForm, setIgForm] = useState({ token: '' });
+  const [igBusy, setIgBusy] = useState(false);
   const [imgZoom, setImgZoom] = useState('');
   const [leftTab, setLeftTab] = useState<'manuel' | 'sohbet'>('manuel');
   const [discForm, setDiscForm] = useState({ price: '', dakika: '' });
@@ -127,6 +131,27 @@ export default function CanliYayinSatis() {
     finally { setFbBusy(false); }
   };
 
+  // Instagram canlı yorum durumu + akışı
+  const loadIg = async () => {
+    try { const r = await api.get('/store/live/ig/status'); setIgStatus(r.data); } catch { /* */ }
+  };
+  const igConnect = async () => {
+    if (!igForm.token.trim()) { toast.error('Instagram erişim token gerekli'); return; }
+    setIgBusy(true);
+    try {
+      await api.post('/store/live/ig/connect', { token: igForm.token.trim() });
+      toast.success('Instagram yayını bağlandı — yorumlar otomatik çekilecek');
+      setIgModal(false); setIgForm({ token: '' }); loadIg();
+    } catch (e) { toast.error(apiErrorMessage(e)); }
+    finally { setIgBusy(false); }
+  };
+  const igDisconnect = async () => {
+    setIgBusy(true);
+    try { await api.post('/store/live/ig/disconnect'); toast.success('Instagram bağlantısı kesildi'); loadIg(); }
+    catch (e) { toast.error(apiErrorMessage(e)); }
+    finally { setIgBusy(false); }
+  };
+
   // Depo + drop ürünleri birleşik liste (arama / barkod / satış bu liste üzerinden)
   const allProds = useMemo(() => [...freeProducts, ...products], [freeProducts, products]);
 
@@ -134,7 +159,8 @@ export default function CanliYayinSatis() {
   useEffect(() => {
     if (!stream) return;
     loadFb();
-    const t = setInterval(() => { loadActive(); loadFree(); loadFb(); reload(); }, 4000);
+    loadIg();
+    const t = setInterval(() => { loadActive(); loadFree(); loadFb(); loadIg(); reload(); }, 4000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream]);
@@ -544,6 +570,9 @@ export default function CanliYayinSatis() {
           {stream && (
             <button onClick={() => setFbModal(true)} className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${fbStatus.connected ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}><Video size={16} /> {fbStatus.connected ? 'FB Bağlı' : 'Facebook'}</button>
           )}
+          {stream && (
+            <button onClick={() => setIgModal(true)} className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${igStatus.connected ? 'bg-pink-600 text-white hover:bg-pink-700' : 'bg-pink-50 text-pink-600 hover:bg-pink-100'}`}><Video size={16} /> {igStatus.connected ? 'IG Bağlı' : 'Instagram'}</button>
+          )}
           {!stream ? (
             <button onClick={startStream} className="inline-flex items-center gap-2 bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"><Radio size={16} /> Yeni Yayın</button>
           ) : (
@@ -646,6 +675,28 @@ export default function CanliYayinSatis() {
               <p className="text-[10px] text-slate-400 mb-2">Yorumdaki satış kodu/barkod otomatik siparişe dönüşür. <span className="text-green-600 font-medium">Yeşil</span> = sipariş açıldı.</p>
               <div className="space-y-1.5 max-h-72 overflow-y-auto">
                 {fbStatus.feed.length === 0 ? <p className="text-[11px] text-slate-400 text-center py-4">Henüz yorum gelmedi…</p> : fbStatus.feed.map((c: any) => (
+                  <div key={c.id} className={`text-xs rounded-lg p-2 border ${c.matched ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-100'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-medium text-slate-700 truncate">{c.name}</span>
+                      {c.matched ? <span className="text-[9px] bg-green-500 text-white px-1.5 py-0.5 rounded-full font-bold shrink-0">✓ {c.urun ? String(c.urun).slice(0, 14) : 'sipariş'}</span> : <MessageSquare size={11} className="text-slate-300 shrink-0" />}
+                    </div>
+                    <p className="text-slate-500 break-words">{c.message}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Instagram canlı yorum akışı */}
+          {igStatus.connected && (
+            <div className="bg-white rounded-2xl border border-slate-200 p-4">
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="font-semibold text-slate-800 flex items-center gap-2"><Video size={16} className="text-pink-600" /> Instagram Yorumları</h3>
+                <button onClick={igDisconnect} disabled={igBusy} className="text-[11px] text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-lg inline-flex items-center gap-1 disabled:opacity-50"><Unlink size={12} /> Kes</button>
+              </div>
+              <p className="text-[10px] text-slate-400 mb-2">Canlı yayındaki yorumlar otomatik çekilir; satış kodu/barkod geçen yorum siparişe dönüşür. <span className="text-green-600 font-medium">Yeşil</span> = sipariş açıldı.</p>
+              <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                {igStatus.feed.length === 0 ? <p className="text-[11px] text-slate-400 text-center py-4">Henüz yorum gelmedi…</p> : igStatus.feed.map((c: any) => (
                   <div key={c.id} className={`text-xs rounded-lg p-2 border ${c.matched ? 'bg-green-50 border-green-200' : 'bg-slate-50 border-slate-100'}`}>
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-medium text-slate-700 truncate">{c.name}</span>
@@ -893,6 +944,35 @@ export default function CanliYayinSatis() {
                 </div>
                 <button onClick={fbConnect} disabled={fbBusy} className="w-full inline-flex items-center justify-center gap-2 bg-blue-600 text-white py-2.5 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50"><Link2 size={16} /> {fbBusy ? 'Bağlanıyor…' : 'Bağla ve Yorumları Çek'}</button>
                 <p className="text-[10px] text-slate-400">Token'ı Facebook Developer panelinden (Graph API Explorer veya Sayfa ayarları) alabilirsiniz. Gerekli izinler: <span className="font-mono">pages_read_engagement</span>.</p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Instagram canlı yayın bağlama modalı */}
+      {igModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-black/50" onClick={() => setIgModal(false)}>
+          <div className="w-full max-w-md bg-white rounded-2xl p-6 space-y-3" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Video size={20} className="text-pink-600" /> Instagram Canlı Yayın</h3>
+              <button onClick={() => setIgModal(false)}><X size={20} className="text-slate-400" /></button>
+            </div>
+            {igStatus.connected ? (
+              <div className="space-y-3">
+                <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700 flex items-center gap-2"><Link2 size={16} /> Bağlı — Hesap ID: <b className="font-mono">{igStatus.igUserId}</b></div>
+                <p className="text-xs text-slate-500">Instagram'da canlı yayını başlattığınızda yorumlar her 5 saniyede otomatik çekilir. İçinde satış kodu/barkod geçen yorumlar siparişe dönüşür.</p>
+                <button onClick={igDisconnect} disabled={igBusy} className="w-full inline-flex items-center justify-center gap-2 bg-rose-500 text-white py-2.5 rounded-lg font-medium hover:bg-rose-600 disabled:opacity-50"><Unlink size={16} /> Bağlantıyı Kes</button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-xs text-slate-500">Instagram <b>erişim token'ınızı</b> yapıştırın. Hesap, token'dan otomatik çözülür. Yayını Instagram'da başlattığınızda yorumlar otomatik çekilmeye başlar.</p>
+                <div>
+                  <label className="text-[11px] font-medium text-slate-600">Instagram Erişim Token</label>
+                  <textarea value={igForm.token} onChange={(e) => setIgForm({ ...igForm, token: e.target.value })} rows={3} placeholder="IGAA... ile başlayan token" className="w-full mt-1 px-3 py-2 text-xs border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-pink-300 font-mono" />
+                </div>
+                <button onClick={igConnect} disabled={igBusy} className="w-full inline-flex items-center justify-center gap-2 bg-pink-600 text-white py-2.5 rounded-lg font-medium hover:bg-pink-700 disabled:opacity-50"><Link2 size={16} /> {igBusy ? 'Bağlanıyor…' : 'Bağla ve Yorumları Çek'}</button>
+                <p className="text-[10px] text-slate-400">Token'ı Meta Developer panelinden (Instagram API ile giriş) alabilirsiniz. Gerekli izin: canlı medya ve yorum okuma.</p>
               </div>
             )}
           </div>

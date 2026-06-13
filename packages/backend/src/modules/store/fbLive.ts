@@ -185,3 +185,115 @@ export async function pollFacebookComments() {
     running = false;
   }
 }
+
+// ───────── Instagram Canlı Yayın Yorum Entegrasyonu ─────────
+// Aktif yayın bir Instagram hesabına bağlıysa, o anda yayında olan canlı medyayı
+// bulur, yorumlarını çeker ve içinde satış kodu geçen yorumlardan sipariş açar.
+
+const igFeeds = new Map<string, FbFeedItem[]>(); // streamId -> son yorumlar
+const igSeen = new Map<string, Set<string>>(); // streamId -> islenmis yorum id'leri
+
+export function getIgFeed(streamId: string): FbFeedItem[] {
+  return igFeeds.get(streamId) || [];
+}
+
+export function clearIgState(streamId: string) {
+  igFeeds.delete(streamId);
+  igSeen.delete(streamId);
+}
+
+function pushIgFeed(streamId: string, item: FbFeedItem) {
+  const arr = igFeeds.get(streamId) || [];
+  arr.unshift(item);
+  if (arr.length > 60) arr.length = 60;
+  igFeeds.set(streamId, arr);
+}
+
+async function pollIgStream(s: { id: string; tenantId: string; igUserId: string | null; igToken: string | null; igSince: Date | null }) {
+  if (!s.igUserId || !s.igToken) return;
+  const tok = encodeURIComponent(s.igToken);
+
+  // 1) O anda yayında olan canlı medyayı bul (yoksa yayın açık değildir)
+  let mediaId = '';
+  try {
+    const lmUrl = `https://graph.instagram.com/v21.0/${encodeURIComponent(s.igUserId)}/live_media?fields=id&limit=1&access_token=${tok}`;
+    const r = await fetch(lmUrl);
+    const j: any = await r.json();
+    if (j?.error) { console.error('[ig] live_media error:', j.error?.message); return; }
+    const arr: any[] = Array.isArray(j?.data) ? j.data : [];
+    if (!arr.length) return; // şu an canlı yayın yok
+    mediaId = String(arr[0]?.id || '');
+  } catch (e: any) { console.error('[ig] live_media fetch', e?.message); return; }
+  if (!mediaId) return;
+
+  // 2) Canlı medyanın yorumlarını çek (zaman damgasıyla filtrelenemez → id ile tekilleştir)
+  const sinceMs = s.igSince ? s.igSince.getTime() : Date.now() - 60 * 1000;
+  let comments: any[] = [];
+  try {
+    const cUrl = `https://graph.instagram.com/v21.0/${encodeURIComponent(mediaId)}/comments?fields=id,text,timestamp,username,from&limit=50&access_token=${tok}`;
+    const r = await fetch(cUrl);
+    const j: any = await r.json();
+    if (j?.error) { console.error('[ig] comments error:', j.error?.message); return; }
+    comments = Array.isArray(j?.data) ? j.data : [];
+  } catch (e: any) { console.error('[ig] comments fetch', e?.message); return; }
+  if (!comments.length) return;
+
+  const seenSet = igSeen.get(s.id) || new Set<string>();
+  let maxTs = sinceMs;
+
+  // Kronolojik işlemek için ters çevir (API ters kronolojik dönebilir)
+  for (const c of [...comments].reverse()) {
+    const cid = String(c.id || '');
+    if (!cid) continue;
+    const ts = c.timestamp ? new Date(c.timestamp).getTime() : Date.now();
+    if (ts < sinceMs) continue; // eski yorumları atla
+    if (seenSet.has(cid)) continue;
+    seenSet.add(cid);
+    if (ts > maxTs) maxTs = ts;
+
+    const name = c.username || c.from?.username || 'Instagram';
+    const message = String(c.text || '');
+    let matched = false;
+    let urun = '';
+    const resolved = await resolveFromMessage(s.tenantId, message);
+    if (resolved) {
+      try {
+        const lo = await placeLiveOrder(s.tenantId, { streamId: s.id, user: name, ...resolved });
+        matched = true;
+        urun = (lo as any)?.urun || resolved.urun || '';
+      } catch (e: any) {
+        console.error('[ig] order', e?.message);
+      }
+    }
+    pushIgFeed(s.id, { id: cid, name, message, matched, urun, at: ts });
+  }
+
+  if (seenSet.size > 1000) {
+    igSeen.set(s.id, new Set([...seenSet].slice(-500)));
+  } else {
+    igSeen.set(s.id, seenSet);
+  }
+
+  if (maxTs > sinceMs) {
+    await prisma.liveStream.update({ where: { id: s.id }, data: { igSince: new Date(maxTs) } }).catch(() => {});
+  }
+}
+
+let igRunning = false;
+export async function pollInstagramComments() {
+  if (igRunning) return;
+  igRunning = true;
+  try {
+    const streams = await prisma.liveStream.findMany({
+      where: { status: 'active', NOT: { igUserId: null } },
+      select: { id: true, tenantId: true, igUserId: true, igToken: true, igSince: true },
+    });
+    for (const s of streams) {
+      await pollIgStream(s).catch((e) => console.error('[ig] poll', e?.message));
+    }
+  } catch (e: any) {
+    console.error('[ig] poller', e?.message);
+  } finally {
+    igRunning = false;
+  }
+}

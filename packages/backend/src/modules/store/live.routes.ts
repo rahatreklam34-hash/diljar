@@ -2,7 +2,8 @@
 import { prisma } from '../../lib/prisma';
 import { asyncHandler, ApiError } from '../../lib/http';
 import { nextOrderNo, logEvent } from './store.routes';
-import { getFbFeed, extractVideoId, clearFbState } from './fbLive';
+import { getFbFeed, extractVideoId, clearFbState, getIgFeed, clearIgState } from './fbLive';
+import { env } from '../../config/env';
 
 const router = Router();
 
@@ -394,6 +395,70 @@ router.get('/fb/status', asyncHandler(async (req: Request, res: Response) => {
   const stream = await prisma.liveStream.findFirst({ where: { tenantId: t, status: 'active' }, orderBy: { startedAt: 'desc' } });
   if (!stream) return res.json({ connected: false, videoId: null, feed: [] });
   res.json({ connected: !!stream.fbVideoId, videoId: stream.fbVideoId, feed: stream.fbVideoId ? getFbFeed(stream.id) : [] });
+}));
+
+// ───────── Instagram Canlı Yayın Yorum Bağlama ─────────
+// Aktif yayını bir Instagram hesabına bağla (Instagram erişim token'ı yeterli;
+// hesap ID token'dan otomatik çözülür). Yayın açıkken canlı medya + yorumlar çekilir.
+router.post('/ig/connect', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const { token } = req.body || {};
+  if (!token) throw new ApiError(422, 'Instagram erişim token gerekli');
+  const stream = await prisma.liveStream.findFirst({ where: { tenantId: t, status: 'active' }, orderBy: { startedAt: 'desc' } });
+  if (!stream) throw new ApiError(400, 'Önce yayını başlatın');
+
+  let igToken = String(token).trim();
+
+  // Opsiyonel: App Secret tanımlıysa kısa ömürlü token'ı 60 günlük uzun ömürlüye çevir
+  if (env.IG_APP_SECRET) {
+    try {
+      const ex = await fetch(
+        `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(env.IG_APP_SECRET)}&access_token=${encodeURIComponent(igToken)}`,
+      );
+      const ej: any = await ex.json();
+      if (ej?.access_token) igToken = ej.access_token;
+    } catch { /* kısa token ile devam */ }
+  }
+
+  // Token doğrula + IG hesap ID'sini çöz
+  let igUserId = '';
+  let username = '';
+  try {
+    const me = await fetch(`https://graph.instagram.com/me?fields=user_id,username&access_token=${encodeURIComponent(igToken)}`);
+    const mj: any = await me.json();
+    if (mj?.error) throw new ApiError(400, 'Instagram bağlantısı başarısız: ' + (mj.error?.message || 'geçersiz token'));
+    igUserId = String(mj.user_id || mj.id || '');
+    username = String(mj.username || '');
+  } catch (e: any) {
+    if (e instanceof ApiError) throw e;
+    throw new ApiError(502, 'Instagram doğrulaması yapılamadı');
+  }
+  if (!igUserId) throw new ApiError(400, 'Instagram hesap ID çözülemedi');
+
+  clearIgState(stream.id);
+  await prisma.liveStream.update({
+    where: { id: stream.id },
+    data: { igUserId, igToken, igSince: new Date(Date.now() - 60 * 1000) },
+  });
+  res.json({ ok: true, igUserId, username });
+}));
+
+router.post('/ig/disconnect', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const stream = await prisma.liveStream.findFirst({ where: { tenantId: t, status: 'active' }, orderBy: { startedAt: 'desc' } });
+  if (stream) {
+    clearIgState(stream.id);
+    await prisma.liveStream.update({ where: { id: stream.id }, data: { igUserId: null, igToken: null, igSince: null } });
+  }
+  res.json({ ok: true });
+}));
+
+// IG bağlantı durumu + son çekilen yorum akışı
+router.get('/ig/status', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const stream = await prisma.liveStream.findFirst({ where: { tenantId: t, status: 'active' }, orderBy: { startedAt: 'desc' } });
+  if (!stream) return res.json({ connected: false, igUserId: null, feed: [] });
+  res.json({ connected: !!stream.igUserId, igUserId: stream.igUserId, feed: stream.igUserId ? getIgFeed(stream.id) : [] });
 }));
 
 export default router;
