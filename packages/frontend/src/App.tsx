@@ -66,6 +66,8 @@ const Sepet = lazy(() => import('./pages/Sepet'));
 const BekleyenSiparisler = lazy(() => import('./pages/BekleyenSiparisler'));
 const SerbestTedarikciler = lazy(() => import('./pages/SerbestTedarikciler'));
 const TedarikciPortal = lazy(() => import('./pages/TedarikciPortal'));
+const LandingPageAdmin = lazy(() => import('./pages/LandingPage'));
+const LandingPublic = lazy(() => import('./pages/LandingPublic'));
 
 // Sayfa yüklenirken yazısız ince spinner
 function PageLoader() {
@@ -138,6 +140,7 @@ function TenantApp() {
               <Route path="/depo/kategoriler" element={<Kategoriler />} />
               <Route path="/depo/satis-kodu" element={<SatisKodu />} />
               <Route path="/online-magaza" element={<OnlineMagaza />} />
+              <Route path="/landing-page" element={<LandingPageAdmin />} />
               <Route path="/siparisler" element={<Siparislerim />} />
               <Route path="/siparisler/canli" element={<Siparislerim kanalFilter="canli" />} />
               <Route path="/siparisler/online" element={<Siparislerim kanalFilter="online" />} />
@@ -206,6 +209,7 @@ export default function App() {
           <Route path="/tum-urunler" element={<StoreView />} />
           <Route path="/urun/:id" element={<UrunDetayPublic />} />
           <Route path="/katalog/:slug" element={<KatalogPublic />} />
+          <Route path="/lp/:slug" element={<LandingPublic />} />
           <Route path="/m/:slug/*" element={<LegacyStoreRedirect />} />
           <Route path="/m/:slug" element={<LegacyStoreRedirect />} />
           <Route path="/magaza/:slug" element={<LegacyStoreRedirect />} />

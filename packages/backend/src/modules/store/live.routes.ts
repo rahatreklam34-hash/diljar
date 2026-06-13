@@ -138,11 +138,13 @@ export async function placeLiveOrder(t: string, payload: any) {
   let lowStockSms: { urun: string; beden: string; kod: string } | null = null;
   const lo = await prisma.$transaction(async (tx) => {
     let durum = 'riskli'; let tutar = 0; let alis = 0; let urunAd = urun || kod; let storeOrderId: string | null = null;
+    let realKod = (kod || '').trim();
     let drop = false; let supplierId: string | null = null; let gorsel: string | null = null;
     if (productId) {
       const p = await tx.product.findFirst({ where: { id: productId, tenantId: t } });
       if (p) {
         urunAd = p.ad; alis = p.alisFiyat || 0; tutar = p.satisFiyat || 0;
+        realKod = p.salesCode || realKod;
         let okStock = false;
         if (variation) {
           const v = await tx.productVariation.findFirst({ where: { productId, tenantId: t, deger: variation } });
@@ -162,6 +164,7 @@ export async function placeLiveOrder(t: string, payload: any) {
       const fp = await tx.freeProduct.findFirst({ where: { id: freeProductId, tenantId: t } });
       if (fp) {
         urunAd = fp.ad; alis = fp.alisFiyat || 0; tutar = fp.satisFiyat || 0;
+        realKod = fp.salesCode || realKod;
         drop = true; supplierId = fp.supplierId || null;
         const imgs = Array.isArray(fp.images) ? (fp.images as any[]) : [];
         gorsel = imgs.length ? imgs[0] : null;
@@ -185,13 +188,13 @@ export async function placeLiveOrder(t: string, payload: any) {
       }
     }
 
-    const lord = await tx.liveOrder.create({ data: { tenantId: t, streamId, user, kod: kod || '', urun: urunAd, beden: beden || null, productId: productId || null, variation: variation || null, saticiAd: saticiAd || null, durum, tutar, alis, storeOrderId: null, freeProductId: freeProductId || null, supplierId, drop, gorsel } });
+    const lord = await tx.liveOrder.create({ data: { tenantId: t, streamId, user, kod: realKod || '', urun: urunAd, beden: beden || null, productId: productId || null, variation: variation || null, saticiAd: saticiAd || null, durum, tutar, alis, storeOrderId: null, freeProductId: freeProductId || null, supplierId, drop, gorsel } });
 
     // Onaylandi/rezerve ise sepete ekle
     if (durum === 'onaylandi' || durum === 'rezerve') {
       const cart = await getOrCreateCart(tx, t, customer?.id || null, norm(user || ''));
       const items: any[] = Array.isArray(cart.items) ? (cart.items as any) : [];
-      items.push({ liveOrderId: lord.id, productId, freeProductId: freeProductId || null, drop, gorsel, ad: urunAd + (beden ? ` (${beden})` : ''), varyasyon: variation || beden || null, kod: kod || null, adet: 1, fiyat: tutar, stokDusuldu: true, durum });
+      items.push({ liveOrderId: lord.id, productId, freeProductId: freeProductId || null, drop, gorsel, ad: urunAd + (beden ? ` (${beden})` : ''), varyasyon: variation || beden || null, kod: realKod || null, adet: 1, fiyat: tutar, stokDusuldu: true, durum });
       const tot = await campaignAdjust(tx, t, items);
       await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...tot } });
       storeOrderId = cart.id;
@@ -200,12 +203,12 @@ export async function placeLiveOrder(t: string, payload: any) {
       // Sadece kayitli musteri eslesip onaylandiginda onay SMS'i hazirla
       if (durum === 'onaylandi' && customer?.telefon) {
         const cno = (cart.orderNo != null) ? `${cart.orderYil}-${String(cart.orderNo).padStart(3, '0')}` : String(cart.id).slice(-5);
-        smsInfo = { token: cart.token, no: cno, tutar: tutar, urun: urunAd, beden: beden || variation || '', kod: kod || '' };
+        smsInfo = { token: cart.token, no: cno, tutar: tutar, urun: urunAd, beden: beden || variation || '', kod: realKod || '' };
       }
     }
     // Kayitli musteri eslesti ama stok yetersiz -> yetersiz stok SMS'i hazirla
     if (durum === 'stok_yok' && customer?.telefon) {
-      lowStockSms = { urun: urunAd, beden: beden || variation || '', kod: kod || '' };
+      lowStockSms = { urun: urunAd, beden: beden || variation || '', kod: realKod || '' };
     }
     return lord;
   });

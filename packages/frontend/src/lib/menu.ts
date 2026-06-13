@@ -3,7 +3,7 @@ import {
   Package, PackagePlus, Layers, Tag, Hash, Radio, ScanLine, Award,
   UserCheck, Megaphone, Store, Bot, LifeBuoy, ShoppingBag, Calendar,
   BarChart3, Target, ClipboardList, FolderOpen, Bell, Plug, UserCog,
-  MessageSquare, Settings, Banknote, Activity,
+  MessageSquare, Settings, Banknote, Activity, LayoutTemplate,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -47,6 +47,7 @@ export const navGroups: MenuGroup[] = [
       { to: '/canli-yayin', icon: Radio, label: 'Canli Yayin Satis' },
       { to: '/kasa-satis', icon: ScanLine, label: 'Kasa Satisi' },
       { to: '/online-magaza', icon: Store, label: 'Online Magazam' },
+      { to: '/landing-page', icon: LayoutTemplate, label: 'Landing Page' },
       { to: '/canli-akis', icon: Activity, label: 'Canli Akisi Izle' },
       { to: '/satici-performans', icon: Award, label: 'Satici Performansi' },
     ],

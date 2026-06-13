@@ -294,6 +294,22 @@ router.get('/katalog/:slug', asyncHandler(async (req: Request, res: Response) =>
   const cfg: any = store.config || {};
   res.json({ ad: store.logoText || 'Ürün Kataloğu', logo: cfg.logo || store.heroImage || '', slug: store.slug, magazaAktif: store.active, items: list });
 }));
+// Dışarıya açık Landing Page (link-in-bio destek paneli)
+router.get('/landing/:slug', asyncHandler(async (req: Request, res: Response) => {
+  const store = await prisma.storeSetting.findFirst({ where: { slug: req.params.slug } });
+  if (!store) throw new ApiError(404, 'Sayfa bulunamadi');
+  const cfg: any = store.config || {};
+  const lp: any = cfg.landingPage || {};
+  res.json({
+    baslik: lp.baslik || store.logoText || 'Mağaza',
+    tagline: lp.tagline ?? '',
+    panelBaslik: lp.panelBaslik ?? 'Müşteri Destek Paneli',
+    logo: lp.logo || cfg.logo || store.heroImage || '',
+    bgStart: lp.bgStart || '#0b1736',
+    bgEnd: lp.bgEnd || '#1e3a8a',
+    butonlar: Array.isArray(lp.butonlar) ? lp.butonlar.map((b: any) => ({ id: b.id, label: b.label || '', url: b.url || '', icon: b.icon || 'link', renk: b.renk || '#0f172a' })) : [],
+  });
+}));
 // Yorum gönder — SADECE ürünü satın almış üye değerlendirme yapabilir
 router.post('/store/:slug/urun/:id/yorum', asyncHandler(async (req: Request, res: Response) => {
   const store = await prisma.storeSetting.findFirst({ where: { slug: req.params.slug, active: true } });
@@ -736,13 +752,12 @@ router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => 
     }
   }
   const oneriler = oneriRaw.map((p) => ({ id: p.id, ad: p.ad, fiyat: p.satisFiyat, eskiFiyat: p.eskiFiyat, img: (Array.isArray(p.images) ? (p.images as any)[0] : '') || '', stok: p.stokAdeti, bedenler: (p.variations || []).filter((v: any) => v.stok > 0).map((v: any) => v.deger) }));
-  // Kargo etiketi: Siparişlerim'de kargo ücreti girildiyse VEYA eşik üstündeyse ücretsiz; aksi halde alıcı ödemeli
+  // Kargo etiketi: eşik üstündeyse ücretsiz; eşik altındaysa alıcı ödemeli (sepet toplamına eklenmez)
   let cfgObj: any = setting?.config || {};
   if (typeof cfgObj === 'string') { try { cfgObj = JSON.parse(cfgObj); } catch { cfgObj = {}; } }
   const malToplam = cart.toplam || 0; // araToplam - indirim
   const freeShip = setting?.freeShipThreshold || 0;
-  const kargoUcretsiz = (cart.kargoUcreti || 0) > 0 || (freeShip > 0 && malToplam >= freeShip);
-  const kargoEtiket = kargoUcretsiz ? 'ucretsiz' : 'alici_odemeli';
+  const kargoEtiket = (freeShip > 0 && malToplam >= freeShip) ? 'ucretsiz' : 'alici_odemeli';
   const kargoUcreti = 0; // sepet toplamına kargo eklenmez (alıcı ödemeli teslimatta tahsil edilir)
   const banka = {
     ad: setting?.bankaAd || '',

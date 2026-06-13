@@ -319,6 +319,9 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
   const [odemeSekli, setOdemeSekli] = useState<string>('Banka');
   const [odemeEkle, setOdemeEkle] = useState<string>('');
   const [odemeLinki, setOdemeLinki] = useState<string>(order.odemeLinki || '');
+  const [odemeGecmisi, setOdemeGecmisi] = useState<any[]>(Array.isArray(order.odemeGecmisi) ? order.odemeGecmisi : []);
+  const [odemeEditId, setOdemeEditId] = useState<string | null>(null);
+  const [odemeEditVal, setOdemeEditVal] = useState<{ tutar: string; yontem: string }>({ tutar: '', yontem: 'Banka' });
   const [saving, setSaving] = useState(false);
   const [events, setEvents] = useState<any[]>([]);
   const [kampanyalar, setKampanyalar] = useState<any[]>(Array.isArray(order.kampanyalar) ? order.kampanyalar : []);
@@ -401,6 +404,7 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
       setKampanyalar(Array.isArray(o.kampanyalar) ? o.kampanyalar : []);
       setManuelInd(isManuel(o));
       setOdemeLinki(o.odemeLinki || '');
+      setOdemeGecmisi(Array.isArray(o.odemeGecmisi) ? o.odemeGecmisi : []);
     } catch { /* */ }
   };
   useEffect(() => { loadEvents(); loadFresh(); /* eslint-disable-next-line */ }, [order.id]);
@@ -461,15 +465,49 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
     toast.success(`Kupon uygulandı: ${d.tip === 'yuzde' ? '%' + d.deger : fmt(d.deger)}`);
   };
 
+  // Ödeme kayıtları: gerçek liste varsa onu kullan; yoksa eski tek tahsilat değerini düzenlenebilir tek satır olarak göster
+  const odemeListe = useMemo(() => {
+    if (Array.isArray(odemeGecmisi) && odemeGecmisi.length > 0) return odemeGecmisi;
+    if ((Number(tahsilat) || 0) > 0) return [{ id: 'legacy', tutar: Number(tahsilat), yontem: order.odemeYontemi || 'Önceki', tarih: order.createdAt, _legacy: true }];
+    return [];
+  }, [odemeGecmisi, tahsilat, order.odemeYontemi, order.createdAt]);
+  const sumGecmis = (list: any[]) => list.reduce((s, r) => s + (Number(r.tutar) || 0), 0);
+  const newId = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+
   const addOdeme = () => {
     const amt = Number(odemeEkle) || 0;
     if (amt <= 0) { toast.error('Geçerli bir tutar girin'); return; }
-    const yeni = (Number(tahsilat) || 0) + amt;
+    const taban = (Array.isArray(odemeGecmisi) && odemeGecmisi.length > 0) ? odemeGecmisi : odemeListe.map((r) => ({ ...r, _legacy: undefined }));
+    const yeniGecmis = [...taban, { id: newId(), tutar: amt, yontem: odemeSekli, tarih: new Date().toISOString() }];
+    const yeni = sumGecmis(yeniGecmis);
+    setOdemeGecmisi(yeniGecmis);
     setTahsilat(yeni);
     setOdemeYontemi(odemeSekli);
     setOdemeEkle('');
-    persist({ tahsilat: yeni, odemeYontemi: odemeSekli, _log: `Ödeme eklendi: ${fmt(amt)} (${odemeSekli})` });
+    persist({ tahsilat: yeni, odemeGecmisi: yeniGecmis, odemeYontemi: odemeSekli, _log: `Ödeme eklendi: ${fmt(amt)} (${odemeSekli})` });
     toast.success(`${fmt(amt)} ödeme eklendi (${odemeSekli})`);
+  };
+  const silOdeme = (id: string) => {
+    if (!confirm('Bu ödeme kaydı silinsin mi?')) return;
+    const silinen = odemeListe.find((r) => r.id === id);
+    const yeniGecmis = odemeListe.filter((r) => r.id !== id).map((r) => ({ ...r, _legacy: undefined }));
+    const yeni = sumGecmis(yeniGecmis);
+    setOdemeGecmisi(yeniGecmis);
+    setTahsilat(yeni);
+    if (odemeEditId === id) setOdemeEditId(null);
+    persist({ tahsilat: yeni, odemeGecmisi: yeniGecmis, _log: `Ödeme silindi: ${fmt(silinen?.tutar || 0)}` });
+    toast.success('Ödeme kaydı silindi');
+  };
+  const saveOdemeEdit = (id: string) => {
+    const amt = Number(odemeEditVal.tutar) || 0;
+    if (amt <= 0) { toast.error('Geçerli bir tutar girin'); return; }
+    const yeniGecmis = odemeListe.map((r) => r.id === id ? { ...r, tutar: amt, yontem: odemeEditVal.yontem, _legacy: undefined } : { ...r, _legacy: undefined });
+    const yeni = sumGecmis(yeniGecmis);
+    setOdemeGecmisi(yeniGecmis);
+    setTahsilat(yeni);
+    setOdemeEditId(null);
+    persist({ tahsilat: yeni, odemeGecmisi: yeniGecmis, _log: `Ödeme düzeltildi: ${fmt(amt)} (${odemeEditVal.yontem})` });
+    toast.success('Ödeme güncellendi');
   };
 
   const waLink = (tel: string) => { let dd = (tel || '').replace(/\D/g, ''); if (dd.startsWith('0')) dd = '90' + dd.slice(1); else if (dd.length === 10) dd = '90' + dd; return 'https://wa.me/' + dd; };
@@ -817,6 +855,36 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
                   <button onClick={addOdeme} className="px-3 py-1.5 text-sm bg-green-600 text-white rounded-lg hover:bg-green-700 inline-flex items-center gap-1"><Plus size={14} /> Ekle</button>
                 </div>
                 {kalan > 0 && <button onClick={() => setOdemeEkle(String(kalan))} className="mt-2 text-xs text-indigo-600">Kalanı doldur ({fmt(kalan)})</button>}
+                {odemeListe.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-slate-100">
+                    <label className="block text-[11px] text-slate-400 mb-1.5">Ödeme Kayıtları ({odemeListe.length})</label>
+                    <div className="space-y-1.5">
+                      {odemeListe.map((r: any) => (
+                        <div key={r.id} className="flex items-center gap-2 text-sm bg-slate-50 rounded-lg px-2 py-1.5">
+                          {odemeEditId === r.id ? (
+                            <>
+                              <select value={odemeEditVal.yontem} onChange={(e) => setOdemeEditVal((v) => ({ ...v, yontem: e.target.value }))} className="text-xs border border-slate-200 rounded px-1 py-1">
+                                {['Banka', 'K.Kartı', 'Bakiye', 'Önceki'].map((k) => <option key={k} value={k}>{k}</option>)}
+                              </select>
+                              <input type="number" value={odemeEditVal.tutar} onChange={(e) => setOdemeEditVal((v) => ({ ...v, tutar: e.target.value }))} className="w-20 text-right text-sm border border-slate-200 rounded px-1.5 py-0.5" />
+                              <button onClick={() => saveOdemeEdit(r.id)} title="Onayla" className="p-1 rounded bg-green-50 text-green-600 hover:bg-green-100"><Check size={13} /></button>
+                              <button onClick={() => setOdemeEditId(null)} title="Vazgeç" className="p-1 rounded bg-slate-100 text-slate-500 hover:bg-slate-200"><X size={13} /></button>
+                            </>
+                          ) : (
+                            <>
+                              <div className="min-w-0 flex-1">
+                                <span className="font-medium text-slate-700">{fmt(r.tutar)}</span>
+                                <span className="text-[11px] text-slate-400 ml-1.5">{r.yontem}{r.tarih ? ` · ${dt(r.tarih)}` : ''}</span>
+                              </div>
+                              <button onClick={() => { setOdemeEditId(r.id); setOdemeEditVal({ tutar: String(r.tutar), yontem: r.yontem || 'Banka' }); }} title="Düzelt" className="p-1 rounded bg-indigo-50 text-indigo-600 hover:bg-indigo-100"><Pencil size={13} /></button>
+                              <button onClick={() => silOdeme(r.id)} title="Sil" className="p-1 rounded bg-red-50 text-red-500 hover:bg-red-100"><Trash2 size={13} /></button>
+                            </>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="mt-3 pt-3 border-t border-slate-100">
                   <label className="block text-[11px] text-slate-400 mb-1">Kredi Kartı Ödeme Linki (müşteriye "Sepeti Öde" butonu)</label>
                   <div className="flex gap-2">

@@ -824,6 +824,7 @@ model StoreOrder {
   kargoUcreti Float    @default(0)
   toplam     Float     @default(0)
   tahsilat   Float     @default(0)
+  odemeGecmisi Json? // [{id, tutar, yontem, tarih}] tekil tahsilat kayitlari
   gelirKaydedilen Float @default(0)
   odemeYontemi String?
   odemeLinki String?
