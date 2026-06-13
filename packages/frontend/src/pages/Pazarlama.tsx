@@ -128,7 +128,7 @@ function SmsBildirimAyar() {
           <div className="w-9 h-9 rounded-lg bg-indigo-100 flex items-center justify-center"><Bell size={18} className="text-indigo-600" /></div>
           <div>
             <h3 className="font-bold text-slate-800 text-sm">Sipariş Bildirimleri (SMS)</h3>
-            <p className="text-[11px] text-slate-400">Sipariş durumu değişince müşteriye otomatik SMS gönderilir. Değişkenler: <code className="text-indigo-500">{'{ad} {no} {tutar} {kargo} {takip} {firma} {kullaniciadi} {durum} {beden} {urun} {instagram}'}</code></p>
+            <p className="text-[11px] text-slate-400">Sipariş durumu değişince müşteriye otomatik SMS gönderilir. Değişkenler: <code className="text-indigo-500">{'{ad} {no} {tutar} {kargo} {takip} {firma} {kullaniciadi} {durum} {beden} {urun} {kod} {instagram} {sepet}'}</code></p>
           </div>
         </div>
         <span className={`text-[11px] px-2.5 py-1 rounded-full font-medium ${s.configured ? 'bg-green-100 text-green-700' : 'bg-amber-100 text-amber-700'}`}>{s.configured ? 'NetGSM bağlı' : 'NetGSM bilgileri eksik'}</span>

@@ -21,10 +21,10 @@ export interface NetgsmConfig {
 
 export const DEFAULT_TEMPLATES = {
   tpl_new: 'Sayin {ad}, {no} numarali siparisiniz alindi. Tesekkur ederiz. {firma}',
-  tpl_approved: 'Sayin {ad}, {no} numarali siparisiniz onaylandi. Tutar: {tutar} TL. {firma}',
+  tpl_approved: 'Sayin {ad}, {no} numarali siparisiniz onaylandi. Urun: {urun} {beden} ({kod}). Tutar: {tutar} TL. {firma}',
   tpl_shipped: 'Sayin {ad}, {no} numarali siparisiniz kargoya verildi. {kargo} Takip No: {takip}',
-  tpl_cancel: 'Sayin {ad}, {no} numarali siparisiniz iptal edilmistir. {firma}',
-  tpl_lowstock: 'Sayin {ad}, {urun} {beden} urunu icin stok yetersiz oldugundan {no} numarali siparisiniz olusturulamadi. {firma}',
+  tpl_cancel: 'Sayin {ad}, {no} numarali siparisiniz iptal edilmistir. Urun: {urun} {beden} ({kod}). {firma}',
+  tpl_lowstock: 'Sayin {ad}, {urun} {beden} ({kod}) urunu icin stok yetersiz oldugundan {no} numarali siparisiniz olusturulamadi. {firma}',
 };
 
 // NetGSM hata kodlari -> Turkce aciklama
@@ -196,7 +196,7 @@ function renderTpl(tpl: string, vars: Record<string, string>): string {
 export async function notifyOrderSms(
   tenantId: string,
   event: 'new' | 'approved' | 'shipped' | 'cancel' | 'lowstock',
-  data: { phone?: string | null; ad?: string | null; no?: string; tutar?: number; kargo?: string; takip?: string; firma?: string; kullaniciadi?: string; durum?: string; beden?: string; urun?: string; instagram?: string; sepetLink?: string }
+  data: { phone?: string | null; ad?: string | null; no?: string; tutar?: number; kargo?: string; takip?: string; firma?: string; kullaniciadi?: string; durum?: string; beden?: string; urun?: string; kod?: string; instagram?: string; sepetLink?: string }
 ): Promise<void> {
   try {
     if (!data.phone) return;
@@ -217,6 +217,7 @@ export async function notifyOrderSms(
       durum: data.durum || '',
       beden: data.beden || '',
       urun: data.urun || '',
+      kod: data.kod || '',
       instagram: data.instagram || '',
       sepet: data.sepetLink || '',
     }).trim();

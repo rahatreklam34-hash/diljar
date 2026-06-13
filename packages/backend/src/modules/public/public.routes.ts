@@ -736,6 +736,12 @@ router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => 
     }
   }
   const oneriler = oneriRaw.map((p) => ({ id: p.id, ad: p.ad, fiyat: p.satisFiyat, eskiFiyat: p.eskiFiyat, img: (Array.isArray(p.images) ? (p.images as any)[0] : '') || '', stok: p.stokAdeti, bedenler: (p.variations || []).filter((v: any) => v.stok > 0).map((v: any) => v.deger) }));
+  // Kargo ücreti: admin panel eşiğine göre dinamik (mal toplamı eşiği geçerse ücretsiz)
+  const malToplam = cart.toplam || 0; // araToplam - indirim
+  const freeShip = setting?.freeShipThreshold || 0;
+  const stdKargo = Number((setting?.config as any)?.kargoUcret) || 0;
+  const kargoUcreti = (freeShip > 0 && malToplam >= freeShip) ? 0 : stdKargo;
+  const toplamWithKargo = malToplam + kargoUcreti;
   res.json({
     magaza: setting?.logoText || tenant?.name || 'Mağaza',
     slug: setting?.slug || null,
@@ -745,12 +751,12 @@ router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => 
     araToplam: cart.araToplam,
     indirim: cart.indirim,
     indirimKodu: cart.indirimKodu || null,
-    kargoUcreti: cart.kargoUcreti || 0,
+    kargoUcreti,
     freeShipThreshold: setting?.freeShipThreshold || 0,
     puanOrani: setting?.puanOrani || 0,
     odemeLinki: cart.odemeLinki || null,
     odemeLinkiSon: cart.odemeLinkiSon || null,
-    toplam: cart.toplam,
+    toplam: toplamWithKargo,
     createdAt: cart.createdAt,
     adres: cart.adres || cart.customer?.adres || '',
     musteri: cart.customer?.ad || cart.musteriHandle || '',

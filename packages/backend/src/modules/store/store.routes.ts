@@ -397,7 +397,7 @@ router.patch('/orders/:id', asyncHandler(async (req: Request, res: Response) => 
       const oItems: any[] = Array.isArray(updated.items) ? (updated.items as any[]) : [];
       const ilk = oItems[0] || {};
       const durumMap: Record<string, string> = { onaylandi: 'Onaylandı', hazirlaniyor: 'Hazırlanıyor', kargoda: 'Kargoda', iptal: 'İptal' };
-      void notifyOrderSms(req.tenantId!, event, { phone: cst?.telefon, ad: cst?.ad, no: no2, tutar: updated.toplam, kargo: (updated as any).kargoFirmasi || '', takip: (updated as any).kargoTakip || '', firma: tnt?.name || '', kullaniciadi: cst?.instagram || '', instagram: cst?.instagram || '', durum: durumMap[yeni] || yeni, urun: ilk.ad || '', beden: ilk.beden || ilk.varyasyon || '', sepetLink: updated.token ? `${env.APP_DOMAIN}/sepet/${updated.token}` : undefined });
+      void notifyOrderSms(req.tenantId!, event, { phone: cst?.telefon, ad: cst?.ad, no: no2, tutar: updated.toplam, kargo: (updated as any).kargoFirmasi || '', takip: (updated as any).kargoTakip || '', firma: tnt?.name || '', kullaniciadi: cst?.instagram || '', instagram: cst?.instagram || '', durum: durumMap[yeni] || yeni, urun: ilk.ad || '', beden: ilk.beden || ilk.varyasyon || '', kod: ilk.kod || '', sepetLink: updated.token ? `${env.APP_DOMAIN}/sepet/${updated.token}` : undefined });
     }
   } catch { /* SMS hatasi siparisi etkilemez */ }
   res.json(updated);

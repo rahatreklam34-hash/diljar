@@ -134,8 +134,8 @@ export async function placeLiveOrder(t: string, payload: any) {
   const customer = await findCustomerByHandle(t, user || '');
 
   let logCartId: string | null = null; let logAd = '';
-  let smsInfo: { token: string; no: string; tutar: number; urun: string; beden: string } | null = null;
-  let lowStockSms: { urun: string; beden: string } | null = null;
+  let smsInfo: { token: string; no: string; tutar: number; urun: string; beden: string; kod: string } | null = null;
+  let lowStockSms: { urun: string; beden: string; kod: string } | null = null;
   const lo = await prisma.$transaction(async (tx) => {
     let durum = 'riskli'; let tutar = 0; let alis = 0; let urunAd = urun || kod; let storeOrderId: string | null = null;
     let drop = false; let supplierId: string | null = null; let gorsel: string | null = null;
@@ -191,7 +191,7 @@ export async function placeLiveOrder(t: string, payload: any) {
     if (durum === 'onaylandi' || durum === 'rezerve') {
       const cart = await getOrCreateCart(tx, t, customer?.id || null, norm(user || ''));
       const items: any[] = Array.isArray(cart.items) ? (cart.items as any) : [];
-      items.push({ liveOrderId: lord.id, productId, freeProductId: freeProductId || null, drop, gorsel, ad: urunAd + (beden ? ` (${beden})` : ''), varyasyon: variation || beden || null, adet: 1, fiyat: tutar, stokDusuldu: true, durum });
+      items.push({ liveOrderId: lord.id, productId, freeProductId: freeProductId || null, drop, gorsel, ad: urunAd + (beden ? ` (${beden})` : ''), varyasyon: variation || beden || null, kod: kod || null, adet: 1, fiyat: tutar, stokDusuldu: true, durum });
       const tot = await campaignAdjust(tx, t, items);
       await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...tot } });
       storeOrderId = cart.id;
@@ -200,12 +200,12 @@ export async function placeLiveOrder(t: string, payload: any) {
       // Sadece kayitli musteri eslesip onaylandiginda onay SMS'i hazirla
       if (durum === 'onaylandi' && customer?.telefon) {
         const cno = (cart.orderNo != null) ? `${cart.orderYil}-${String(cart.orderNo).padStart(3, '0')}` : String(cart.id).slice(-5);
-        smsInfo = { token: cart.token, no: cno, tutar: tutar, urun: urunAd, beden: beden || variation || '' };
+        smsInfo = { token: cart.token, no: cno, tutar: tutar, urun: urunAd, beden: beden || variation || '', kod: kod || '' };
       }
     }
     // Kayitli musteri eslesti ama stok yetersiz -> yetersiz stok SMS'i hazirla
     if (durum === 'stok_yok' && customer?.telefon) {
-      lowStockSms = { urun: urunAd, beden: beden || variation || '' };
+      lowStockSms = { urun: urunAd, beden: beden || variation || '', kod: kod || '' };
     }
     return lord;
   });
@@ -218,7 +218,7 @@ export async function placeLiveOrder(t: string, payload: any) {
       void notifyOrderSms(t, 'approved', {
         phone: customer.telefon, ad: customer.ad, no: (smsInfo as any).no, tutar: (smsInfo as any).tutar,
         firma: tnt?.name || '', kullaniciadi: customer.instagram || '', instagram: customer.instagram || '',
-        durum: 'Onaylandı', urun: (smsInfo as any).urun, beden: (smsInfo as any).beden, sepetLink: link,
+        durum: 'Onaylandı', urun: (smsInfo as any).urun, beden: (smsInfo as any).beden, kod: (smsInfo as any).kod, sepetLink: link,
       });
     } catch (e: any) { console.error('[live SMS]', String(e?.message || e)); }
   }
@@ -229,7 +229,7 @@ export async function placeLiveOrder(t: string, payload: any) {
       void notifyOrderSms(t, 'lowstock', {
         phone: customer.telefon, ad: customer.ad, firma: tnt?.name || '',
         kullaniciadi: customer.instagram || '', instagram: customer.instagram || '', durum: 'Yetersiz Stok',
-        urun: (lowStockSms as any).urun, beden: (lowStockSms as any).beden,
+        urun: (lowStockSms as any).urun, beden: (lowStockSms as any).beden, kod: (lowStockSms as any).kod,
       });
     } catch (e: any) { console.error('[live SMS lowstock]', String(e?.message || e)); }
   }
@@ -301,8 +301,8 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
   const t = req.tenantId!;
   let streamId = '';
   let logCartId: string | null = null; let logAd = '';
-  let cancelSms: { user: string; urun: string; beden: string } | null = null;
-  let promoteSms: { user: string; urun: string; beden: string; token: string; no: string; tutar: number } | null = null;
+  let cancelSms: { user: string; urun: string; beden: string; kod: string } | null = null;
+  let promoteSms: { user: string; urun: string; beden: string; kod: string; token: string; no: string; tutar: number } | null = null;
   await prisma.$transaction(async (tx) => {
     const lo = await tx.liveOrder.findFirst({ where: { id: req.params.id, tenantId: t } });
     if (!lo) return;
@@ -335,7 +335,7 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
         }
       }
       // Onaylanmis/rezerve siparis iptal edildi -> iptal SMS'i hazirla
-      cancelSms = { user: lo.user, urun: lo.urun, beden: lo.beden || lo.variation || '' };
+      cancelSms = { user: lo.user, urun: lo.urun, beden: lo.beden || lo.variation || '', kod: lo.kod || '' };
     }
     await tx.liveOrder.update({ where: { id: lo.id }, data: { durum: 'iptal', storeOrderId: null } });
     // Bekleyen stok_yok talipli
@@ -358,7 +358,7 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
             await tx.liveOrder.update({ where: { id: wait.id }, data: { durum: matched ? 'onaylandi' : 'rezerve', storeOrderId: cart.id } });
             if (matched?.telefon) {
               const wno = (cart.orderNo != null) ? `${cart.orderYil}-${String(cart.orderNo).padStart(3, '0')}` : String(cart.id).slice(-5);
-              promoteSms = { user: wait.user, urun: wait.urun, beden: wait.beden || wait.variation || '', token: cart.token, no: wno, tutar: wait.tutar };
+              promoteSms = { user: wait.user, urun: wait.urun, beden: wait.beden || wait.variation || '', kod: wait.kod || '', token: cart.token, no: wno, tutar: wait.tutar };
             }
             void cust;
           }
@@ -377,7 +377,7 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
         const openCart = await prisma.storeOrder.findFirst({ where: { tenantId: t, customerId: cust.id, durum: 'sepet' }, select: { token: true } });
         void notifyOrderSms(t, 'cancel', {
           phone: cust.telefon, ad: cust.ad, firma: tnt?.name || '', kullaniciadi: cust.instagram || '',
-          instagram: cust.instagram || '', durum: 'İptal', urun: cs.urun, beden: cs.beden,
+          instagram: cust.instagram || '', durum: 'İptal', urun: cs.urun, beden: cs.beden, kod: cs.kod,
           sepetLink: openCart?.token ? `${env.APP_DOMAIN}/sepet/${openCart.token}` : undefined,
         });
       }
@@ -393,7 +393,7 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
         void notifyOrderSms(t, 'approved', {
           phone: cust.telefon, ad: cust.ad, no: ps.no, tutar: ps.tutar, firma: tnt?.name || '',
           kullaniciadi: cust.instagram || '', instagram: cust.instagram || '', durum: 'Onaylandı',
-          urun: ps.urun, beden: ps.beden, sepetLink: ps.token ? `${env.APP_DOMAIN}/sepet/${ps.token}` : undefined,
+          urun: ps.urun, beden: ps.beden, kod: ps.kod, sepetLink: ps.token ? `${env.APP_DOMAIN}/sepet/${ps.token}` : undefined,
         });
       }
     } catch (e: any) { console.error('[live SMS promote]', String(e?.message || e)); }
@@ -448,7 +448,7 @@ export async function promoteReserved(tenantId: string, customer: { id: string; 
         void notifyOrderSms(tenantId, 'approved', {
           phone: customer.telefon, ad: customer.ad, no, tutar: cart.toplam, firma: tnt?.name || '',
           kullaniciadi: customer.instagram || '', instagram: customer.instagram || '', durum: 'Onaylandı',
-          urun: ilk.ad || '', beden: ilk.beden || ilk.varyasyon || '',
+          urun: ilk.ad || '', beden: ilk.beden || ilk.varyasyon || '', kod: ilk.kod || '',
           sepetLink: cart.token ? `${env.APP_DOMAIN}/sepet/${cart.token}` : undefined,
         });
       }

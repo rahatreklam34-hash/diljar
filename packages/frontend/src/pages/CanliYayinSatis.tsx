@@ -11,6 +11,25 @@ ChartJS.register(ArcElement, LineElement, PointElement, CategoryScale, LinearSca
 const fmt = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const norm = (s: string) => (s || '').toLowerCase().replace(/^@/, '').replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ö/g, 'o').replace(/ü/g, 'u').trim();
 const hhmm = (iso: string) => { try { return new Date(iso).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }); } catch { return ''; } };
+// Kod karşılaştırma anahtarı: küçük harf + TR sadeleştirme + harf/rakam dışını at
+const codeKey = (s: string) => norm(s).replace(/[^a-z0-9]/g, '');
+// Levenshtein mesafesi (1 harf hatasını tolere etmek için)
+const lev = (a: string, b: string): number => {
+  if (a === b) return 0;
+  const m = a.length, n = b.length;
+  if (!m) return n; if (!n) return m;
+  const dp = new Array(n + 1);
+  for (let j = 0; j <= n; j++) dp[j] = j;
+  for (let i = 1; i <= m; i++) {
+    let prev = dp[0]; dp[0] = i;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j];
+      dp[j] = Math.min(dp[j] + 1, dp[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = tmp;
+    }
+  }
+  return dp[n];
+};
 
 type Durum = 'onaylandi' | 'rezerve' | 'stok_yok' | 'riskli' | 'iptal';
 const DURUM_BADGE: Record<string, { t: string; c: string }> = {
@@ -255,8 +274,24 @@ export default function CanliYayinSatis() {
   const openHistory = async () => { try { const r = await api.get('/store/live/history'); setHistory(r.data); setHistoryOpen(true); } catch (e) { toast.error(apiErrorMessage(e)); } };
 
   const findByCode = (code: string) => {
-    const c = norm(code); if (!c) return undefined;
-    return allProds.find((p) => norm(p.salesCode || '') === c || (p.barkod || '') === code.trim());
+    const c = codeKey(code); if (!c) return undefined;
+    // 1) Birebir eşleşme (satış kodu / barkod) — büyük/küçük harf duyarsız
+    let p = allProds.find((pp) => codeKey(pp.salesCode || '') === c || codeKey(pp.barkod || '') === c);
+    if (p) return p;
+    // 2) Tek harf hatası toleransı (ör. "hila1" → "hilal") — yalnız 3+ karakterli kodlarda
+    if (c.length >= 3) {
+      let best: any; let bestDist = 2;
+      for (const pp of allProds) {
+        for (const key of [codeKey(pp.salesCode || ''), codeKey(pp.barkod || '')]) {
+          if (key.length >= 3 && Math.abs(key.length - c.length) <= 1) {
+            const d = lev(key, c);
+            if (d < bestDist) { bestDist = d; best = pp; }
+          }
+        }
+      }
+      if (best && bestDist <= 1) return best;
+    }
+    return undefined;
   };
 
   const isRegistered = (u: string) => {
