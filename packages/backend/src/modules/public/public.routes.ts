@@ -736,17 +736,28 @@ router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => 
   const prods = ids.length ? await prisma.product.findMany({ where: { tenantId: cart.tenantId, id: { in: ids } }, select: { id: true, images: true, barkod: true, salesCode: true, sku: true } }) : [];
   const pMap = new Map(prods.map((p) => [p.id, p]));
   const itemsWithImg = items.map((it) => { const p: any = pMap.get(it.productId); return { ...it, img: (Array.isArray(p?.images) ? (p.images as any)[0] : '') || it.gorsel || it.img || '', barkod: p?.barkod || '', salesCode: p?.salesCode || '', sku: p?.sku || '' }; });
-  // Öneriler (canlı yayına özel fırsatlar) — admin'den aç/kapa + elle seçim
+  // Öneriler (canlı yayına özel fırsatlar) — admin'den aç/kapa + kaynak seçimi (mağaza ⇄ katalog) + elle seçim
   const oneriCfg: any = (setting?.config as any) || {};
   const oneriEnabled = oneriCfg.oneriEnabled !== false; // varsayılan açık
+  const oneriKaynak = oneriCfg.oneriKaynak === 'katalog' ? 'katalog' : 'magaza'; // varsayılan: mağaza ürünleri
   const oneriSecili: string[] = Array.isArray(oneriCfg.oneriProductIds) ? oneriCfg.oneriProductIds.filter(Boolean) : [];
   let oneriRaw: any[] = [];
   if (oneriEnabled) {
     if (oneriSecili.length) {
+      // Elle seçim her zaman önceliklidir (kaynaktan bağımsız)
       const seciliIds = oneriSecili.filter((id) => !ids.includes(id));
       oneriRaw = seciliIds.length
         ? await prisma.product.findMany({ where: { tenantId: cart.tenantId, aktif: true, stokAdeti: { gt: 0 }, id: { in: seciliIds } }, include: { variations: true } })
         : [];
+    } else if (oneriKaynak === 'katalog') {
+      // Katalogda (canlıda okutulan) bulunan ürünleri öner — CatalogItem → Product
+      const citems = await prisma.catalogItem.findMany({ where: { tenantId: cart.tenantId }, orderBy: { updatedAt: 'desc' }, take: 40 });
+      const catIds = [...new Set(citems.map((c) => c.productId).filter(Boolean))].filter((id) => !ids.includes(id));
+      oneriRaw = catIds.length
+        ? await prisma.product.findMany({ where: { tenantId: cart.tenantId, aktif: true, stokAdeti: { gt: 0 }, id: { in: catIds } }, include: { variations: true } })
+        : [];
+      const orderMap = new Map(catIds.map((id, i) => [id, i]));
+      oneriRaw = oneriRaw.sort((a, b) => (orderMap.get(a.id) ?? 99) - (orderMap.get(b.id) ?? 99)).slice(0, 8);
     } else {
       oneriRaw = await prisma.product.findMany({ where: { tenantId: cart.tenantId, aktif: true, stokAdeti: { gt: 0 }, id: { notIn: ids.length ? ids : ['_'] } }, orderBy: [{ oneCikan: 'desc' }, { createdAt: 'desc' }], take: 8, include: { variations: true } });
     }
@@ -1047,8 +1058,8 @@ router.post('/sepet/:token/item', asyncHandler(async (req: Request, res: Respons
 router.post('/sepet/:token/odeme-bildir', asyncHandler(async (req: Request, res: Response) => {
   const cart = await prisma.storeOrder.findFirst({ where: { token: req.params.token } });
   if (!cart) throw new ApiError(404, 'Sepet bulunamadi');
+  // Ödeme bildirimi sepet DURUMUNU değiştirmez; yalnız bildirim bayrağı set edilir.
   const data: any = { odemeBildirim: 'bekliyor' };
-  if (cart.durum === 'sepet') data.durum = 'yeni';
   await prisma.storeOrder.update({ where: { id: cart.id }, data });
   try { await prisma.orderEvent.create({ data: { tenantId: cart.tenantId, orderId: cart.id, kullanici: 'Müşteri', islem: 'Ödeme bildirimi yapıldı', detay: `Tutar: ${(cart.toplam || 0).toLocaleString('tr-TR')}₺` } }); } catch { /* */ }
   res.json({ ok: true });

@@ -502,10 +502,12 @@ model LiveOrder {
   drop         Boolean  @default(false)
   teslimAlindi Boolean  @default(false)
   gorsel       String?
+  commentId    String?  // IG/FB yorum kimliği — kalıcı tekilleştirme (pm2 restart sonrası çift sipariş engeli)
   createdAt    DateTime @default(now())
 
   @@index([tenantId])
   @@index([streamId])
+  @@index([streamId, commentId])
   @@index([supplierId])
 }
 

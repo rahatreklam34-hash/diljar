@@ -198,7 +198,7 @@ async function pollStream(s: { id: string; tenantId: string; fbVideoId: string |
     const resolved = await resolveFromMessage(s.tenantId, message);
     if (resolved) {
       try {
-        const lo = await placeLiveOrder(s.tenantId, { streamId: s.id, user: name, ...resolved });
+        const lo = await placeLiveOrder(s.tenantId, { streamId: s.id, user: name, commentId: cid, ...resolved });
         matched = true;
         urun = (lo as any)?.urun || resolved.urun || '';
       } catch (e: any) {
@@ -312,7 +312,7 @@ async function pollIgStream(s: { id: string; tenantId: string; igUserId: string 
     const resolved = await resolveFromMessage(s.tenantId, message);
     if (resolved) {
       try {
-        const lo = await placeLiveOrder(s.tenantId, { streamId: s.id, user: name, ...resolved });
+        const lo = await placeLiveOrder(s.tenantId, { streamId: s.id, user: name, commentId: cid, ...resolved });
         matched = true;
         urun = (lo as any)?.urun || resolved.urun || '';
       } catch (e: any) {

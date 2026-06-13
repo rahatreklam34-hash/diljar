@@ -738,17 +738,28 @@ export default function OnlineMagaza() {
                 <input type="checkbox" checked={cfg.oneriEnabled !== false} onChange={(e) => setCfg('oneriEnabled', e.target.checked)} className="w-4 h-4" />
               </div>
               {cfg.oneriEnabled !== false && (
-                <div>
-                  <label className="block text-xs text-slate-500 mb-1.5">Önerilecek ürünler (boş = otomatik çok satanlar)</label>
-                  <div className="flex flex-wrap gap-1.5 mb-2">
-                    {(cfg.oneriProductIds || []).map((id: string) => { const p = onlineProducts.find((x) => x.id === id); if (!p) return null; return (
-                      <span key={id} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-xs px-2 py-1 rounded-lg">{p.ad}<button onClick={() => setCfg('oneriProductIds', (cfg.oneriProductIds || []).filter((x: string) => x !== id))}><X size={12} /></button></span>
-                    ); })}
+                <div className="space-y-3">
+                  {/* Öneri kaynağı: mağaza ⇄ katalog */}
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Öneri kaynağı</label>
+                    <div className="inline-flex rounded-lg border border-slate-200 overflow-hidden">
+                      <button type="button" onClick={() => setCfg('oneriKaynak', 'magaza')} className={`px-3 py-1.5 text-sm ${(cfg.oneriKaynak || 'magaza') === 'magaza' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600'}`}>Mağaza Ürünleri</button>
+                      <button type="button" onClick={() => setCfg('oneriKaynak', 'katalog')} className={`px-3 py-1.5 text-sm border-l border-slate-200 ${cfg.oneriKaynak === 'katalog' ? 'bg-indigo-600 text-white' : 'bg-white text-slate-600'}`}>Katalog Ürünleri</button>
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-1">{cfg.oneriKaynak === 'katalog' ? 'Canlıda okutulan katalog ürünleri önerilir.' : 'Online mağaza ürünleri önerilir.'} Aşağıdan ürün seçerseniz bu seçim her zaman önceliklidir.</p>
                   </div>
-                  <select value="" onChange={(e) => { const v = e.target.value; if (v && !(cfg.oneriProductIds || []).includes(v)) setCfg('oneriProductIds', [...(cfg.oneriProductIds || []), v]); }} className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg">
-                    <option value="">+ Ürün ekle...</option>
-                    {onlineProducts.filter((p) => !(cfg.oneriProductIds || []).includes(p.id)).map((p) => <option key={p.id} value={p.id}>{p.ad}</option>)}
-                  </select>
+                  <div>
+                    <label className="block text-xs text-slate-500 mb-1.5">Önerilecek ürünler (boş = otomatik / kaynağa göre)</label>
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {(cfg.oneriProductIds || []).map((id: string) => { const p = onlineProducts.find((x) => x.id === id); if (!p) return null; return (
+                        <span key={id} className="inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 text-xs px-2 py-1 rounded-lg">{p.ad}<button onClick={() => setCfg('oneriProductIds', (cfg.oneriProductIds || []).filter((x: string) => x !== id))}><X size={12} /></button></span>
+                      ); })}
+                    </div>
+                    <select value="" onChange={(e) => { const v = e.target.value; if (v && !(cfg.oneriProductIds || []).includes(v)) setCfg('oneriProductIds', [...(cfg.oneriProductIds || []), v]); }} className="w-full px-2 py-2 text-sm border border-slate-200 rounded-lg">
+                      <option value="">+ Ürün ekle...</option>
+                      {onlineProducts.filter((p) => !(cfg.oneriProductIds || []).includes(p.id)).map((p) => <option key={p.id} value={p.id}>{p.ad}</option>)}
+                    </select>
+                  </div>
                 </div>
               )}
             </div>

@@ -225,6 +225,16 @@ export async function notifyOrderSms(
     // Her SMS altina sepet linki ekle (sablonda zaten yoksa)
     let finalMsg = msg;
     if (data.sepetLink && !finalMsg.includes(data.sepetLink)) finalMsg += `\nSepetiniz: ${data.sepetLink}`;
+    // Garanti: onaylandi / iptal / yetersiz SMS'lerinde urun kodu + varyasyon mutlaka gorunsun.
+    // (Tenant ozel sablonu {urun}/{beden}/{kod} yer tutucularini silmis olabilir.)
+    if (event === 'approved' || event === 'cancel' || event === 'lowstock') {
+      const kodStr = (data.kod || '').trim();
+      const urunStr = (data.urun || '').trim();
+      const bedenStr = (data.beden || '').trim();
+      const alreadyHas = (kodStr && finalMsg.includes(kodStr)) || (!kodStr && !!urunStr && finalMsg.includes(urunStr));
+      const parca = [urunStr, bedenStr, kodStr ? `(${kodStr})` : ''].filter(Boolean).join(' ').trim();
+      if (parca && !alreadyHas) finalMsg += `\nUrun: ${parca}`;
+    }
     await sendSms(tenantId, [data.phone], finalMsg).catch((e) => console.error('[SMS notify]', String(e?.message || e)));
   } catch (e: any) {
     console.error('[SMS notify error]', String(e?.message || e));

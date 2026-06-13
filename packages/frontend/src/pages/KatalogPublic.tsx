@@ -20,6 +20,13 @@ export default function KatalogPublic() {
   const [loaded, setLoaded] = useState(false);
   const [now, setNow] = useState(Date.now());
   const [zoom, setZoom] = useState('');
+  const [copiedKod, setCopiedKod] = useState('');
+  const copyKod = (kod: string) => {
+    if (!kod) return;
+    try { navigator.clipboard?.writeText(kod); } catch { /* */ }
+    setCopiedKod(kod);
+    setTimeout(() => setCopiedKod((c) => (c === kod ? '' : c)), 1200);
+  };
 
   useEffect(() => { api.get(`/public/katalog/${slug}`).then((r) => { setData(r.data); setLoaded(true); }).catch(() => setLoaded(true)); }, [slug]);
   useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
@@ -67,13 +74,31 @@ export default function KatalogPublic() {
                   </div>
                   <div className="p-2.5 flex flex-col flex-1">
                     <p className="text-[13px] font-medium text-slate-800 leading-tight line-clamp-2">{p.ad}</p>
-                    <p className="text-[10px] text-slate-400 mt-0.5 truncate">{p.salesCode || '-'}{p.marka ? ` · ${p.marka}` : ''}{p.cinsiyet ? ` · ${GENDER_LBL[p.cinsiyet] || p.cinsiyet}` : ''}</p>
+                    {/* Satış kodu — belirgin, kopyalanabilir rozet (kesilmez) */}
+                    {p.salesCode && (
+                      <button type="button" onClick={() => copyKod(p.salesCode)} title="Kodu kopyala"
+                        className="mt-1 self-start inline-flex items-center gap-1 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md px-2 py-0.5 text-[13px] font-bold tracking-wide hover:bg-indigo-100 active:scale-95 transition">
+                        <span className="text-[9px] font-semibold text-indigo-400 uppercase">Kod</span>
+                        <span>{p.salesCode}</span>
+                        {copiedKod === p.salesCode && <span className="text-[9px] text-emerald-600 font-semibold">✓ kopyalandı</span>}
+                      </button>
+                    )}
+                    {(p.marka || p.cinsiyet) && (
+                      <p className="text-[10px] text-slate-400 mt-0.5 truncate">{[p.marka, p.cinsiyet ? (GENDER_LBL[p.cinsiyet] || p.cinsiyet) : ''].filter(Boolean).join(' · ')}</p>
+                    )}
                     <div className="flex items-center gap-1.5 mt-1">
                       {eski > 0 && <span className="text-[11px] text-slate-300 line-through">{fmt(eski)}</span>}
                       <span className={`text-base font-bold ${ind > 0 ? 'text-rose-600' : 'text-slate-800'}`}>{fmt(fiyat)}</span>
                     </div>
                     {bedenler.length > 0 ? (
-                      <div className="flex flex-wrap gap-1 mt-1.5">{bedenler.slice(0, 6).map((v: any) => <span key={v.deger} className="text-[10px] px-1.5 py-0.5 rounded border border-slate-200 text-slate-600">{v.deger}</span>)}</div>
+                      <div className="mt-1.5">
+                        <span className="text-[10px] font-semibold text-slate-500">Beden:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {bedenler.map((v: any) => (
+                            <span key={v.deger} className="text-[12px] px-2 py-0.5 rounded-md border border-slate-300 bg-slate-50 text-slate-700 font-semibold">{v.deger}</span>
+                          ))}
+                        </div>
+                      </div>
                     ) : <p className="text-[10px] text-slate-400 mt-1.5">{(p.stokAdeti || 0) > 0 ? `${p.stokAdeti} adet stokta` : 'Tükendi'}</p>}
                     {flashAktif && <p className="mt-auto pt-2 text-[10px] text-rose-500 font-medium flex items-center gap-1"><Tag size={11} /> Süreli indirim</p>}
                   </div>

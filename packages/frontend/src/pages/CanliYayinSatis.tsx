@@ -393,15 +393,18 @@ export default function CanliYayinSatis() {
       const parts = line.split(/\s+/);
       const user = parts[0] || 'kullanici';
       const rest = parts.slice(1).join(' ');
+      if (!rest.trim()) { atlanan++; continue; }
       const { product: p, beden, code } = resolveCodeBeden(rest);
-      // Satışa uygun ürün yoksa satır açma — boş/geçersiz kod phantom sipariş oluşturmasın
-      if (!p) { atlanan++; continue; }
-      // Varyasyonlu üründe beden zorunlu — beden yoksa sipariş açma
-      if ((p.variations || []).length > 0 && !beden) { atlanan++; continue; }
       try {
-        await api.post('/store/live/order', { streamId: stream.id, user, kod: code, beden: beden || '', productId: p._drop ? undefined : p.id, freeProductId: p._drop ? p.id : undefined, variation: beden, urun: p.ad || code, saticiAd: satici || null, fiyatOverride: activeFlash(p.id) });
+        if (p && (!(p.variations || []).length || beden)) {
+          // Yerel listede çözüldü — hızlı yol (productId ile)
+          await api.post('/store/live/order', { streamId: stream.id, user, kod: code, beden: beden || '', productId: p._drop ? undefined : p.id, freeProductId: p._drop ? p.id : undefined, variation: beden, urun: p.ad || code, saticiAd: satici || null, fiyatOverride: activeFlash(p.id) });
+        } else {
+          // Yerel liste bayat olabilir → ham kodu backend taze DB'den çözsün (kod + beden)
+          await api.post('/store/live/order', { streamId: stream.id, user, kod: rest, saticiAd: satici || null });
+        }
         islenen++;
-      } catch { /* */ }
+      } catch { atlanan++; }
     }
     setText(''); setBusy(false);
     await loadActive(); loadFree(); reload();

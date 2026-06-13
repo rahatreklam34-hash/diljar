@@ -10,6 +10,8 @@ const router = Router();
 
 const norm = (s: string) => (s || '').toLowerCase().replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/^@/, '').trim();
 const genToken = () => Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
+// Beden/varyasyon eşleşmesi toleranslı: boşluk + büyük/küçük harf farkını yok say
+const normVar = (s: any) => String(s ?? '').trim().toUpperCase();
 
 async function findCustomerByHandle(tenantId: string, handle: string) {
   const h = norm(handle);
@@ -128,8 +130,15 @@ router.get('/history', asyncHandler(async (req: Request, res: Response) => {
 // Yayin siparisi olustur (musteri eslesirse onaylandi, yoksa rezerve) + sepete ekle.
 // Hem REST /order ucu hem de Facebook canli yorum poller'i bu fonksiyonu kullanir.
 export async function placeLiveOrder(t: string, payload: any) {
-  const { streamId, user, kod, beden, productId, variation, urun, saticiAd, fiyatOverride, freeProductId } = payload || {};
+  const { streamId, user, kod, beden, productId, variation, urun, saticiAd, fiyatOverride, freeProductId, commentId } = payload || {};
   if (!streamId) throw new ApiError(400, 'Aktif yayin yok');
+
+  // Kalıcı tekilleştirme: aynı yorumdan (IG/FB) ikinci kez sipariş açma.
+  // (Bellek içi seen seti pm2 restart'ta sıfırlanıyordu → çift sipariş.)
+  if (commentId) {
+    const dup = await prisma.liveOrder.findFirst({ where: { tenantId: t, streamId, commentId: String(commentId) } });
+    if (dup) return dup;
+  }
 
   const customer = await findCustomerByHandle(t, user || '');
 
@@ -147,7 +156,9 @@ export async function placeLiveOrder(t: string, payload: any) {
         realKod = p.salesCode || realKod;
         let okStock = false;
         if (variation) {
-          const v = await tx.productVariation.findFirst({ where: { productId, tenantId: t, deger: variation } });
+          const vlist = await tx.productVariation.findMany({ where: { productId, tenantId: t } });
+          const want = normVar(variation);
+          const v = vlist.find((x: any) => x.deger === variation) || vlist.find((x: any) => normVar(x.deger) === want);
           if (v) { tutar += v.ekFiyat || 0; if (v.stok >= 1) { await tx.productVariation.update({ where: { id: v.id }, data: { stok: { decrement: 1 } } }); okStock = true; } }
         } else if ((p.stokAdeti || 0) >= 1) okStock = true;
         const ov = Number(fiyatOverride) || 0;
@@ -172,7 +183,9 @@ export async function placeLiveOrder(t: string, payload: any) {
         const target = variation || beden || null;
         let okStock = false;
         if (target) {
-          const idx = vars.findIndex((v) => v.deger === target);
+          const want = normVar(target);
+          let idx = vars.findIndex((v) => v.deger === target);
+          if (idx < 0) idx = vars.findIndex((v) => normVar(v.deger) === want);
           if (idx >= 0 && (Number(vars[idx].stok) || 0) >= 1) { vars[idx].stok = (Number(vars[idx].stok) || 0) - 1; okStock = true; }
         } else if (vars.length === 0) {
           okStock = true;
@@ -188,7 +201,7 @@ export async function placeLiveOrder(t: string, payload: any) {
       }
     }
 
-    const lord = await tx.liveOrder.create({ data: { tenantId: t, streamId, user, kod: realKod || '', urun: urunAd, beden: beden || null, productId: productId || null, variation: variation || null, saticiAd: saticiAd || null, durum, tutar, alis, storeOrderId: null, freeProductId: freeProductId || null, supplierId, drop, gorsel } });
+    const lord = await tx.liveOrder.create({ data: { tenantId: t, streamId, user, kod: realKod || '', urun: urunAd, beden: beden || null, productId: productId || null, variation: variation || null, saticiAd: saticiAd || null, durum, tutar, alis, storeOrderId: null, freeProductId: freeProductId || null, supplierId, drop, gorsel, commentId: commentId ? String(commentId) : null } });
 
     // Onaylandi/rezerve ise sepete ekle
     if (durum === 'onaylandi' || durum === 'rezerve') {
@@ -260,7 +273,9 @@ export async function promoteWaitingStock(t: string, opts: { productId?: string 
           const p = await tx.product.findFirst({ where: { id: w.productId, tenantId: t } });
           if (!p) return null;
           if (w.variation) {
-            const v = await tx.productVariation.findFirst({ where: { productId: w.productId, tenantId: t, deger: w.variation } });
+            const vlist = await tx.productVariation.findMany({ where: { productId: w.productId, tenantId: t } });
+            const want = normVar(w.variation);
+            const v = vlist.find((x: any) => x.deger === w.variation) || vlist.find((x: any) => normVar(x.deger) === want);
             if (v && v.stok >= 1) { await tx.productVariation.update({ where: { id: v.id }, data: { stok: { decrement: 1 } } }); okStock = true; }
           } else if ((p.stokAdeti || 0) >= 1) okStock = true;
           if (okStock) await tx.product.update({ where: { id: p.id }, data: { stokAdeti: { decrement: 1 } } });
@@ -270,7 +285,9 @@ export async function promoteWaitingStock(t: string, opts: { productId?: string 
           const vars: any[] = Array.isArray(fp.variations) ? (fp.variations as any[]) : [];
           const target = w.variation || w.beden || null;
           if (target) {
-            const idx = vars.findIndex((v) => v.deger === target);
+            const want = normVar(target);
+            let idx = vars.findIndex((v) => v.deger === target);
+            if (idx < 0) idx = vars.findIndex((v) => normVar(v.deger) === want);
             if (idx >= 0 && (Number(vars[idx].stok) || 0) >= 1) { vars[idx].stok = (Number(vars[idx].stok) || 0) - 1; okStock = true; await tx.freeProduct.update({ where: { id: fp.id }, data: { variations: vars } }); }
           } else if (vars.length === 0) okStock = true;
         }
