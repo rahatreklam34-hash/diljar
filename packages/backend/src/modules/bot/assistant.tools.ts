@@ -167,7 +167,7 @@ export async function execTool(name: string, args: any, ctx: ToolCtx): Promise<s
 
     if (name === 'odeme_iste') {
       if (items.length === 0) return JSON.stringify({ hata: true, mesaj: 'Sepet boş.' });
-      if (cart.durum === 'sepet') await prisma.storeOrder.update({ where: { id: cart.id }, data: { durum: 'yeni' } });
+      // Sepet durumu otomatik değiştirilmez; durumu yalnız satıcı sepet detayından değiştirir.
       const tahsilEdilen = cart.tahsilat || 0;
       const kalan = Math.max(0, (cart.toplam || 0) - tahsilEdilen);
       const siparisNo = cart.orderNo ? `${cart.orderYil || new Date(cart.createdAt).getFullYear()}-${String(cart.orderNo).padStart(3, '0')}` : cart.id.slice(-5).toUpperCase();

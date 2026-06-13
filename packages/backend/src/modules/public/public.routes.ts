@@ -926,7 +926,9 @@ router.get('/sepet/:token/siparislerim', asyncHandler(async (req: Request, res: 
   const cart = await prisma.storeOrder.findFirst({ where: { token: req.params.token } });
   if (!cart) throw new ApiError(404, 'Sepet bulunamadi');
   if (!cart.customerId) return res.json({ siparisler: [], ozet: { toplam: 0, teslim: 0, kargoda: 0, iade: 0 } });
-  const orders = await prisma.storeOrder.findMany({ where: { tenantId: cart.tenantId, customerId: cart.customerId }, orderBy: { createdAt: 'desc' }, take: 100 });
+  const allOrders = await prisma.storeOrder.findMany({ where: { tenantId: cart.tenantId, customerId: cart.customerId }, orderBy: { createdAt: 'desc' }, take: 100 });
+  // İçinde ürün kalmayan (boşalmış) sepetler "Siparişlerim"de gösterilmez
+  const orders = allOrders.filter((o) => (Array.isArray(o.items) ? (o.items as any) : []).length > 0);
   const ids = [...new Set(orders.flatMap((o) => (Array.isArray(o.items) ? (o.items as any) : []).map((it: any) => it.productId)).filter(Boolean))] as string[];
   const prods = ids.length ? await prisma.product.findMany({ where: { tenantId: cart.tenantId, id: { in: ids } }, select: { id: true, images: true } }) : [];
   const imgMap = new Map(prods.map((p) => [p.id, (Array.isArray(p.images) ? (p.images as any)[0] : '') || '']));

@@ -54,11 +54,7 @@ export default function CanliYayinSatis() {
   const [barHistory, setBarHistory] = useState<any[]>([]);
   const [barHistModal, setBarHistModal] = useState(false);
   const [iptalAday, setIptalAday] = useState<any>(null);
-  const katalogGoster = ((storeSetting?.config as any)?.canliKatalogGoster) !== false; // varsayılan açık
-  const setKatalogGoster = async (val: boolean) => {
-    try { await api.put('/store/settings', { config: { ...((storeSetting?.config as any) || {}), canliKatalogGoster: val } }); toast.success(val ? 'Yayındaki ürünler katalogda gösterilecek' : 'Yayındaki ürünler katalogda gizlenecek'); reload(); }
-    catch (e) { toast.error(apiErrorMessage(e)); }
-  };
+  // Katalog her zaman açık: yayında okutulan/yazılan/indirimli ürünler herkese açık katalogda görünür
   const [araQ, setAraQ] = useState('');
   const [fbStatus, setFbStatus] = useState<{ connected: boolean; videoId: string | null; feed: any[] }>({ connected: false, videoId: null, feed: [] });
   const [fbModal, setFbModal] = useState(false);
@@ -339,7 +335,7 @@ export default function CanliYayinSatis() {
   const openProduct = (p: any, preBeden?: string) => {
     setBarkodModal({ ...p, _preBeden: preBeden || null }); setDiscForm({ price: '', dakika: '' });
     setBarHistory((h) => [{ id: Date.now(), productId: p.id, ad: p.ad, kod: p.salesCode || '-', barkod: p.barkod || '-', stok: p.stokAdeti || 0, time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) }, ...h.filter((x) => x.productId !== p.id)].slice(0, 30));
-    if (!p._drop && katalogGoster) api.post('/store/catalog/add', { productId: p.id }).catch(() => {});
+    if (!p._drop) api.post('/store/catalog/add', { productId: p.id }).catch(() => {});
   };
   const openByCode = (code: string) => {
     const { product, beden } = resolveCodeBeden(code);
@@ -378,9 +374,10 @@ export default function CanliYayinSatis() {
     if (!(price > 0) || !(dk > 0)) { toast.error('Geçerli fiyat ve süre girin'); return; }
     const exp = Date.now() + dk * 60000;
     setFlash((f) => ({ ...f, [barkodModal.id]: { price, exp } }));
-    if (katalogGoster) api.post('/store/catalog/add', { productId: barkodModal.id, flashFiyat: price, flashBitis: new Date(exp).toISOString() }).catch(() => {});
+    // Flash indirim her zaman katalog item'a yazılır (katalog sürekli açık); katalog linkinde geri sayım görünür
+    api.post('/store/catalog/add', { productId: barkodModal.id, flashFiyat: price, flashBitis: new Date(exp).toISOString() }).catch(() => {});
     toast.success(`${barkodModal.ad}: ${dk} dk boyunca ${price}₺ indirimli`);
-    setBarkodModal(null);
+    // Ürün detayı/kartı açık kalır (kullanıcı talebi); modal kapatılmaz
   };
 
   const parse = async () => {
@@ -658,9 +655,6 @@ export default function CanliYayinSatis() {
             <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
               <h3 className="font-semibold text-slate-800 flex items-center gap-2"><Filter size={16} className="text-indigo-600" /> Ürün Bul</h3>
               <div className="flex items-center gap-1">
-                <button onClick={() => setKatalogGoster(!katalogGoster)} title="Yayında okutulan/yazılan ürünleri herkese açık katalogda göster" className={`text-[11px] px-2 py-1 rounded-lg inline-flex items-center gap-1 border ${katalogGoster ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-slate-50 border-slate-200 text-slate-500'}`}>
-                  <span className={`w-2 h-2 rounded-full ${katalogGoster ? 'bg-emerald-500' : 'bg-slate-400'}`} /> Katalogda Göster: {katalogGoster ? 'Açık' : 'Kapalı'}
-                </button>
                 {storeSetting?.slug && <button onClick={() => { navigator.clipboard?.writeText(`${location.origin}/katalog/${storeSetting.slug}`); toast.success('Katalog linki kopyalandı'); }} className="text-[11px] text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded-lg inline-flex items-center gap-1"><Share2 size={13} /> Katalog Linki</button>}
                 <button onClick={() => setBarHistModal(true)} className="text-[11px] text-indigo-600 hover:bg-indigo-50 px-2 py-1 rounded-lg inline-flex items-center gap-1"><History size={13} /> Geçmiş{barHistory.length > 0 && <span className="bg-indigo-100 text-indigo-700 px-1.5 rounded-full text-[10px]">{barHistory.length}</span>}</button>
               </div>

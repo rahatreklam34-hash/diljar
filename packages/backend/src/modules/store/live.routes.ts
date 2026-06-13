@@ -162,7 +162,13 @@ export async function placeLiveOrder(t: string, payload: any) {
           if (v) { tutar += v.ekFiyat || 0; if (v.stok >= 1) { await tx.productVariation.update({ where: { id: v.id }, data: { stok: { decrement: 1 } } }); okStock = true; } }
         } else if ((p.stokAdeti || 0) >= 1) okStock = true;
         const ov = Number(fiyatOverride) || 0;
-        if (ov > 0) tutar = ov;
+        if (ov > 0) {
+          tutar = ov;
+        } else {
+          // Katalog süreli (flash) indirim: payload override yoksa sunucu tarafı katalogdan uygular
+          const ci = await tx.catalogItem.findFirst({ where: { tenantId: t, productId } });
+          if (ci?.flashFiyat && ci.flashBitis && ci.flashBitis.getTime() > Date.now()) tutar = ci.flashFiyat;
+        }
         if (okStock) {
           await tx.product.update({ where: { id: p.id }, data: { stokAdeti: { decrement: 1 } } });
           // Kayitli musteri -> onaylandi, degilse rezerve
