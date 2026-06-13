@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { Toaster } from 'react-hot-toast';
 import api from './lib/api';
 import { AuthProvider, useAuth } from './context/AuthContext';
@@ -7,7 +7,7 @@ import { AppProvider } from './context/AppContext';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import Sidebar from './components/Sidebar';
 import CommandPalette from './components/CommandPalette';
-import { StoreProvider } from './context/StoreContext';
+import { StoreProvider, useStore } from './context/StoreContext';
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const CariHesaplar = lazy(() => import('./pages/CariHesaplar'));
 const GelirGider = lazy(() => import('./pages/GelirGider'));
@@ -88,12 +88,24 @@ function AccessGuard() {
   return null;
 }
 
+function RouteDataRefresher() {
+  const { reload } = useStore();
+  const location = useLocation();
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; } // ilk yukleme StoreProvider'da yapiliyor
+    reload();
+  }, [location.pathname]);
+  return null;
+}
+
 function TenantApp() {
   return (
     <AppProvider>
       <StoreProvider>
       <CommandPalette />
       <AccessGuard />
+      <RouteDataRefresher />
       <div className="min-h-screen flex">
         <Sidebar />
         <main className="flex-1 min-w-0 ml-0 lg:ml-64 overflow-x-hidden transition-all duration-300" id="main-content">

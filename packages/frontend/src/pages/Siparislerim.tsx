@@ -70,11 +70,14 @@ export default function Siparislerim({ kanalFilter }: { kanalFilter?: 'online' |
   const counts = useMemo(() => {
     const m: Record<string, number> = { tumu: channelOrders.length };
     STATUSES.forEach((s) => { m[s.key] = channelOrders.filter((o) => o.durum === s.key).length; });
+    m['odeme_bekliyor'] = channelOrders.filter((o) => o.durum !== 'iptal' && ((o.toplam || 0) - (o.tahsilat || 0)) > 0.5).length;
     return m;
   }, [channelOrders]);
 
   const filtered = useMemo(() => {
-    let list = tab === 'tumu' ? channelOrders : channelOrders.filter((o) => o.durum === tab);
+    let list = tab === 'tumu' ? channelOrders
+      : tab === 'odeme_bekliyor' ? channelOrders.filter((o) => o.durum !== 'iptal' && ((o.toplam || 0) - (o.tahsilat || 0)) > 0.5)
+      : channelOrders.filter((o) => o.durum === tab);
     if (search.trim()) {
       const q = search.toLowerCase();
       list = list.filter((o) => siparisNo(o.id).toLowerCase().includes(q) || custName(o).toLowerCase().includes(q) || custPhone(o).includes(q) || custInsta(o).toLowerCase().includes(q));
@@ -142,6 +145,7 @@ export default function Siparislerim({ kanalFilter }: { kanalFilter?: 'online' |
       {/* Durum sekmeleri */}
       <div className="flex items-center gap-1 border-b border-slate-200 mb-4 overflow-x-auto">
         <TabBtn active={tab === 'tumu'} onClick={() => { setTab('tumu'); setPage(1); }} label="Tümü" count={counts.tumu} />
+        <TabBtn active={tab === 'odeme_bekliyor'} onClick={() => { setTab('odeme_bekliyor'); setPage(1); }} label="Ödeme Bekleniyor" count={counts['odeme_bekliyor']} />
         {STATUSES.map((s) => <TabBtn key={s.key} active={tab === s.key} onClick={() => { setTab(s.key); setPage(1); }} label={s.t} count={counts[s.key]} />)}
       </div>
 
