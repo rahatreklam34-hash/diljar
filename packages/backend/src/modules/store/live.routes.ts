@@ -97,6 +97,14 @@ router.post('/start', asyncHandler(async (req: Request, res: Response) => {
   const t = req.tenantId!;
   await prisma.liveStream.updateMany({ where: { tenantId: t, status: 'active' }, data: { status: 'ended', endedAt: new Date() } });
   const s = await prisma.liveStream.create({ data: { tenantId: t, status: 'active', baslik: req.body?.baslik || null } });
+  // Kayıtlı Instagram token varsa yeni yayına otomatik bağla (her seferinde girme derdi yok)
+  try {
+    const ss = await prisma.storeSetting.findUnique({ where: { tenantId: t }, select: { igTokenSaved: true, igUserIdSaved: true } });
+    if (ss?.igTokenSaved && ss?.igUserIdSaved) {
+      clearIgState(s.id);
+      await prisma.liveStream.update({ where: { id: s.id }, data: { igUserId: ss.igUserIdSaved, igToken: ss.igTokenSaved, igSince: new Date(Date.now() - 60 * 1000) } });
+    }
+  } catch { /* yoksa devam */ }
   res.status(201).json(s);
 }));
 
@@ -405,7 +413,6 @@ router.post('/ig/connect', asyncHandler(async (req: Request, res: Response) => {
   const { token } = req.body || {};
   if (!token) throw new ApiError(422, 'Instagram erişim token gerekli');
   const stream = await prisma.liveStream.findFirst({ where: { tenantId: t, status: 'active' }, orderBy: { startedAt: 'desc' } });
-  if (!stream) throw new ApiError(400, 'Önce yayını başlatın');
 
   let igToken = String(token).trim();
 
@@ -445,16 +452,28 @@ router.post('/ig/connect', asyncHandler(async (req: Request, res: Response) => {
   }
   if (!igUserId) throw new ApiError(400, 'Instagram hesap ID çözülemedi');
 
-  clearIgState(stream.id);
-  await prisma.liveStream.update({
-    where: { id: stream.id },
-    data: { igUserId, igToken, igSince: new Date(Date.now() - 60 * 1000) },
+  // Kalıcı kaydet → her yayında otomatik bağlanır, bir daha girmeye gerek yok
+  await prisma.storeSetting.upsert({
+    where: { tenantId: t },
+    create: { tenantId: t, igTokenSaved: igToken, igUserIdSaved: igUserId },
+    update: { igTokenSaved: igToken, igUserIdSaved: igUserId },
   });
-  res.json({ ok: true, igUserId, username });
+
+  // Aktif yayın varsa hemen bağla
+  if (stream) {
+    clearIgState(stream.id);
+    await prisma.liveStream.update({
+      where: { id: stream.id },
+      data: { igUserId, igToken, igSince: new Date(Date.now() - 60 * 1000) },
+    });
+  }
+  res.json({ ok: true, igUserId, username, saved: true, bound: !!stream });
 }));
 
 router.post('/ig/disconnect', asyncHandler(async (req: Request, res: Response) => {
   const t = req.tenantId!;
+  // Kalıcı kaydı da temizle (artık otomatik bağlanmasın)
+  await prisma.storeSetting.updateMany({ where: { tenantId: t }, data: { igTokenSaved: null, igUserIdSaved: null } });
   const stream = await prisma.liveStream.findFirst({ where: { tenantId: t, status: 'active' }, orderBy: { startedAt: 'desc' } });
   if (stream) {
     clearIgState(stream.id);
@@ -466,9 +485,18 @@ router.post('/ig/disconnect', asyncHandler(async (req: Request, res: Response) =
 // IG bağlantı durumu + son çekilen yorum akışı
 router.get('/ig/status', asyncHandler(async (req: Request, res: Response) => {
   const t = req.tenantId!;
+  const ss = await prisma.storeSetting.findUnique({ where: { tenantId: t }, select: { igTokenSaved: true, igUserIdSaved: true } });
+  const saved = !!(ss?.igTokenSaved && ss?.igUserIdSaved);
   const stream = await prisma.liveStream.findFirst({ where: { tenantId: t, status: 'active' }, orderBy: { startedAt: 'desc' } });
-  if (!stream) return res.json({ connected: false, igUserId: null, feed: [] });
-  res.json({ connected: !!stream.igUserId, igUserId: stream.igUserId, feed: stream.igUserId ? getIgFeed(stream.id) : [] });
+  if (!stream) return res.json({ connected: false, igUserId: ss?.igUserIdSaved || null, feed: [], saved });
+
+  // Kayıtlı token var ama yayın henüz bağlı değilse → güvenli otomatik bağla
+  if (saved && !stream.igUserId) {
+    clearIgState(stream.id);
+    await prisma.liveStream.update({ where: { id: stream.id }, data: { igUserId: ss!.igUserIdSaved, igToken: ss!.igTokenSaved, igSince: new Date(Date.now() - 60 * 1000) } });
+    return res.json({ connected: true, igUserId: ss!.igUserIdSaved, feed: getIgFeed(stream.id), saved });
+  }
+  res.json({ connected: !!stream.igUserId, igUserId: stream.igUserId, feed: stream.igUserId ? getIgFeed(stream.id) : [], saved });
 }));
 
 export default router;

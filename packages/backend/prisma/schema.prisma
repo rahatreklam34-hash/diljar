@@ -869,6 +869,8 @@ model StoreSetting {
   config       Json? // gelişmiş mağaza ayarları (iletişim, sosyal, tema, seo, kargo, ödeme, bildirim, politika)
   freeShipThreshold Float @default(0) // 0 = kapalı; bu tutar üzeri ücretsiz kargo
   puanOrani    Float    @default(0) // 0 = kapalı; sipariş tutarının %'i kadar puan
+  igTokenSaved  String? // Instagram canlı yorum entegrasyonu için kalıcı token
+  igUserIdSaved String? // Instagram hesap ID (kalıcı)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }

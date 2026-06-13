@@ -39,7 +39,7 @@ export default function CanliYayinSatis() {
   const [fbModal, setFbModal] = useState(false);
   const [fbForm, setFbForm] = useState({ videoId: '', token: '' });
   const [fbBusy, setFbBusy] = useState(false);
-  const [igStatus, setIgStatus] = useState<{ connected: boolean; igUserId: string | null; feed: any[] }>({ connected: false, igUserId: null, feed: [] });
+  const [igStatus, setIgStatus] = useState<{ connected: boolean; igUserId: string | null; feed: any[]; saved?: boolean }>({ connected: false, igUserId: null, feed: [], saved: false });
   const [igModal, setIgModal] = useState(false);
   const [igForm, setIgForm] = useState({ token: '' });
   const [igBusy, setIgBusy] = useState(false);
@@ -571,7 +571,7 @@ export default function CanliYayinSatis() {
             <button onClick={() => setFbModal(true)} className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${fbStatus.connected ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-blue-50 text-blue-600 hover:bg-blue-100'}`}><Video size={16} /> {fbStatus.connected ? 'FB Bağlı' : 'Facebook'}</button>
           )}
           {stream && (
-            <button onClick={() => setIgModal(true)} className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${igStatus.connected ? 'bg-pink-600 text-white hover:bg-pink-700' : 'bg-pink-50 text-pink-600 hover:bg-pink-100'}`}><Video size={16} /> {igStatus.connected ? 'IG Bağlı' : 'Instagram'}</button>
+            <button onClick={() => setIgModal(true)} className={`inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${(igStatus.connected || igStatus.saved) ? 'bg-pink-600 text-white hover:bg-pink-700' : 'bg-pink-50 text-pink-600 hover:bg-pink-100'}`}><Video size={16} /> {igStatus.connected ? 'IG Bağlı' : igStatus.saved ? 'IG Kayıtlı' : 'Instagram'}</button>
           )}
           {!stream ? (
             <button onClick={startStream} className="inline-flex items-center gap-2 bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700"><Radio size={16} /> Yeni Yayın</button>
@@ -958,11 +958,11 @@ export default function CanliYayinSatis() {
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Video size={20} className="text-pink-600" /> Instagram Canlı Yayın</h3>
               <button onClick={() => setIgModal(false)}><X size={20} className="text-slate-400" /></button>
             </div>
-            {igStatus.connected ? (
+            {(igStatus.connected || igStatus.saved) ? (
               <div className="space-y-3">
-                <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700 flex items-center gap-2"><Link2 size={16} /> Bağlı — Hesap ID: <b className="font-mono">{igStatus.igUserId}</b></div>
-                <p className="text-xs text-slate-500">Instagram'da canlı yayını başlattığınızda yorumlar her 5 saniyede otomatik çekilir. İçinde satış kodu/barkod geçen yorumlar siparişe dönüşür.</p>
-                <button onClick={igDisconnect} disabled={igBusy} className="w-full inline-flex items-center justify-center gap-2 bg-rose-500 text-white py-2.5 rounded-lg font-medium hover:bg-rose-600 disabled:opacity-50"><Unlink size={16} /> Bağlantıyı Kes</button>
+                <div className="bg-green-50 border border-green-200 rounded-xl p-3 text-sm text-green-700 flex items-center gap-2"><Link2 size={16} /> {igStatus.connected ? 'Yayına bağlı' : 'Kayıtlı'} — Hesap ID: <b className="font-mono">{igStatus.igUserId}</b></div>
+                <p className="text-xs text-slate-500">Token <b>kalıcı kaydedildi</b>. Her yayın başlattığınızda otomatik bağlanır — bir daha token girmenize gerek yok. Canlı yayındaki yorumlar 5 sn'de bir çekilir; satış kodu/barkod geçen yorumlar siparişe dönüşür.</p>
+                <button onClick={igDisconnect} disabled={igBusy} className="w-full inline-flex items-center justify-center gap-2 bg-rose-500 text-white py-2.5 rounded-lg font-medium hover:bg-rose-600 disabled:opacity-50"><Unlink size={16} /> Kayıtlı Token'ı Kaldır</button>
               </div>
             ) : (
               <div className="space-y-3">
