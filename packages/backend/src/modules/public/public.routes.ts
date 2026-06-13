@@ -622,6 +622,8 @@ router.get('/chat/:slug/messages', asyncHandler(async (req: Request, res: Respon
 
 // ───── Uyelik formu (public) ─────
 const igNorm = (s: string) => (s || '').toLowerCase().replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/^@/, '').trim();
+// Telefonu 10 haneli (5xxxxxxxxx) anahtara indirger
+const telKey = (s: string) => { let d = (s || '').replace(/\D/g, ''); if (d.startsWith('90')) d = d.slice(2); if (d.length === 11 && d.startsWith('0')) d = d.slice(1); return d; };
 
 // Üyelik için telefona SMS doğrulama kodu gönder
 router.post('/uye/:slug/kod-gonder', asyncHandler(async (req: Request, res: Response) => {
@@ -630,7 +632,14 @@ router.post('/uye/:slug/kod-gonder', asyncHandler(async (req: Request, res: Resp
   const telN = String(req.body?.telefon || '').replace(/\D/g, '');
   const telOk = (telN.length === 10 && telN.startsWith('5')) || (telN.length === 11 && telN.startsWith('05')) || (telN.length === 12 && telN.startsWith('905'));
   if (!telOk) throw new ApiError(422, 'Geçerli bir cep telefonu girin (05XX XXX XX XX).');
-  const norm = telN.replace(/^90/, '').replace(/^0/, '');
+  const norm = telKey(telN);
+  // Zaten üye olan numara/kullanıcı adına SMS gönderme — net hata ver
+  const igN = igNorm(String(req.body?.instagram || ''));
+  const mevcutlar = await prisma.customer.findMany({ where: { tenantId } });
+  if (mevcutlar.some((c) => (c.not || '') === 'Üyelik formu' && telKey(c.telefon || '') === norm))
+    throw new ApiError(409, 'Bu telefon numarası ile zaten üyelik oluşturulmuş. Her numara yalnızca bir kez üye olabilir.');
+  if (igN && mevcutlar.some((c) => (c.not || '') === 'Üyelik formu' && igNorm(c.instagram || '') === igN))
+    throw new ApiError(409, 'Bu Instagram kullanıcı adı ile zaten üyelik oluşturulmuş. Her kullanıcı adı yalnızca bir kez üye olabilir.');
   const key = uyeKodKey(tenantId, norm);
   const now = Date.now();
   const prev = uyeKodlar.get(key);
@@ -658,25 +667,29 @@ router.post('/uye/:slug', asyncHandler(async (req: Request, res: Response) => {
   const igN = igNorm(igClean);
   const telN = String(telefon).replace(/\D/g, '');
   // SMS doğrulama: telefona gönderilen kod doğru olmalı
-  const dogKey = uyeKodKey(tenantId, telN.replace(/^90/, '').replace(/^0/, ''));
+  const dogKey = uyeKodKey(tenantId, telKey(telN));
   const rec = uyeKodlar.get(dogKey);
   if (!rec || rec.exp < Date.now()) { uyeKodlar.delete(dogKey); throw new ApiError(422, 'Doğrulama kodu bulunamadı veya süresi doldu. Lütfen yeni kod isteyin.'); }
   if (rec.tries >= 5) { uyeKodlar.delete(dogKey); throw new ApiError(429, 'Çok fazla hatalı deneme. Lütfen yeni kod isteyin.'); }
   if (String(kod || '').replace(/\D/g, '') !== rec.kod) { rec.tries += 1; throw new ApiError(422, 'Doğrulama kodu hatalı. Telefonunuza gelen 4 haneli kodu girin.'); }
   uyeKodlar.delete(dogKey);
   const mevcutlar = await prisma.customer.findMany({ where: { tenantId } });
-  const existing = mevcutlar.find((c) =>
-    (igN && igNorm(c.instagram || '') === igN) ||
-    (telN.length >= 7 && (c.telefon || '').replace(/\D/g, '') === telN)
-  );
+  const telMatch = mevcutlar.find((c) => telKey(telN).length >= 10 && telKey(c.telefon || '') === telKey(telN));
+  const igMatch = mevcutlar.find((c) => igN && igNorm(c.instagram || '') === igN);
+  // Zaten ÜYE olan numara/kullanıcı adı ile ikinci kez kayıt AÇMA
+  if (telMatch && (telMatch.not || '') === 'Üyelik formu')
+    throw new ApiError(409, 'Bu telefon numarası ile zaten üyelik oluşturulmuş. Her numara yalnızca bir kez üye olabilir.');
+  if (igMatch && (igMatch.not || '') === 'Üyelik formu')
+    throw new ApiError(409, 'Bu Instagram kullanıcı adı ile zaten üyelik oluşturulmuş. Her kullanıcı adı yalnızca bir kez üye olabilir.');
+  const existing = telMatch || igMatch;
   if (existing) {
-    // Eksik bilgileri tamamla (üzerine yazma yok), rezerve siparişleri onayla, mükerrer kayıt oluşturma.
-    const patch: any = {};
-    if (!existing.instagram && igClean) patch.instagram = igClean;
+    // Otomatik oluşmuş kayıt (canlı yayın/online sipariş) -> üyeliği tamamla, mükerrer kayıt açma.
+    const patch: any = { not: 'Üyelik formu' };
+    if (igClean) patch.instagram = igClean;
     if (!existing.telefon && telefon) patch.telefon = telefon;
     if ((!existing.ad || igNorm(existing.ad) === igNorm(existing.instagram || '')) && ad) patch.ad = ad;
     if (!existing.adres && adres) patch.adres = adres;
-    const cust = Object.keys(patch).length ? await prisma.customer.update({ where: { id: existing.id }, data: patch }) : existing;
+    const cust = await prisma.customer.update({ where: { id: existing.id }, data: patch });
     await promoteReserved(tenantId, cust);
     return res.status(200).json({ ok: true, existed: true });
   }

@@ -25,6 +25,12 @@ export default function UyeOl() {
     if (errField === k) { setErr(''); setErrField(''); }
   };
 
+  // Instagram kullanıcı adı: küçük harf, Türkçe karakter yok, @ yok, sadece a-z 0-9 . _
+  const cleanIg = (v: string) => v
+    .toLowerCase()
+    .replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/İ/g, 'i')
+    .replace(/[^a-z0-9._]/g, '');
+
   // 1. adım: bilgileri doğrula + telefona kod gönder
   const kodGonder = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -34,7 +40,7 @@ export default function UyeOl() {
     if (!form.telefon.trim()) { setErr('Telefon zorunludur.'); setErrField('telefon'); return; }
     setBusy(true);
     try {
-      const { data } = await api.post(`/public/uye/${slug}/kod-gonder`, { telefon: form.telefon });
+      const { data } = await api.post(`/public/uye/${slug}/kod-gonder`, { telefon: form.telefon, instagram: form.instagram });
       setStep('kod');
       setInfo(data?.message || 'Doğrulama kodu telefonunuza gönderildi.');
       setBekle(60);
@@ -103,10 +109,17 @@ export default function UyeOl() {
         </div>
         <div>
           <label className="block text-sm text-slate-600 mb-1">Instagram Kullanıcı Adı *</label>
-          <input value={form.instagram} onChange={(e) => set('instagram', e.target.value)} disabled={step === 'kod'} placeholder="@kullaniciadi" className={inputCls('instagram')} />
+          <input
+            value={form.instagram}
+            onChange={(e) => set('instagram', cleanIg(e.target.value))}
+            disabled={step === 'kod'}
+            placeholder="kullaniciadi"
+            autoCapitalize="none" autoCorrect="off" autoComplete="off" spellCheck={false}
+            className={`${inputCls('instagram')} lowercase`}
+          />
           {errField === 'instagram'
             ? <p className="flex items-center gap-1 text-[12px] text-red-600 mt-1"><AlertCircle size={13} /> {err}</p>
-            : <p className="text-[11px] text-slate-400 mt-1">Kullanıcı adınızı doğru yazdığınızdan emin olun.</p>}
+            : <p className="text-[11px] text-slate-400 mt-1">Sadece küçük harf, rakam, nokta ve alt çizgi. Başına @ koymayın.</p>}
         </div>
         <div>
           <label className="block text-sm text-slate-600 mb-1">Telefon *</label>

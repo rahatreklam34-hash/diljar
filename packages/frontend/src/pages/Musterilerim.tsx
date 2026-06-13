@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus, Pencil, Trash2, Search, X, Phone, Mail, Eye, ChevronRight, Download, SlidersHorizontal, Users, ShieldCheck, TrendingUp, Star } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -13,6 +13,8 @@ const VIP_ESIK = 15000;
 export default function Musterilerim() {
   const { customers, orders, reload, storeSetting } = useStore();
   const nav = useNavigate();
+  // Sayfa açıldığında en güncel müşteri listesini çek (yeni üyelikler hemen görünsün)
+  useEffect(() => { reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
   const [search, setSearch] = useState('');
   const [fDurum, setFDurum] = useState('all');
   const [fRisk, setFRisk] = useState('all');
