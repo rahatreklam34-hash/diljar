@@ -737,9 +737,12 @@ router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => 
   }
   const oneriler = oneriRaw.map((p) => ({ id: p.id, ad: p.ad, fiyat: p.satisFiyat, eskiFiyat: p.eskiFiyat, img: (Array.isArray(p.images) ? (p.images as any)[0] : '') || '', stok: p.stokAdeti, bedenler: (p.variations || []).filter((v: any) => v.stok > 0).map((v: any) => v.deger) }));
   // Kargo ücreti: admin panel eşiğine göre dinamik (mal toplamı eşiği geçerse ücretsiz)
+  let cfgObj: any = setting?.config || {};
+  if (typeof cfgObj === 'string') { try { cfgObj = JSON.parse(cfgObj); } catch { cfgObj = {}; } }
+  const parseNum = (v: any) => { const n = Number(String(v ?? '').replace(/[^0-9.,]/g, '').replace(',', '.')); return Number.isFinite(n) ? n : 0; };
   const malToplam = cart.toplam || 0; // araToplam - indirim
   const freeShip = setting?.freeShipThreshold || 0;
-  const stdKargo = Number((setting?.config as any)?.kargoUcret) || 0;
+  const stdKargo = parseNum(cfgObj.kargoUcret);
   const kargoUcreti = (freeShip > 0 && malToplam >= freeShip) ? 0 : stdKargo;
   const toplamWithKargo = malToplam + kargoUcreti;
   res.json({
