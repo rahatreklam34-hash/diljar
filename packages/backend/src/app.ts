@@ -34,7 +34,7 @@ export function createApp() {
   app.use(express.json({ limit: '20mb' }));
   app.use(cookieParser());
 
-  const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false });
+  const apiLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10000, standardHeaders: true, legacyHeaders: false });
   const authLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 50, standardHeaders: true, legacyHeaders: false });
 
   app.get('/api/v1/health', (_req, res) => res.json({ ok: true, name: env.APP_NAME }));

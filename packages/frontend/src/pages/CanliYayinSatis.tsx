@@ -160,8 +160,9 @@ export default function CanliYayinSatis() {
     if (!stream) return;
     loadFb();
     loadIg();
-    const t = setInterval(() => { loadActive(); loadFree(); loadFb(); loadIg(); reload(); }, 4000);
-    return () => clearInterval(t);
+    const t = setInterval(() => { loadActive(); loadFree(); reload(); }, 4000);
+    const tSocial = setInterval(() => { loadFb(); loadIg(); }, 8000);
+    return () => { clearInterval(t); clearInterval(tSocial); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stream]);
 
