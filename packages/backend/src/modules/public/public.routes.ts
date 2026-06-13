@@ -12,6 +12,11 @@ import { botReply, offeredTicket } from '../bot/engine';
 import { summarizeTicket } from '../bot/llm';
 import { promoteReserved, campaignAdjust } from '../store/live.routes';
 import { nextOrderNo } from '../store/store.routes';
+import { sendSms } from '../sms/netgsm.service';
+
+// ───── Üyelik SMS doğrulama kodu (bellekte; tek süreç/pm2 fork) ─────
+const uyeKodlar = new Map<string, { kod: string; exp: number; lastSent: number; tries: number }>();
+const uyeKodKey = (tenantId: string, telN: string) => `${tenantId}:${telN}`;
 
 const router = Router();
 
@@ -618,15 +623,47 @@ router.get('/chat/:slug/messages', asyncHandler(async (req: Request, res: Respon
 // ───── Uyelik formu (public) ─────
 const igNorm = (s: string) => (s || '').toLowerCase().replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/^@/, '').trim();
 
+// Üyelik için telefona SMS doğrulama kodu gönder
+router.post('/uye/:slug/kod-gonder', asyncHandler(async (req: Request, res: Response) => {
+  const tenantId = await tenantBySlug(req.params.slug);
+  if (!tenantId) throw new ApiError(404, `Mağaza linki geçersiz (adres: "${req.params.slug}").`);
+  const telN = String(req.body?.telefon || '').replace(/\D/g, '');
+  const telOk = (telN.length === 10 && telN.startsWith('5')) || (telN.length === 11 && telN.startsWith('05')) || (telN.length === 12 && telN.startsWith('905'));
+  if (!telOk) throw new ApiError(422, 'Geçerli bir cep telefonu girin (05XX XXX XX XX).');
+  const norm = telN.replace(/^90/, '').replace(/^0/, '');
+  const key = uyeKodKey(tenantId, norm);
+  const now = Date.now();
+  const prev = uyeKodlar.get(key);
+  if (prev && now - prev.lastSent < 60_000) {
+    const sn = Math.ceil((60_000 - (now - prev.lastSent)) / 1000);
+    throw new ApiError(429, `Çok sık denediniz. ${sn} saniye sonra tekrar deneyin.`);
+  }
+  const kod = String(Math.floor(1000 + Math.random() * 9000));
+  const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
+  const firma = (tenant?.name || '').trim();
+  const msg = `Uyelik dogrulama kodunuz: ${kod}${firma ? ' - ' + firma : ''}`;
+  const r = await sendSms(tenantId, [norm], msg);
+  if (!r.ok) throw new ApiError(400, r.message || 'Doğrulama SMS\'i gönderilemedi. Numaranızı kontrol edin.');
+  uyeKodlar.set(key, { kod, exp: now + 5 * 60_000, lastSent: now, tries: 0 });
+  res.json({ ok: true, message: 'Doğrulama kodu telefonunuza gönderildi.' });
+}));
+
 router.post('/uye/:slug', asyncHandler(async (req: Request, res: Response) => {
   const tenantId = await tenantBySlug(req.params.slug);
   if (!tenantId) throw new ApiError(404, `Mağaza linki geçersiz (adres: "${req.params.slug}"). Lütfen mağaza panelindeki güncel "Üyelik formu linki" ile açın.`);
-  const { ad, instagram, telefon, adres } = req.body || {};
+  const { ad, instagram, telefon, adres, kod } = req.body || {};
   if (!ad || !instagram || !telefon) throw new ApiError(422, 'Ad soyad, Instagram ve telefon zorunludur');
   const igClean = String(instagram).trim().replace(/^@+/, '');
   // Mükerrer kontrol: aynı Instagram (veya telefon) zaten kayıtlıysa yeni kayıt AÇMA.
   const igN = igNorm(igClean);
   const telN = String(telefon).replace(/\D/g, '');
+  // SMS doğrulama: telefona gönderilen kod doğru olmalı
+  const dogKey = uyeKodKey(tenantId, telN.replace(/^90/, '').replace(/^0/, ''));
+  const rec = uyeKodlar.get(dogKey);
+  if (!rec || rec.exp < Date.now()) { uyeKodlar.delete(dogKey); throw new ApiError(422, 'Doğrulama kodu bulunamadı veya süresi doldu. Lütfen yeni kod isteyin.'); }
+  if (rec.tries >= 5) { uyeKodlar.delete(dogKey); throw new ApiError(429, 'Çok fazla hatalı deneme. Lütfen yeni kod isteyin.'); }
+  if (String(kod || '').replace(/\D/g, '') !== rec.kod) { rec.tries += 1; throw new ApiError(422, 'Doğrulama kodu hatalı. Telefonunuza gelen 4 haneli kodu girin.'); }
+  uyeKodlar.delete(dogKey);
   const mevcutlar = await prisma.customer.findMany({ where: { tenantId } });
   const existing = mevcutlar.find((c) =>
     (igN && igNorm(c.instagram || '') === igN) ||
