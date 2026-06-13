@@ -135,6 +135,7 @@ export async function placeLiveOrder(t: string, payload: any) {
 
   let logCartId: string | null = null; let logAd = '';
   let smsInfo: { token: string; no: string; tutar: number; urun: string; beden: string } | null = null;
+  let lowStockSms: { urun: string; beden: string } | null = null;
   const lo = await prisma.$transaction(async (tx) => {
     let durum = 'riskli'; let tutar = 0; let alis = 0; let urunAd = urun || kod; let storeOrderId: string | null = null;
     let drop = false; let supplierId: string | null = null; let gorsel: string | null = null;
@@ -202,6 +203,10 @@ export async function placeLiveOrder(t: string, payload: any) {
         smsInfo = { token: cart.token, no: cno, tutar: tutar, urun: urunAd, beden: beden || variation || '' };
       }
     }
+    // Kayitli musteri eslesti ama stok yetersiz -> yetersiz stok SMS'i hazirla
+    if (durum === 'stok_yok' && customer?.telefon) {
+      lowStockSms = { urun: urunAd, beden: beden || variation || '' };
+    }
     return lord;
   });
   if (logCartId) await logEvent(t, logCartId, user || 'Canlı Yayın', 'Ürün eklendi (canlı yayın)', logAd);
@@ -216,6 +221,17 @@ export async function placeLiveOrder(t: string, payload: any) {
         durum: 'Onaylandı', urun: (smsInfo as any).urun, beden: (smsInfo as any).beden, sepetLink: link,
       });
     } catch (e: any) { console.error('[live SMS]', String(e?.message || e)); }
+  }
+  // Yetersiz stok SMS'i — sessiz
+  if (lowStockSms && customer?.telefon) {
+    try {
+      const tnt = await prisma.tenant.findUnique({ where: { id: t }, select: { name: true } });
+      void notifyOrderSms(t, 'lowstock', {
+        phone: customer.telefon, ad: customer.ad, firma: tnt?.name || '',
+        kullaniciadi: customer.instagram || '', instagram: customer.instagram || '', durum: 'Yetersiz Stok',
+        urun: (lowStockSms as any).urun, beden: (lowStockSms as any).beden,
+      });
+    } catch (e: any) { console.error('[live SMS lowstock]', String(e?.message || e)); }
   }
   return lo;
 }
@@ -285,6 +301,8 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
   const t = req.tenantId!;
   let streamId = '';
   let logCartId: string | null = null; let logAd = '';
+  let cancelSms: { user: string; urun: string; beden: string } | null = null;
+  let promoteSms: { user: string; urun: string; beden: string; token: string; no: string; tutar: number } | null = null;
   await prisma.$transaction(async (tx) => {
     const lo = await tx.liveOrder.findFirst({ where: { id: req.params.id, tenantId: t } });
     if (!lo) return;
@@ -316,6 +334,8 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
           logCartId = cart.id; logAd = lo.urun + (lo.beden ? ` (${lo.beden})` : '');
         }
       }
+      // Onaylanmis/rezerve siparis iptal edildi -> iptal SMS'i hazirla
+      cancelSms = { user: lo.user, urun: lo.urun, beden: lo.beden || lo.variation || '' };
     }
     await tx.liveOrder.update({ where: { id: lo.id }, data: { durum: 'iptal', storeOrderId: null } });
     // Bekleyen stok_yok talipli
@@ -336,6 +356,10 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
             items.push({ liveOrderId: wait.id, productId: wait.productId, ad: wait.urun + (wait.beden ? ` (${wait.beden})` : ''), varyasyon: wait.variation || wait.beden || null, adet: 1, fiyat: wait.tutar, stokDusuldu: true });
             await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...(await campaignAdjust(tx, t, items)) } });
             await tx.liveOrder.update({ where: { id: wait.id }, data: { durum: matched ? 'onaylandi' : 'rezerve', storeOrderId: cart.id } });
+            if (matched?.telefon) {
+              const wno = (cart.orderNo != null) ? `${cart.orderYil}-${String(cart.orderNo).padStart(3, '0')}` : String(cart.id).slice(-5);
+              promoteSms = { user: wait.user, urun: wait.urun, beden: wait.beden || wait.variation || '', token: cart.token, no: wno, tutar: wait.tutar };
+            }
             void cust;
           }
         }
@@ -343,6 +367,37 @@ router.post('/order/:id/iptal', asyncHandler(async (req: Request, res: Response)
     }
   });
   if (logCartId) await logEvent(t, logCartId, req.body?.user || 'Canlı Yayın', 'Ürün iptal edildi (canlı yayın)', logAd);
+  // İptal SMS'i (iptal edilen siparisin musterisine) — sessiz
+  if (cancelSms) {
+    try {
+      const cs: any = cancelSms;
+      const cust = await findCustomerByHandle(t, cs.user);
+      if (cust?.telefon) {
+        const tnt = await prisma.tenant.findUnique({ where: { id: t }, select: { name: true } });
+        const openCart = await prisma.storeOrder.findFirst({ where: { tenantId: t, customerId: cust.id, durum: 'sepet' }, select: { token: true } });
+        void notifyOrderSms(t, 'cancel', {
+          phone: cust.telefon, ad: cust.ad, firma: tnt?.name || '', kullaniciadi: cust.instagram || '',
+          instagram: cust.instagram || '', durum: 'İptal', urun: cs.urun, beden: cs.beden,
+          sepetLink: openCart?.token ? `${env.APP_DOMAIN}/sepet/${openCart.token}` : undefined,
+        });
+      }
+    } catch (e: any) { console.error('[live SMS cancel]', String(e?.message || e)); }
+  }
+  // Bekleyen talipli onaylandi -> onay SMS'i — sessiz
+  if (promoteSms) {
+    try {
+      const ps: any = promoteSms;
+      const cust = await findCustomerByHandle(t, ps.user);
+      if (cust?.telefon) {
+        const tnt = await prisma.tenant.findUnique({ where: { id: t }, select: { name: true } });
+        void notifyOrderSms(t, 'approved', {
+          phone: cust.telefon, ad: cust.ad, no: ps.no, tutar: ps.tutar, firma: tnt?.name || '',
+          kullaniciadi: cust.instagram || '', instagram: cust.instagram || '', durum: 'Onaylandı',
+          urun: ps.urun, beden: ps.beden, sepetLink: ps.token ? `${env.APP_DOMAIN}/sepet/${ps.token}` : undefined,
+        });
+      }
+    } catch (e: any) { console.error('[live SMS promote]', String(e?.message || e)); }
+  }
   const orders = streamId ? await prisma.liveOrder.findMany({ where: { tenantId: t, streamId }, orderBy: { createdAt: 'desc' } }) : [];
   res.json({ ok: true, orders });
 }));
