@@ -272,15 +272,36 @@ export default function CanliYayinSatis() {
     toast.success(`Satıcı: ${name}`);
   };
 
-  const openProduct = (p: any) => {
-    setBarkodModal(p); setDiscForm({ price: '', dakika: '' });
+  // "A12", "M A12", "A12 M" gibi girişten ürün + beden çöz (sıra önemli değil)
+  const resolveCodeBeden = (raw: string): { product?: any; beden?: string; code: string } => {
+    const toks = String(raw || '').trim().split(/\s+/).filter(Boolean);
+    if (!toks.length) return { code: '' };
+    for (let i = 0; i < toks.length; i++) {
+      const p = findByCode(toks[i]);
+      if (p) {
+        let beden: string | undefined;
+        if ((p.variations || []).length) {
+          for (let j = 0; j < toks.length; j++) {
+            if (j === i) continue;
+            const v = (p.variations || []).find((x: any) => norm(x.deger) === norm(toks[j]));
+            if (v) { beden = v.deger; break; }
+          }
+        }
+        return { product: p, beden, code: toks[i] };
+      }
+    }
+    return { code: toks[0] };
+  };
+
+  const openProduct = (p: any, preBeden?: string) => {
+    setBarkodModal({ ...p, _preBeden: preBeden || null }); setDiscForm({ price: '', dakika: '' });
     setBarHistory((h) => [{ id: Date.now(), productId: p.id, ad: p.ad, kod: p.salesCode || '-', barkod: p.barkod || '-', stok: p.stokAdeti || 0, time: new Date().toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' }) }, ...h.filter((x) => x.productId !== p.id)].slice(0, 30));
     if (!p._drop) api.post('/store/catalog/add', { productId: p.id }).catch(() => {});
   };
   const openByCode = (code: string) => {
-    const p = findByCode(code);
-    if (!p) { toast.error('Ürün bulunamadı: ' + code); return; }
-    openProduct(p);
+    const { product, beden } = resolveCodeBeden(code);
+    if (!product) { toast.error('Ürün bulunamadı: ' + code); return; }
+    openProduct(product, beden);
   };
   // Ürün ara (ad / satış kodu / marka / beden / cinsiyet)
   const araSonuc = useMemo(() => {
@@ -328,18 +349,14 @@ export default function CanliYayinSatis() {
     for (const line of lines) {
       const parts = line.split(/\s+/);
       const user = parts[0] || 'kullanici';
-      const kod = parts[1] || '';
-      const beden = parts[2] || '';
-      const p = findByCode(kod);
+      const rest = parts.slice(1).join(' ');
+      const { product: p, beden, code } = resolveCodeBeden(rest);
       // Satışa uygun ürün yoksa satır açma — boş/geçersiz kod phantom sipariş oluşturmasın
       if (!p) { atlanan++; continue; }
-      let variation: string | undefined;
-      if ((p.variations || []).length > 0) {
-        const v = p.variations.find((x: any) => norm(x.deger) === norm(beden));
-        if (v) variation = v.deger;
-      }
+      // Varyasyonlu üründe beden zorunlu — beden yoksa sipariş açma
+      if ((p.variations || []).length > 0 && !beden) { atlanan++; continue; }
       try {
-        await api.post('/store/live/order', { streamId: stream.id, user, kod, beden, productId: p._drop ? undefined : p.id, freeProductId: p._drop ? p.id : undefined, variation, urun: p.ad || kod, saticiAd: satici || null, fiyatOverride: activeFlash(p.id) });
+        await api.post('/store/live/order', { streamId: stream.id, user, kod: code, beden: beden || '', productId: p._drop ? undefined : p.id, freeProductId: p._drop ? p.id : undefined, variation: beden, urun: p.ad || code, saticiAd: satici || null, fiyatOverride: activeFlash(p.id) });
         islenen++;
       } catch { /* */ }
     }
@@ -600,12 +617,12 @@ export default function CanliYayinSatis() {
               <input
                 value={araQ}
                 onChange={(e) => setAraQ(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') { const p = findByCode(araQ); if (p) { openProduct(p); setAraQ(''); } else if (araSonuc.length === 1) { openProduct(araSonuc[0]); setAraQ(''); } else if (araSonuc.length === 0 && araQ.trim()) { toast.error('Ürün bulunamadı'); } } }}
-                placeholder="Barkod okut · satış kodu · ürün adı, marka, beden, cinsiyet..."
+                onKeyDown={(e) => { if (e.key === 'Enter') { const r = resolveCodeBeden(araQ); if (r.product) { openProduct(r.product, r.beden); setAraQ(''); } else if (araSonuc.length === 1) { openProduct(araSonuc[0]); setAraQ(''); } else if (araSonuc.length === 0 && araQ.trim()) { toast.error('Ürün bulunamadı'); } } }}
+                placeholder="Barkod · satış kodu · 'A12 M' / 'M A12' · ürün adı, marka, beden..."
                 className="w-full pl-8 pr-16 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300"
                 autoFocus
               />
-              <button onClick={() => { const p = findByCode(araQ); if (p) { openProduct(p); setAraQ(''); } else if (araSonuc.length === 1) { openProduct(araSonuc[0]); setAraQ(''); } else if (araQ.trim()) { toast.error('Ürün bulunamadı'); } }} className="absolute right-1 top-1 bottom-1 bg-slate-800 text-white px-3 rounded-md hover:bg-slate-700 text-xs font-medium">Bul</button>
+              <button onClick={() => { const r = resolveCodeBeden(araQ); if (r.product) { openProduct(r.product, r.beden); setAraQ(''); } else if (araSonuc.length === 1) { openProduct(araSonuc[0]); setAraQ(''); } else if (araQ.trim()) { toast.error('Ürün bulunamadı'); } }} className="absolute right-1 top-1 bottom-1 bg-slate-800 text-white px-3 rounded-md hover:bg-slate-700 text-xs font-medium">Bul</button>
             </div>
             {araQ && (
               <div className="mt-2 max-h-56 overflow-y-auto space-y-1 border border-slate-100 rounded-lg p-1">
@@ -639,9 +656,9 @@ export default function CanliYayinSatis() {
                   </div>
                   {(barkodModal.variations || []).length > 0 ? (
                     <div>
-                      <p className="text-[10px] text-slate-400 uppercase mb-1">Varyasyon / Beden Stoğu</p>
+                      <p className="text-[10px] text-slate-400 uppercase mb-1">Varyasyon / Beden Stoğu{barkodModal._preBeden && <span className="ml-1 text-indigo-500 normal-case">· seçilen: <b>{barkodModal._preBeden}</b></span>}</p>
                       <div className="flex flex-wrap gap-1.5">
-                        {barkodModal.variations.map((v: any) => <span key={v.id} className={`text-xs px-2 py-1 rounded-lg border ${v.stok > 0 ? 'bg-white border-slate-200 text-slate-700' : 'bg-red-50 border-red-200 text-red-500 line-through'}`}>{v.deger}: <b>{v.stok}</b></span>)}
+                        {barkodModal.variations.map((v: any) => <span key={v.id} className={`text-xs px-2 py-1 rounded-lg border ${barkodModal._preBeden && norm(v.deger) === norm(barkodModal._preBeden) ? 'ring-2 ring-indigo-400 ' : ''}${v.stok > 0 ? 'bg-white border-slate-200 text-slate-700' : 'bg-red-50 border-red-200 text-red-500 line-through'}`}>{v.deger}: <b>{v.stok}</b></span>)}
                       </div>
                     </div>
                   ) : <p className="text-[10px] text-slate-400">Varyasyon yok (tek stok).</p>}

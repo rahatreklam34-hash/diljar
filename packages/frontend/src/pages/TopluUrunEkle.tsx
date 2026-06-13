@@ -37,7 +37,7 @@ function fileToDataUrl(file: File, maxSize = 900, quality = 0.72): Promise<strin
 const uid = () => 'p' + Math.random().toString(36).slice(2, 9);
 const cleanName = (n: string) => n.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (c) => c.toUpperCase());
 
-interface Item { id: string; ad: string; images: string[]; cinsiyet: string; lokasyon: string; alisFiyat: string; satisFiyat: string; stokAdeti: string; variations?: { ad: string; deger: string }[] }
+interface Item { id: string; ad: string; images: string[]; cinsiyet: string; lokasyon: string; alisFiyat: string; satisFiyat: string; stokAdeti: string; variations?: { ad: string; deger: string }[]; varStoklar?: Record<string, number> }
 
 export default function TopluUrunEkle() {
   const { categories, variationTemplates, reload } = useStore();
@@ -48,6 +48,7 @@ export default function TopluUrunEkle() {
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<{ images: string[]; idx: number } | null>(null);
   const [autoApply, setAutoApply] = useState(true);
+  const [bedenDraft, setBedenDraft] = useState<Record<string, string>>({});
   const mainInput = useRef<HTMLInputElement>(null);
 
   // Ortak panel (Tümüne Uygula)
@@ -59,7 +60,8 @@ export default function TopluUrunEkle() {
     if (!autoApply) return { cinsiyet: 'unisex', lokasyon: '', alisFiyat: '', satisFiyat: '', stokAdeti: '' };
     const t = common.templateId ? (variationTemplates || []).find((x: any) => x.id === common.templateId) : null;
     const vars = t ? tmplToVars(t) : [];
-    return { cinsiyet: common.cinsiyet, lokasyon: common.lokasyon, alisFiyat: common.alisFiyat, satisFiyat: common.satisFiyat, stokAdeti: common.stokAdeti, ...(vars.length ? { variations: vars } : {}) };
+    const varStoklar = vars.length ? Object.fromEntries(vars.map((v: any) => [v.deger, 1])) : undefined;
+    return { cinsiyet: common.cinsiyet, lokasyon: common.lokasyon, alisFiyat: common.alisFiyat, satisFiyat: common.satisFiyat, stokAdeti: common.stokAdeti, ...(vars.length ? { variations: vars, varStoklar } : {}) };
   };
 
   // Ana alana bırakılan her görsel -> yeni ürün widget'ı
@@ -94,10 +96,37 @@ export default function TopluUrunEkle() {
     if (items.length === 0) { toast('Önce görsel ekleyin'); return; }
     const t = (variationTemplates || []).find((x: any) => x.id === common.templateId);
     const vars = tmplToVars(t);
-    setItems((prev) => prev.map((it) => ({ ...it, variations: vars })));
+    const varStoklar = Object.fromEntries(vars.map((v: any) => [v.deger, 1]));
+    setItems((prev) => prev.map((it) => ({ ...it, variations: vars, varStoklar })));
     toast.success(`${items.length} ürüne "${t?.ad}" varyasyonu uygulandı`);
   };
-  const clearVars = (id: string) => setItems((prev) => prev.map((it) => it.id === id ? { ...it, variations: undefined } : it));
+  const clearVars = (id: string) => setItems((prev) => prev.map((it) => it.id === id ? { ...it, variations: undefined, varStoklar: undefined } : it));
+
+  // Tek bir bedenin stoğunu güncelle
+  const setVarStok = (id: string, deger: string, val: number) =>
+    setItems((prev) => prev.map((it) => it.id === id ? { ...it, varStoklar: { ...(it.varStoklar || {}), [deger]: val } } : it));
+
+  // Tek bir bedeni kaldır
+  const removeBeden = (id: string, deger: string) =>
+    setItems((prev) => prev.map((it) => {
+      if (it.id !== id) return it;
+      const vars = (it.variations || []).filter((v) => v.deger !== deger);
+      const vs = { ...(it.varStoklar || {}) }; delete vs[deger];
+      return { ...it, variations: vars.length ? vars : undefined, varStoklar: vars.length ? vs : undefined };
+    }));
+
+  // Manuel beden ekle (yoksa bedenli ürüne dönüştürür)
+  const addBeden = (id: string, deger: string) => {
+    const d = deger.trim();
+    if (!d) return;
+    setItems((prev) => prev.map((it) => {
+      if (it.id !== id) return it;
+      const ad = it.variations?.[0]?.ad || 'Beden';
+      if ((it.variations || []).some((v) => v.deger.toLowerCase() === d.toLowerCase())) return it;
+      return { ...it, variations: [...(it.variations || []), { ad, deger: d }], varStoklar: { ...(it.varStoklar || {}), [d]: 1 } };
+    }));
+    setBedenDraft((dr) => ({ ...dr, [id]: '' }));
+  };
 
   const submit = async () => {
     const valid = items.filter((r) => r.ad && r.lokasyon && r.images.length > 0);
@@ -106,7 +135,7 @@ export default function TopluUrunEkle() {
     let ok = 0;
     for (const r of valid) {
       try {
-        await api.post('/store/products', { ad: r.ad, cinsiyet: r.cinsiyet, lokasyon: r.lokasyon, kategoriId: kategoriId || null, alisFiyat: Number(r.alisFiyat) || 0, satisFiyat: Number(r.satisFiyat) || 0, stokAdeti: Number(r.stokAdeti) || 0, images: r.images, variations: (r.variations || []).map((v) => ({ ad: v.ad, deger: v.deger, stok: Number(r.stokAdeti) || 0 })) });
+        await api.post('/store/products', { ad: r.ad, cinsiyet: r.cinsiyet, lokasyon: r.lokasyon, kategoriId: kategoriId || null, alisFiyat: Number(r.alisFiyat) || 0, satisFiyat: Number(r.satisFiyat) || 0, stokAdeti: Number(r.stokAdeti) || 0, images: r.images, variations: (r.variations || []).map((v) => ({ ad: v.ad, deger: v.deger, stok: r.varStoklar?.[v.deger] ?? (Number(r.stokAdeti) || 0) })) });
         ok++;
       } catch { /* devam */ }
     }
@@ -155,7 +184,7 @@ export default function TopluUrunEkle() {
           </div>
           <button onClick={applyTemplateAll} className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 h-[38px]"><Sparkles size={15} /> Şablonu Tümüne Uygula</button>
           {(!variationTemplates || variationTemplates.length === 0) && <span className="text-[11px] text-amber-500">Önce “Varyasyonlar” sayfasından şablon oluşturun.</span>}
-          {common.templateId && <span className="text-[11px] text-slate-400 w-full">Not: Yukarıdaki “Stok” değeri, varyasyon uygulanan ürünlerde <b>her varyasyon için</b> stok olarak yazılır.</span>}
+          {common.templateId && <span className="text-[11px] text-slate-400 w-full">Not: Şablon uygulanınca her beden için ayrı stok kutucuğu açılır (varsayılan 1). Kartlardan her bedenin stoğunu tek tek düzenleyebilir, <b>“+ Beden ekle”</b> ile yeni beden ekleyebilirsiniz. Yukarıdaki “Stok” yalnız bedensiz ürünlerde kullanılır.</span>}
         </div>
       </div>
 
@@ -224,14 +253,36 @@ export default function TopluUrunEkle() {
                   ))}
                 </div>
               )}
-              {/* Varyasyonlar */}
-              {it.variations && it.variations.length > 0 && (
-                <div className="flex items-center gap-1.5 flex-wrap mt-2 bg-indigo-50 border border-indigo-100 rounded-lg px-2 py-1.5">
-                  <span className="text-[11px] font-semibold text-indigo-700">{it.variations[0].ad}:</span>
-                  {it.variations.map((v, vi) => <span key={vi} className="text-[11px] bg-white border border-indigo-200 text-indigo-700 px-1.5 py-0.5 rounded">{v.deger}</span>)}
-                  <button onClick={() => clearVars(it.id)} title="Varyasyonları kaldır" className="ml-auto text-indigo-400 hover:text-red-500"><X size={13} /></button>
+              {/* Varyasyonlar / Beden stokları */}
+              <div className="mt-2 bg-indigo-50/70 border border-indigo-100 rounded-lg px-2 py-2">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[11px] font-semibold text-indigo-700">Bedenler & Stok</span>
+                  {it.variations && it.variations.length > 0 && <button onClick={() => clearVars(it.id)} title="Tüm bedenleri kaldır" className="text-indigo-400 hover:text-red-500"><X size={13} /></button>}
                 </div>
-              )}
+                {it.variations && it.variations.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5">
+                    {it.variations.map((v, vi) => (
+                      <div key={vi} className="flex items-center gap-1 bg-white border border-indigo-200 rounded px-1.5 py-0.5">
+                        <span className="text-[11px] text-indigo-700 font-medium">{v.deger}</span>
+                        <input type="number" min={0} value={it.varStoklar?.[v.deger] ?? 1} onChange={(e) => setVarStok(it.id, v.deger, Math.max(0, Number(e.target.value) || 0))} className="w-12 px-1 py-0.5 text-[11px] border border-slate-200 rounded text-center" />
+                        <button onClick={() => removeBeden(it.id, v.deger)} title="Bedeni kaldır" className="text-slate-300 hover:text-red-500"><X size={11} /></button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-[10px] text-slate-400">Tek stoklu ürün. Beden eklersen bedenli ürüne dönüşür (üstteki "Stok" kutusu yerine her beden ayrı stoklanır).</p>
+                )}
+                <div className="flex items-center gap-1 mt-1.5">
+                  <input
+                    value={bedenDraft[it.id] || ''}
+                    onChange={(e) => setBedenDraft((d) => ({ ...d, [it.id]: e.target.value }))}
+                    onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBeden(it.id, bedenDraft[it.id] || ''); } }}
+                    placeholder="+ Beden ekle (örn. M)"
+                    className="flex-1 px-2 py-1 text-[11px] border border-slate-200 rounded"
+                  />
+                  <button onClick={() => addBeden(it.id, bedenDraft[it.id] || '')} className="text-[11px] bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700">Ekle</button>
+                </div>
+              </div>
               <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">
                 <span className="text-[11px] text-slate-400">{it.images.length}/{MAX_IMG} görsel</span>
                 <button onClick={() => delItem(it.id)} className="text-red-500 text-xs inline-flex items-center gap-1 hover:underline"><Trash2 size={13} /> Kaldır</button>

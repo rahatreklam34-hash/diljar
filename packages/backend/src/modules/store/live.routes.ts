@@ -201,8 +201,63 @@ export async function placeLiveOrder(t: string, payload: any) {
   return lo;
 }
 
+// Operatör arama/barkod kutusundan gelen "kod" (örn. "A12", "M A12", "A12 M") çözümü.
+// productId verilmediyse kullanılır. Varyasyonlu üründe beden yoksa beden_gerekli döner.
+async function resolveOperatorCode(t: string, raw: string): Promise<{ status: 'ok' | 'beden_gerekli' | 'yok'; payload?: any; kod?: string; bedenler?: string[] }> {
+  const tokens = String(raw || '').toLowerCase().split(/[\s,.;:!?()\[\]\/\\"'+]+/).map((x) => x.trim()).filter(Boolean);
+  const upper = tokens.map((x) => x.toUpperCase());
+  if (!upper.length) return { status: 'yok' };
+  const [products, frees] = await Promise.all([
+    prisma.product.findMany({ where: { tenantId: t, aktif: true }, select: { id: true, ad: true, salesCode: true, barkod: true, variations: { select: { deger: true, barkod: true } } } }),
+    prisma.freeProduct.findMany({ where: { tenantId: t, aktif: true }, select: { id: true, ad: true, salesCode: true, variations: true } }),
+  ]);
+  // 1) Varyasyon barkodu doğrudan
+  for (const p of products) for (const v of p.variations || []) {
+    if (v.barkod && upper.includes(String(v.barkod).toUpperCase())) return { status: 'ok', payload: { productId: p.id, variation: v.deger, beden: v.deger, urun: p.ad, kod: v.barkod } };
+  }
+  // 2) Satış kodu / barkod
+  for (let i = 0; i < upper.length; i++) {
+    const code = upper[i];
+    if (code.length < 2) continue;
+    const p = products.find((pp) => (pp.salesCode || '').toUpperCase() === code || (pp.barkod || '').toUpperCase() === code);
+    if (p) {
+      const degerler = (p.variations || []).map((v) => v.deger);
+      if (degerler.length > 0) {
+        const set = degerler.map((d) => d.toUpperCase());
+        let beden: string | null = null;
+        for (let j = 0; j < upper.length; j++) { if (j === i) continue; const idx = set.indexOf(upper[j]); if (idx >= 0) { beden = degerler[idx]; break; } }
+        if (!beden) return { status: 'beden_gerekli', kod: p.salesCode || code, bedenler: degerler };
+        return { status: 'ok', payload: { productId: p.id, variation: beden, beden, urun: p.ad, kod: p.salesCode || code } };
+      }
+      return { status: 'ok', payload: { productId: p.id, variation: null, beden: null, urun: p.ad, kod: p.salesCode || code } };
+    }
+    const fp = frees.find((ff) => (ff.salesCode || '').toUpperCase() === code);
+    if (fp) {
+      const vars = Array.isArray(fp.variations) ? (fp.variations as any[]).map((v) => v.deger) : [];
+      if (vars.length > 0) {
+        const set = vars.map((d: string) => d.toUpperCase());
+        let beden: string | null = null;
+        for (let j = 0; j < upper.length; j++) { if (j === i) continue; const idx = set.indexOf(upper[j]); if (idx >= 0) { beden = vars[idx]; break; } }
+        if (!beden) return { status: 'beden_gerekli', kod: fp.salesCode || code, bedenler: vars };
+        return { status: 'ok', payload: { freeProductId: fp.id, variation: beden, beden, urun: fp.ad, kod: fp.salesCode || code } };
+      }
+      return { status: 'ok', payload: { freeProductId: fp.id, variation: null, beden: null, urun: fp.ad, kod: fp.salesCode || code } };
+    }
+  }
+  return { status: 'yok' };
+}
+
 router.post('/order', asyncHandler(async (req: Request, res: Response) => {
-  const lo = await placeLiveOrder(req.tenantId!, req.body || {});
+  const t = req.tenantId!;
+  const body = req.body || {};
+  // Operatör yalnız kod yazdıysa (ürün seçili değilse) kod+beden çöz
+  if (!body.productId && !body.freeProductId && body.kod) {
+    const r = await resolveOperatorCode(t, String(body.kod));
+    if (r.status === 'yok') throw new ApiError(404, 'Ürün bulunamadı: ' + String(body.kod).trim());
+    if (r.status === 'beden_gerekli') throw new ApiError(422, `Beden belirtin (örn: M ${r.kod} veya ${r.kod} M)${r.bedenler && r.bedenler.length ? ' — Mevcut bedenler: ' + r.bedenler.join(', ') : ''}`);
+    Object.assign(body, r.payload);
+  }
+  const lo = await placeLiveOrder(t, body);
   res.status(201).json(lo);
 }));
 

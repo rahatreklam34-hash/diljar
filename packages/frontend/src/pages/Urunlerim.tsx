@@ -111,6 +111,15 @@ export default function Urunlerim({ autoAdd }: Props) {
   const empty = { ad: '', sku: '', salesCode: '', marka: '', cinsiyet: 'unisex', kategoriId: '', alisFiyat: '', satisFiyat: '', eskiFiyat: '', oneCikan: false, onlineMagaza: false, stokAdeti: '', aciklama: '', tedarikciAd: '', tedarikciBarkod: '', lokasyon: '', images: [] as string[] };
   const [form, setForm] = useState<any>(empty);
   const [varRows, setVarRows] = useState<any[]>([]);
+  const [bedenDraft, setBedenDraft] = useState('');
+  const addBedenRow = () => {
+    const d = bedenDraft.trim();
+    if (!d) return;
+    if (varRows.some((r) => String(r.deger).toLowerCase() === d.toLowerCase())) { setBedenDraft(''); return; }
+    const ad = varRows[0]?.ad || 'Beden';
+    setVarRows((rs) => [...rs, { ad, deger: d, stok: '' }]);
+    setBedenDraft('');
+  };
   const set = (k: string, v: any) => setForm((f: any) => ({ ...f, [k]: v }));
   const applyTemplate = (id: string) => { const t = variationTemplates.find((x: any) => x.id === id); if (!t) return; setVarRows((t.values || []).map((deger: string) => ({ ad: t.ad, deger, stok: '' }))); };
   const setVarStok = (i: number, stok: string) => setVarRows((rs) => rs.map((r, idx) => idx === i ? { ...r, stok } : r));
@@ -471,9 +480,13 @@ export default function Urunlerim({ autoAdd }: Props) {
             </div>
             <div className="mt-4 border-t border-slate-100 pt-4">
               <div className="flex items-center justify-between mb-2"><label className="text-sm font-medium text-slate-700">Varyasyon Stokları</label><select onChange={(e) => { if (e.target.value) applyTemplate(e.target.value); e.target.value = ''; }} className="text-xs px-2 py-1.5 border border-slate-200 rounded-lg"><option value="">Şablondan ekle...</option>{variationTemplates.map((t: any) => <option key={t.id} value={t.id}>{t.ad}</option>)}</select></div>
-              {varRows.length === 0 ? (<p className="text-xs text-slate-400">Varyasyon yoksa boş bırakın; stok yukarıdan girilir.</p>) : (
+              {varRows.length === 0 ? (<p className="text-xs text-slate-400">Varyasyon yoksa boş bırakın; stok yukarıdan girilir. Beden eklemek için aşağıdan yazıp “Ekle”ye basın.</p>) : (
                 <div className="space-y-2">{varRows.map((r, i) => (<div key={i} className="flex items-center gap-2"><span className="text-xs text-slate-500 w-16">{r.ad}</span><span className="text-sm font-medium text-slate-700 flex-1">{r.deger}</span><input type="number" value={r.stok} onChange={(e) => setVarStok(i, e.target.value)} placeholder="Stok" className="w-24 px-2 py-1.5 text-sm border border-slate-200 rounded-lg" /><button type="button" onClick={() => delVar(i)} className="text-red-500"><X size={15} /></button></div>))}<p className="text-[10px] text-slate-400">Toplam stok varyasyonların toplamıdır.</p></div>
               )}
+              <div className="flex items-center gap-2 mt-2">
+                <input value={bedenDraft} onChange={(e) => setBedenDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBedenRow(); } }} placeholder="+ Beden ekle (örn. M, 38)" className="flex-1 px-2 py-1.5 text-sm border border-slate-200 rounded-lg" />
+                <button type="button" onClick={addBedenRow} className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 whitespace-nowrap">Ekle</button>
+              </div>
             </div>
             <div className="flex justify-end gap-2 mt-4"><button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">İptal</button><button type="submit" className="px-5 py-2 text-sm bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700">Kaydet</button></div>
           </form>

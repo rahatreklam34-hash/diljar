@@ -41,33 +41,62 @@ function pushFeed(streamId: string, item: FbFeedItem) {
   feeds.set(streamId, arr);
 }
 
-function pickVariation(degerler: string[], tokens: string[], fromIdx: number): string | null {
-  if (!degerler.length) return null;
-  const set = degerler.map((d) => String(d).toUpperCase());
-  for (let j = fromIdx + 1; j < tokens.length; j++) {
-    const idx = set.indexOf(tokens[j]);
-    if (idx >= 0) return degerler[idx];
-  }
-  for (let j = 0; j < tokens.length; j++) {
-    const idx = set.indexOf(tokens[j]);
-    if (idx >= 0) return degerler[idx];
-  }
-  return null;
-}
+// ── Sipariş ayıklama yardımcıları ──
 
-// Yorum metninden ürün + beden çöz (kod/barkod eşleşmesi). Yoksa null (sipariş açılmaz).
-async function resolveFromMessage(tenantId: string, text: string): Promise<any | null> {
-  const tokens = String(text || '')
-    .split(/[\s,.;:!?()\[\]]+/)
+// Mesajı tokenlara böl (küçük harf, noktalama temizle)
+function tokenize(msg: string): string[] {
+  return String(msg || '')
+    .toLowerCase()
+    .split(/[\s,.;:!?()\[\]\/\\"'+]+/)
     .map((x) => x.trim())
     .filter(Boolean);
+}
+
+// Satın alma niyeti kelimeleri (varsa uzun mesaja tolerans tanınır)
+const BUY_WORDS = new Set([
+  'al', 'alir', 'alırım', 'alirim', 'alıyorum', 'aliyorum', 'alayım', 'alayim',
+  'alabilir', 'alabilirmiyim', 'alacam', 'alacağım', 'alacagim', 'almak',
+  'istiyorum', 'isterim', 'siparis', 'sipariş', 'ver', 'verir', 'verin',
+  'olsun', 'lütfen', 'lutfen', 'rezerve', 'kapat', 'kapatın', 'kapatin',
+]);
+function hasBuyIntent(tokens: string[]): boolean {
+  return tokens.some((t) => BUY_WORDS.has(t));
+}
+
+// Bedeni, kod indexine yakınlık (token mesafesi) içinde ara; en yakını döner
+function findBedenNear(upperTokens: string[], degerler: string[], codeIdx: number, maxDist: number): string | null {
+  if (!degerler.length) return null;
+  const set = degerler.map((d) => String(d).toUpperCase());
+  let best: string | null = null;
+  let bestDist = Infinity;
+  for (let j = 0; j < upperTokens.length; j++) {
+    if (j === codeIdx) continue;
+    const idx = set.indexOf(upperTokens[j]);
+    if (idx >= 0) {
+      const dist = Math.abs(j - codeIdx);
+      if (dist <= maxDist && dist < bestDist) { best = degerler[idx]; bestDist = dist; }
+    }
+  }
+  return best;
+}
+
+const MAX_TOKENS_PLAIN = 12; // niyet yoksa varyasyonlu üst sınır
+const MAX_TOKENS_INTENT = 20; // niyet varsa üst sınır
+const MAX_TOKENS_NONVAR = 5; // varyasyonsuz: kısa/net mesaj sınırı (niyet yoksa)
+const MAX_BEDEN_DIST = 3; // kod ile beden arası izinli token mesafesi
+
+// Yorum metninden ürün + beden çöz. Yeni kurallar: tam token eşleşmesi,
+// varyasyonlu üründe beden zorunlu + yakınlık, uzun sohbet cümlelerini ele.
+async function resolveFromMessage(tenantId: string, text: string): Promise<any | null> {
+  const tokens = tokenize(text);
   if (!tokens.length) return null;
   const upper = tokens.map((x) => x.toUpperCase());
+  const intent = hasBuyIntent(tokens);
 
   const [products, frees] = await Promise.all([
     prisma.product.findMany({
       where: { tenantId, aktif: true },
-      select: { id: true, ad: true, salesCode: true, barkod: true, variations: { select: { deger: true, barkod: true } } },
+      select: { id: true, ad: true, salesCode: true, barkod: true, stokAdeti: true, variations: { select: { deger: true, barkod: true, stok: true } } },
     }),
     prisma.freeProduct.findMany({
       where: { tenantId, aktif: true },
@@ -75,27 +104,52 @@ async function resolveFromMessage(tenantId: string, text: string): Promise<any |
     }),
   ]);
 
+  // 1) Doğrudan varyasyon barkodu (operatör/okutma) — tek güçlü sinyal, filtreye takılmaz
+  for (const p of products) {
+    for (const v of p.variations || []) {
+      if (v.barkod && upper.includes(String(v.barkod).toUpperCase())) {
+        if ((v.stok ?? 0) <= 0) continue; // stok yok
+        return { productId: p.id, variation: v.deger, beden: v.deger, urun: p.ad, kod: v.barkod };
+      }
+    }
+  }
+
+  // 2) Token token gez, tam eşleşen satış kodu / barkod ara
   for (let i = 0; i < upper.length; i++) {
     const code = upper[i];
     if (code.length < 2) continue;
 
-    // Ürün varyasyon barkodu eşleşmesi (doğrudan beden seçer)
-    for (const p of products) {
-      const v = (p.variations || []).find((vv) => (vv.barkod || '').toUpperCase() === code);
-      if (v) return { productId: p.id, variation: v.deger, beden: v.deger, urun: p.ad, kod: code };
-    }
-    // Ürün satış kodu / ana barkod
     const p = products.find((pp) => (pp.salesCode || '').toUpperCase() === code || (pp.barkod || '').toUpperCase() === code);
     if (p) {
-      const variation = pickVariation((p.variations || []).map((v) => v.deger), upper, i);
-      return { productId: p.id, variation: variation || null, beden: variation || null, urun: p.ad, kod: code };
+      const varList = (p.variations || []);
+      const degerler = varList.map((v) => v.deger);
+      if (degerler.length > 0) {
+        // VARYASYONLU: uzun sohbeti ele + beden zorunlu + yakınlık
+        if (tokens.length > (intent ? MAX_TOKENS_INTENT : MAX_TOKENS_PLAIN)) continue;
+        const beden = findBedenNear(upper, degerler, i, MAX_BEDEN_DIST);
+        if (!beden) continue; // beden yok → sipariş açılmaz
+        const vobj = varList.find((v) => v.deger === beden);
+        if (vobj && (vobj.stok ?? 0) <= 0) continue; // stok yok
+        return { productId: p.id, variation: beden, beden, urun: p.ad, kod: p.salesCode || code };
+      }
+      // VARYASYONSUZ: niyet yoksa kısa/net mesaj zorunlu
+      if (tokens.length > (intent ? MAX_TOKENS_INTENT : MAX_TOKENS_NONVAR)) continue;
+      if ((p.stokAdeti ?? 0) <= 0) continue; // stok yok
+      return { productId: p.id, variation: null, beden: null, urun: p.ad, kod: p.salesCode || code };
     }
-    // Tedarikçi (drop) ürün satış kodu
+
+    // Tedarikçi (drop) ürün satış kodu — aynı kurallar
     const fp = frees.find((ff) => (ff.salesCode || '').toUpperCase() === code);
     if (fp) {
       const vars = Array.isArray(fp.variations) ? (fp.variations as any[]).map((v) => v.deger) : [];
-      const variation = pickVariation(vars, upper, i);
-      return { freeProductId: fp.id, variation: variation || null, beden: variation || null, urun: fp.ad, kod: code };
+      if (vars.length > 0) {
+        if (tokens.length > (intent ? MAX_TOKENS_INTENT : MAX_TOKENS_PLAIN)) continue;
+        const beden = findBedenNear(upper, vars, i, MAX_BEDEN_DIST);
+        if (!beden) continue;
+        return { freeProductId: fp.id, variation: beden, beden, urun: fp.ad, kod: fp.salesCode || code };
+      }
+      if (tokens.length > (intent ? MAX_TOKENS_INTENT : MAX_TOKENS_NONVAR)) continue;
+      return { freeProductId: fp.id, variation: null, beden: null, urun: fp.ad, kod: fp.salesCode || code };
     }
   }
   return null;
