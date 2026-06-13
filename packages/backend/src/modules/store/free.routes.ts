@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma';
 import { asyncHandler, ApiError } from '../../lib/http';
 import { nextOrderNo, logEvent } from './store.routes';
-import { campaignAdjust } from './live.routes';
+import { campaignAdjust, promoteWaitingStock } from './live.routes';
 import bcrypt from 'bcryptjs';
 
 const router = Router();
@@ -159,6 +159,7 @@ router.post('/products', asyncHandler(async (req: Request, res: Response) => {
       satisFiyat: satis,
     },
   });
+  await promoteWaitingStock(t, { freeProductId: p.id }).catch((e) => console.error('[promoteWaitingStock]', e));
   res.status(201).json(p);
 }));
 
@@ -180,6 +181,7 @@ router.patch('/products/:id', asyncHandler(async (req: Request, res: Response) =
   if (aktif !== undefined) data.aktif = aktif;
   await prisma.freeProduct.updateMany({ where: { id: req.params.id, tenantId: t }, data });
   const p = await prisma.freeProduct.findFirst({ where: { id: req.params.id, tenantId: t } });
+  await promoteWaitingStock(t, { freeProductId: req.params.id }).catch((e) => console.error('[promoteWaitingStock]', e));
   res.json(p);
 }));
 

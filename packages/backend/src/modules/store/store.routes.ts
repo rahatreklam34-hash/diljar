@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { prisma } from '../../lib/prisma';
 import { asyncHandler, ApiError } from '../../lib/http';
-import { promoteReserved, campaignAdjust, recalcOpenCarts } from './live.routes';
+import { promoteReserved, campaignAdjust, recalcOpenCarts, promoteWaitingStock } from './live.routes';
 import { notifyOrderSms } from '../sms/netgsm.service';
 import { enhanceProductImage } from '../../lib/fal';
 import { env } from '../../config/env';
@@ -243,6 +243,7 @@ router.post('/products', asyncHandler(async (req: Request, res: Response) => {
     }
     return p;
   });
+  await promoteWaitingStock(req.tenantId!, { productId: product.id }).catch((e) => console.error('[promoteWaitingStock]', e));
   res.status(201).json(product);
 }));
 router.patch('/products/:id', asyncHandler(async (req: Request, res: Response) => {
@@ -270,6 +271,7 @@ router.patch('/products/:id', asyncHandler(async (req: Request, res: Response) =
     }
     return p;
   });
+  await promoteWaitingStock(req.tenantId!, { productId: req.params.id }).catch((e) => console.error('[promoteWaitingStock]', e));
   res.json(updated);
 }));
 router.delete('/products/:id', asyncHandler(async (req: Request, res: Response) => {

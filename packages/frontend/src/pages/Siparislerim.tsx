@@ -37,7 +37,7 @@ const initials = (ad: string) => (ad || '?').split(' ').map((w) => w[0]).slice(0
 const waLink = (tel: string) => { let d = (tel || '').replace(/\D/g, ''); if (d.startsWith('0')) d = '90' + d.slice(1); else if (d.length === 10) d = '90' + d; return 'https://wa.me/' + d; };
 
 export default function Siparislerim({ kanalFilter }: { kanalFilter?: 'online' | 'canli' }) {
-  const { orders, customers, products, categories, discountCodes, campaigns, reload } = useStore();
+  const { orders, customers, products, categories, discountCodes, campaigns, storeSetting, reload } = useStore();
   const [tab, setTab] = useState<string>('tumu');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -243,7 +243,7 @@ export default function Siparislerim({ kanalFilter }: { kanalFilter?: 'online' |
         );
       })()}
 
-      {detail && <DetailModal order={detail} customer={cust(detail.customerId)} custName={custName(detail)} custPhone={custPhone(detail)} products={products} categories={categories} discountCodes={discountCodes} campaigns={campaigns} onClose={() => setDetail(null)} reload={reload} />}
+      {detail && <DetailModal order={detail} customer={cust(detail.customerId)} custName={custName(detail)} custPhone={custPhone(detail)} products={products} categories={categories} discountCodes={discountCodes} campaigns={campaigns} storeSetting={storeSetting} onClose={() => setDetail(null)} reload={reload} />}
 
       {/* Yeni siparis modali */}
       {modal && (
@@ -298,10 +298,13 @@ function ActBtn({ onClick, icon: Ic, label, cls }: any) {
   return <button onClick={onClick} title={label} className={`inline-flex items-center gap-1 px-2 py-1 text-xs border rounded-lg hover:bg-slate-50 ${cls}`}><Ic size={13} /><span className="hidden xl:inline">{label}</span></button>;
 }
 
-function DetailModal({ order, customer, custName, custPhone, products, categories, discountCodes, campaigns, onClose, reload }: any) {
+function DetailModal({ order, customer, custName, custPhone, products, categories, discountCodes, campaigns, storeSetting, onClose, reload }: any) {
+  const stdKargo = Number((storeSetting?.config as any)?.kargoUcret) || 0;
+  const freeShip = Number(storeSetting?.freeShipThreshold) || 0;
   const [durum, setDurumState] = useState<string>(order.durum);
   const [tahsilat, setTahsilat] = useState<number>(order.tahsilat || 0);
   const [kargoUcreti, setKargoUcreti] = useState<number>(order.kargoUcreti || 0);
+  const [kargoManual, setKargoManual] = useState<boolean>((order.kargoUcreti || 0) > 0);
   const [indirim, setIndirim] = useState<number>(order.indirim || 0);
   const [items, setItems] = useState<any[]>(Array.isArray(order.items) ? order.items.map((x: any) => ({ ...x })) : []);
   const [odemeYontemi, setOdemeYontemi] = useState<string>(order.odemeYontemi || 'Banka');
@@ -355,6 +358,13 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
   const cleanAd = (it: any) => { const p = prodOf(it.productId); return p?.ad || String(it.ad || '').replace(/\s*\([^)]*\)\s*$/, ''); };
   const bedenOf = (it: any) => { if (it.varyasyon) return it.varyasyon; if (it.beden) return it.beden; const m = String(it.ad || '').match(/\(([^)]+)\)\s*$/); return m ? m[1] : ''; };
   const sepetTutari = useMemo(() => items.reduce((s, it) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 0), 0), [items]);
+  // Kargo ücreti: eşik aşılırsa otomatik 0 (ücretsiz); aksi halde manuel değilse online mağaza
+  // ayarlarındaki sabit kargo ücretinden çek. Admin elle düzenlerse o değer korunur.
+  const kargoUcretsiz = freeShip > 0 && sepetTutari >= freeShip;
+  useEffect(() => {
+    if (kargoUcretsiz) { setKargoUcreti(0); return; }
+    if (!kargoManual) setKargoUcreti((order.kargoUcreti || 0) > 0 ? order.kargoUcreti : stdKargo);
+  }, [sepetTutari, kargoUcretsiz, kargoManual, stdKargo]);
   // Kampanya indirimini, kapsamdaki ürünlere orantılı dağıt -> her satırda indirim gösterimi
   const itemDiscMap = useMemo(() => {
     const map = new Map<number, number>();
@@ -774,7 +784,9 @@ function DetailModal({ order, customer, custName, custPhone, products, categorie
               <Card title="ÖDEME ÖZETİ">
                 <SumRow label="Sepet Tutarı" value={fmt(sepetTutari)} />
                 <div className="flex items-center justify-between text-sm py-1"><span className="text-slate-400">Kargo Ücreti</span>
-                  <input type="number" value={kargoUcreti} onChange={(e) => setKargoUcreti(Number(e.target.value))} onBlur={() => persist()} className="w-24 text-right text-sm border border-slate-200 rounded px-1.5 py-0.5" />
+                  {kargoUcretsiz
+                    ? <span className="text-green-600 font-medium">Ücretsiz <span className="text-[10px] text-slate-400">(eşik aşıldı)</span></span>
+                    : <input type="number" value={kargoUcreti} onChange={(e) => { setKargoManual(true); setKargoUcreti(Number(e.target.value)); }} onBlur={() => persist()} className="w-24 text-right text-sm border border-slate-200 rounded px-1.5 py-0.5" />}
                 </div>
                 <div className="flex items-center justify-between text-sm py-1"><span className="text-slate-400">İndirim</span><span className="text-green-600">-{fmt(indirim)}</span></div>
                 {kampanyalar.length > 0 && (
