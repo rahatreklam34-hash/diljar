@@ -409,14 +409,24 @@ router.post('/ig/connect', asyncHandler(async (req: Request, res: Response) => {
 
   let igToken = String(token).trim();
 
-  // Opsiyonel: App Secret tanımlıysa kısa ömürlü token'ı 60 günlük uzun ömürlüye çevir
+  // Opsiyonel: App Secret tanımlıysa token'ı 60 günlük uzun ömürlüye çevir/yenile
   if (env.IG_APP_SECRET) {
     try {
+      // Kısa ömürlü token ise uzun ömürlüye çevir
       const ex = await fetch(
         `https://graph.instagram.com/access_token?grant_type=ig_exchange_token&client_secret=${encodeURIComponent(env.IG_APP_SECRET)}&access_token=${encodeURIComponent(igToken)}`,
       );
       const ej: any = await ex.json();
-      if (ej?.access_token) igToken = ej.access_token;
+      if (ej?.access_token) {
+        igToken = ej.access_token;
+      } else {
+        // Zaten uzun ömürlü ise süreyi yenile (60 gün sıfırlanır)
+        const rf = await fetch(
+          `https://graph.instagram.com/refresh_access_token?grant_type=ig_refresh_token&access_token=${encodeURIComponent(igToken)}`,
+        );
+        const rj: any = await rf.json();
+        if (rj?.access_token) igToken = rj.access_token;
+      }
     } catch { /* kısa token ile devam */ }
   }
 
