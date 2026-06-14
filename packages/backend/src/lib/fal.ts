@@ -35,7 +35,7 @@ export async function enhanceProductImage(dataUri: string, prompt?: string): Pro
       body: JSON.stringify({
         prompt: prompt || DEFAULT_PROMPT,
         image_urls: [dataUri],
-        image_size: 'auto',
+        image_size: 'auto_2K', // v4.5 'auto' kabul etmiyor; auto_2K en/boy oranını korur
         num_images: 1,
         sync_mode: true, // sonucu data URI olarak döndür (CORS / ekstra indirme gerekmez)
         enable_safety_checker: true,
