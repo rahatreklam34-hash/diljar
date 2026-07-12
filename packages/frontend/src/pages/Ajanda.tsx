@@ -177,7 +177,7 @@ export default function Ajanda() {
       {/* Ozet Kartlar */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {[
-          { label: 'Toplam Etkinlik', val: ozet.toplam, color: 'from-indigo-500 to-indigo-600' },
+          { label: 'Toplam Etkinlik', val: ozet.toplam, color: 'from-emerald-500 to-emerald-600' },
           { label: 'Odeme', val: ozet.odeme, color: 'from-red-500 to-red-600' },
           { label: 'Gelir', val: ozet.gelir, color: 'from-green-500 to-green-600' },
           { label: 'Toplanti', val: ozet.toplanti, color: 'from-blue-500 to-blue-600' },

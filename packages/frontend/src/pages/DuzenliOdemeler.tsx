@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { useUrlState } from '../lib/useUrlState';
 import { DuzenliOdeme } from '../types';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
@@ -11,7 +12,7 @@ const PERIYOT_LABEL: Record<string, string> = { aylik: 'Aylik', haftalik: 'Hafta
 const KAT_COLORS: Record<string, string> = {
   Kira: 'bg-blue-50 text-blue-600', Elektrik: 'bg-yellow-50 text-yellow-600', Su: 'bg-cyan-50 text-cyan-600',
   Dogalgaz: 'bg-orange-50 text-orange-600', Internet: 'bg-purple-50 text-purple-600', Telefon: 'bg-pink-50 text-pink-600',
-  Sigorta: 'bg-green-50 text-green-600', Kredi: 'bg-red-50 text-red-600', Abonelik: 'bg-indigo-50 text-indigo-600', Diger: 'bg-gray-100 text-gray-600',
+  Sigorta: 'bg-green-50 text-green-600', Kredi: 'bg-red-50 text-red-600', Abonelik: 'bg-emerald-50 text-emerald-600', Diger: 'bg-gray-100 text-gray-600',
 };
 
 function nextPaymentDate(item: DuzenliOdeme): Date {
@@ -48,9 +49,9 @@ const emptyForm = {
 export default function DuzenliOdemeler() {
   const { duzenliOdemeler, addDuzenliOdeme, updateDuzenliOdeme, deleteDuzenliOdeme, kasaBanka, addHareket, updateKasaBanka } = useApp();
 
-  const [tab, setTab] = useState<'tumu' | 'aktif' | 'pasif'>('tumu');
-  const [filterKat, setFilterKat] = useState('tumu');
-  const [search, setSearch] = useState('');
+  const [tab, setTab] = useUrlState<'tumu' | 'aktif' | 'pasif'>('tab', 'tumu');
+  const [filterKat, setFilterKat] = useUrlState('kat', 'tumu');
+  const [search, setSearch] = useUrlState('q', '');
   const [modalOpen, setModalOpen] = useState(false);
   const [editItem, setEditItem] = useState<DuzenliOdeme | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -126,7 +127,7 @@ export default function DuzenliOdemeler() {
           <h1 className="text-xl font-bold text-gray-800">Duzenli Odemelerim</h1>
           <p className="text-[11px] text-gray-400">Tekrar eden odemelerinizi takip edin ve yonetin.</p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-1.5 px-3.5 py-2 bg-[#6c63ff] text-white rounded-lg text-xs font-medium hover:bg-[#5b54e6]">
+        <button onClick={openCreate} className="flex items-center gap-1.5 px-3.5 py-2 bg-[#1F9D57] text-white rounded-lg text-xs font-medium hover:bg-[#178A49]">
           <Plus size={14} /> Yeni Odeme
         </button>
       </div>
@@ -171,7 +172,7 @@ export default function DuzenliOdemeler() {
       {/* Yaklasan Odemeler */}
       {yaklasan.length > 0 && (
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-          <h3 className="text-[12px] font-semibold text-gray-700 mb-2 flex items-center gap-1"><Zap size={13} className="text-[#6c63ff]" /> Yaklasan Odemeler (7 Gun)</h3>
+          <h3 className="text-[12px] font-semibold text-gray-700 mb-2 flex items-center gap-1"><Zap size={13} className="text-[#1F9D57]" /> Yaklasan Odemeler (7 Gun)</h3>
           <div className="flex gap-2 flex-wrap">
             {yaklasan.map(d => {
               const diff = daysDiff(nextPaymentDate(d));
@@ -192,7 +193,7 @@ export default function DuzenliOdemeler() {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
         <div className="flex items-center gap-4 px-4 border-b border-gray-100">
           {(['tumu', 'aktif', 'pasif'] as const).map(t => (
-            <button key={t} onClick={() => setTab(t)} className={`py-3 text-[11px] font-medium border-b-2 capitalize ${tab === t ? 'border-[#6c63ff] text-[#6c63ff]' : 'border-transparent text-gray-400'}`}>
+            <button key={t} onClick={() => setTab(t)} className={`py-3 text-[11px] font-medium border-b-2 capitalize ${tab === t ? 'border-[#1F9D57] text-[#1F9D57]' : 'border-transparent text-gray-400'}`}>
               {t === 'tumu' ? 'Tumu' : t === 'aktif' ? 'Aktif' : 'Pasif'}
             </button>
           ))}
@@ -333,7 +334,7 @@ export default function DuzenliOdemeler() {
 
           <div className="flex gap-2 justify-end pt-2">
             <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button>
-            <button type="submit" className="px-5 py-2 text-sm bg-[#6c63ff] text-white rounded-lg hover:bg-[#5b54e6]">{editItem ? 'Guncelle' : 'Kaydet'}</button>
+            <button type="submit" className="px-5 py-2 text-sm bg-[#1F9D57] text-white rounded-lg hover:bg-[#178A49]">{editItem ? 'Guncelle' : 'Kaydet'}</button>
           </div>
         </form>
       </Modal>

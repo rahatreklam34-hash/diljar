@@ -152,17 +152,17 @@ export default function TopluUrunEkle() {
   return (
     <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => e.preventDefault()}>
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center"><PackagePlus className="text-indigo-600" size={22} /></div>
+        <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><PackagePlus className="text-emerald-600" size={22} /></div>
         <div className="flex-1 min-w-[180px]"><h1 className="text-xl font-bold text-slate-800">Toplu Ürün Ekle</h1><p className="text-sm text-slate-400">Görselleri sürükle-bırak — her görsel bir ürün olur</p></div>
         <select value={kategoriId} onChange={(e) => setKategoriId(e.target.value)} className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white">
           <option value="">Ortak Kategori (ops.)</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.ad}</option>)}
         </select>
-        <button onClick={submit} disabled={busy || items.length === 0} className="inline-flex items-center gap-2 bg-indigo-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"><Save size={16} /> {busy ? 'Kaydediliyor…' : `Tümünü Kaydet${items.length ? ` (${items.length})` : ''}`}</button>
+        <button onClick={submit} disabled={busy || items.length === 0} className="inline-flex items-center gap-2 bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"><Save size={16} /> {busy ? 'Kaydediliyor…' : `Tümünü Kaydet${items.length ? ` (${items.length})` : ''}`}</button>
       </div>
 
       {/* Tümüne Uygula paneli */}
       <div className="bg-white rounded-2xl border border-slate-200 p-4 mb-4">
-        <div className="flex items-center gap-2 mb-3"><Sparkles size={16} className="text-indigo-600" /><h3 className="font-semibold text-slate-700">Tümüne Uygula</h3><span className="text-xs text-slate-400">— ortak değerleri tek panelden doldur</span></div>
+        <div className="flex items-center gap-2 mb-3"><Sparkles size={16} className="text-emerald-600" /><h3 className="font-semibold text-slate-700">Tümüne Uygula</h3><span className="text-xs text-slate-400">— ortak değerleri tek panelden doldur</span></div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 items-end">
           <div><label className="text-[11px] font-semibold text-slate-500">Cinsiyet</label><select value={common.cinsiyet} onChange={(e) => setC('cinsiyet', e.target.value)} className={`${inp} mt-1`}>{CINSIYET.map((c) => <option key={c}>{c}</option>)}</select></div>
           <div><label className="text-[11px] font-semibold text-slate-500">Lokasyon</label><input value={common.lokasyon} onChange={(e) => setC('lokasyon', e.target.value)} placeholder="Depo/raf" className={`${inp} mt-1`} /></div>
@@ -182,7 +182,7 @@ export default function TopluUrunEkle() {
               {(variationTemplates || []).map((t: any) => <option key={t.id} value={t.id}>{t.ad} — {(t.values || []).join(', ')}</option>)}
             </select>
           </div>
-          <button onClick={applyTemplateAll} className="inline-flex items-center justify-center gap-2 bg-indigo-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 h-[38px]"><Sparkles size={15} /> Şablonu Tümüne Uygula</button>
+          <button onClick={applyTemplateAll} className="inline-flex items-center justify-center gap-2 bg-emerald-600 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 h-[38px]"><Sparkles size={15} /> Şablonu Tümüne Uygula</button>
           {(!variationTemplates || variationTemplates.length === 0) && <span className="text-[11px] text-amber-500">Önce “Varyasyonlar” sayfasından şablon oluşturun.</span>}
           {common.templateId && <span className="text-[11px] text-slate-400 w-full">Not: Şablon uygulanınca her beden için ayrı stok kutucuğu açılır (varsayılan 1). Kartlardan her bedenin stoğunu tek tek düzenleyebilir, <b>“+ Beden ekle”</b> ile yeni beden ekleyebilirsiniz. Yukarıdaki “Stok” yalnız bedensiz ürünlerde kullanılır.</span>}
         </div>
@@ -194,9 +194,9 @@ export default function TopluUrunEkle() {
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={onMainDrop}
-        className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-colors mb-4 ${drag ? 'border-indigo-500 bg-indigo-50' : 'border-slate-300 hover:border-indigo-300 bg-white'}`}
+        className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-colors mb-4 ${drag ? 'border-emerald-500 bg-emerald-50' : 'border-slate-300 hover:border-emerald-300 bg-white'}`}
       >
-        <Upload size={28} className="mx-auto text-indigo-400 mb-2" />
+        <Upload size={28} className="mx-auto text-emerald-400 mb-2" />
         <p className="text-sm font-medium text-slate-600">Tüm ürün görsellerini buraya sürükleyip bırakın</p>
         <p className="text-xs text-slate-400 mt-0.5">Her görsel ayrı bir ürün kartı oluşturur · adı dosya adından gelir</p>
         <input ref={mainInput} type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && addAsProducts(e.target.files)} />
@@ -212,18 +212,18 @@ export default function TopluUrunEkle() {
               onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setDropTarget(it.id); }}
               onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDropTarget(null); }}
               onDrop={(e) => onCardDrop(e, it.id)}
-              className={`bg-white rounded-2xl border-2 p-3 transition-colors ${dropTarget === it.id ? 'border-indigo-500 ring-2 ring-indigo-200 bg-indigo-50/40' : 'border-slate-200'}`}
+              className={`bg-white rounded-2xl border-2 p-3 transition-colors ${dropTarget === it.id ? 'border-emerald-500 ring-2 ring-emerald-200 bg-emerald-50/40' : 'border-slate-200'}`}
             >
               <div className="flex gap-3">
                 {/* Kapak görseli — tıkla büyüt */}
                 <div
                   onClick={() => setLightbox({ images: it.images, idx: 0 })}
                   title="Tıkla büyüt · karta görsel bırak (galeri)"
-                  className={`relative w-24 h-24 rounded-xl overflow-hidden border-2 shrink-0 cursor-zoom-in ${dropTarget === it.id ? 'border-indigo-400' : 'border-slate-200'}`}
+                  className={`relative w-24 h-24 rounded-xl overflow-hidden border-2 shrink-0 cursor-zoom-in ${dropTarget === it.id ? 'border-emerald-400' : 'border-slate-200'}`}
                 >
                   {it.images[0] ? <img src={it.images[0]} alt="" className="w-full h-full object-cover" /> : <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-300"><ImagePlus size={20} /></div>}
                   {it.images.length > 1 && <span className="absolute bottom-1 right-1 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded-full">+{it.images.length - 1}</span>}
-                  {dropTarget === it.id && <div className="absolute inset-0 bg-indigo-500/20 flex items-center justify-center"><ImagePlus className="text-indigo-600" size={20} /></div>}
+                  {dropTarget === it.id && <div className="absolute inset-0 bg-emerald-500/20 flex items-center justify-center"><ImagePlus className="text-emerald-600" size={20} /></div>}
                 </div>
                 <div className="flex-1 min-w-0 space-y-1.5">
                   <input value={it.ad} onChange={(e) => setItem(it.id, { ad: e.target.value })} placeholder="Ürün adı *" className="w-full px-2.5 py-1.5 text-sm font-medium border border-slate-200 rounded-lg" />
@@ -244,7 +244,7 @@ export default function TopluUrunEkle() {
                   {it.images.map((src, idx) => (
                     <div key={idx} className="relative w-11 h-11 rounded-lg overflow-hidden border border-slate-200 group">
                       <img src={src} alt="" onClick={() => setLightbox({ images: it.images, idx })} className="w-full h-full object-cover cursor-zoom-in" />
-                      {idx === 0 && <span className="absolute top-0 left-0 bg-indigo-600 text-white text-[7px] px-1 rounded-br">Kapak</span>}
+                      {idx === 0 && <span className="absolute top-0 left-0 bg-emerald-600 text-white text-[7px] px-1 rounded-br">Kapak</span>}
                       <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-1 transition">
                         {idx !== 0 && <button onClick={() => makeCover(it.id, idx)} title="Kapak yap" className="text-white"><Star size={12} /></button>}
                         <button onClick={() => removeImg(it.id, idx)} title="Sil" className="text-white"><X size={12} /></button>
@@ -254,16 +254,16 @@ export default function TopluUrunEkle() {
                 </div>
               )}
               {/* Varyasyonlar / Beden stokları */}
-              <div className="mt-2 bg-indigo-50/70 border border-indigo-100 rounded-lg px-2 py-2">
+              <div className="mt-2 bg-emerald-50/70 border border-emerald-100 rounded-lg px-2 py-2">
                 <div className="flex items-center justify-between mb-1">
-                  <span className="text-[11px] font-semibold text-indigo-700">Bedenler & Stok</span>
-                  {it.variations && it.variations.length > 0 && <button onClick={() => clearVars(it.id)} title="Tüm bedenleri kaldır" className="text-indigo-400 hover:text-red-500"><X size={13} /></button>}
+                  <span className="text-[11px] font-semibold text-emerald-700">Bedenler & Stok</span>
+                  {it.variations && it.variations.length > 0 && <button onClick={() => clearVars(it.id)} title="Tüm bedenleri kaldır" className="text-emerald-400 hover:text-red-500"><X size={13} /></button>}
                 </div>
                 {it.variations && it.variations.length > 0 ? (
                   <div className="flex flex-wrap gap-1.5">
                     {it.variations.map((v, vi) => (
-                      <div key={vi} className="flex items-center gap-1 bg-white border border-indigo-200 rounded px-1.5 py-0.5">
-                        <span className="text-[11px] text-indigo-700 font-medium">{v.deger}</span>
+                      <div key={vi} className="flex items-center gap-1 bg-white border border-emerald-200 rounded px-1.5 py-0.5">
+                        <span className="text-[11px] text-emerald-700 font-medium">{v.deger}</span>
                         <input type="number" min={0} value={it.varStoklar?.[v.deger] ?? 1} onChange={(e) => setVarStok(it.id, v.deger, Math.max(0, Number(e.target.value) || 0))} className="w-12 px-1 py-0.5 text-[11px] border border-slate-200 rounded text-center" />
                         <button onClick={() => removeBeden(it.id, v.deger)} title="Bedeni kaldır" className="text-slate-300 hover:text-red-500"><X size={11} /></button>
                       </div>
@@ -280,7 +280,7 @@ export default function TopluUrunEkle() {
                     placeholder="+ Beden ekle (örn. M)"
                     className="flex-1 px-2 py-1 text-[11px] border border-slate-200 rounded"
                   />
-                  <button onClick={() => addBeden(it.id, bedenDraft[it.id] || '')} className="text-[11px] bg-indigo-600 text-white px-2 py-1 rounded hover:bg-indigo-700">Ekle</button>
+                  <button onClick={() => addBeden(it.id, bedenDraft[it.id] || '')} className="text-[11px] bg-emerald-600 text-white px-2 py-1 rounded hover:bg-emerald-700">Ekle</button>
                 </div>
               </div>
               <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100">

@@ -3,6 +3,8 @@ import { Bot, Wallet, TrendingUp, Receipt, XCircle, Search, Link2, Trash2, Eye, 
 import toast from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
 import { useStore } from '../context/StoreContext';
+import { useUrlState } from '../lib/useUrlState';
+import { buildSepetCopyText } from './Siparislerim';
 
 const fmt = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmt0 = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { maximumFractionDigits: 0 });
@@ -15,9 +17,9 @@ const STMAP: Record<string, { t: string; c: string }> = {
 };
 
 export default function AsistanSatislari() {
-  const { orders, customers, products, reload } = useStore();
-  const [search, setSearch] = useState('');
-  const [tab, setTab] = useState('hepsi');
+  const { orders, customers, products, reload, storeSetting } = useStore();
+  const [search, setSearch] = useUrlState('q', '');
+  const [tab, setTab] = useUrlState('tab', 'hepsi');
   const prodCost = useMemo(() => new Map(products.map((p) => [p.id, p.alisFiyat || 0])), [products]);
   const cust = (id?: string) => customers.find((c) => c.id === id);
   const custName = (o: any) => cust(o.customerId)?.ad || o.musteriHandle || 'Misafir';
@@ -44,18 +46,18 @@ export default function AsistanSatislari() {
     return list;
   }, [botOrders, tab, search, customers]);
 
-  const copyLink = (o: any) => { if (!o.token) { toast.error('Link yok'); return; } navigator.clipboard.writeText(`${window.location.origin}/sepet/${o.token}`); toast.success('Sipariş linki kopyalandı'); };
+  const copyLink = (o: any) => { if (!o.token) { toast.error('Link yok'); return; } navigator.clipboard.writeText(buildSepetCopyText(`${window.location.origin}/sepet/${o.token}`, storeSetting)); toast.success('Sipariş linki + ödeme bilgileri kopyalandı'); };
   const iptal = async (o: any) => { if (!confirm('Asistan satışı iptal edilsin mi? Ürünler stoğa iade edilir.')) return; try { await api.post(`/store/orders/${o.id}/cancel`); toast.success('İptal edildi'); reload(); } catch (e) { toast.error(apiErrorMessage(e)); } };
 
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center"><Bot className="text-indigo-600" size={22} /></div>
+        <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><Bot className="text-emerald-600" size={22} /></div>
         <div><h1 className="text-2xl font-bold text-slate-800">Asistan Satışları</h1><p className="text-sm text-slate-400">Yapay zeka asistanının gerçekleştirdiği satışlar ve karlılık raporu.</p></div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Kpi icon={Wallet} cls="bg-indigo-100 text-indigo-600" label="Toplam Ciro" value={fmt0(kpi.ciro)} />
+        <Kpi icon={Wallet} cls="bg-emerald-100 text-emerald-600" label="Toplam Ciro" value={fmt0(kpi.ciro)} />
         <Kpi icon={TrendingUp} cls="bg-green-100 text-green-600" label="Toplam Kâr" value={fmt0(kpi.kar)} valueCls="text-green-600" />
         <Kpi icon={TrendingUp} cls="bg-emerald-100 text-emerald-600" label="Karlılık" value={`%${kpi.karOran.toFixed(1)}`} valueCls="text-emerald-600" />
         <Kpi icon={Receipt} cls="bg-sky-100 text-sky-600" label="Satış Adedi" value={String(kpi.adet)} />
@@ -66,7 +68,7 @@ export default function AsistanSatislari() {
       <div className="flex items-center gap-3 flex-wrap">
         <div className="flex items-center gap-1 border-b border-slate-200">
           {[['hepsi', 'Tümü'], ['aktif', 'Aktif Satışlar'], ['iptal', 'İptal Edilenler']].map(([k, t]) => (
-            <button key={k} onClick={() => setTab(k)} className={`px-3 py-2.5 text-sm font-medium border-b-2 ${tab === k ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>{t}</button>
+            <button key={k} onClick={() => setTab(k)} className={`px-3 py-2.5 text-sm font-medium border-b-2 ${tab === k ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>{t}</button>
           ))}
         </div>
         <div className="relative ml-auto min-w-[220px]"><Search size={15} className="absolute left-3 top-2.5 text-slate-400" /><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Sipariş / müşteri ara..." className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>

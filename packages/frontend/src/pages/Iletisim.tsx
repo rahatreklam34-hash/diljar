@@ -19,9 +19,9 @@ export default function Iletisim() {
           <h2>Bize Ulaşın</h2>
           <p>Ürün, abonelik veya teknik konularda her zaman yanınızdayız. Aşağıdaki kanallardan bize ulaşabilir veya formu doldurabilirsiniz.</p>
           <div className="space-y-3 text-slate-700">
-            <div className="flex items-center gap-3"><Mail size={18} className="text-indigo-600" /> destek@diljar.com</div>
-            <div className="flex items-center gap-3"><Phone size={18} className="text-indigo-600" /> 0850 000 00 00</div>
-            <div className="flex items-start gap-3"><MapPin size={18} className="text-indigo-600 mt-0.5" /> WTech Yazılım A.Ş. — [Şirket adresi]</div>
+            <div className="flex items-center gap-3"><Mail size={18} className="text-emerald-600" /> destek@diljar.com</div>
+            <div className="flex items-center gap-3"><Phone size={18} className="text-emerald-600" /> 0850 000 00 00</div>
+            <div className="flex items-start gap-3"><MapPin size={18} className="text-emerald-600 mt-0.5" /> WTech Yazılım A.Ş. — [Şirket adresi]</div>
           </div>
           <p className="text-sm text-slate-400">Mevcut müşteriyseniz, panel içindeki <strong>Destek Merkezi</strong>'nden talep oluşturmanız daha hızlı yanıt almanızı sağlar.</p>
         </div>
@@ -38,7 +38,7 @@ export default function Iletisim() {
             <label className="block text-sm text-slate-600 mb-1">Mesajınız</label>
             <textarea required rows={4} value={form.mesaj} onChange={(e) => setForm({ ...form, mesaj: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-lg" />
           </div>
-          <button type="submit" className="inline-flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-indigo-700"><Send size={16} /> Gönder</button>
+          <button type="submit" className="inline-flex items-center gap-2 bg-emerald-600 text-white px-5 py-2.5 rounded-lg font-medium hover:bg-emerald-700"><Send size={16} /> Gönder</button>
         </form>
       </div>
     </PublicPage>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Headphones, Plus, Trash2, X, Eye } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
+import { useUrlState } from '../lib/useUrlState';
 
 const DURUM: Record<string, { t: string; c: string }> = {
   acik: { t: 'Açık', c: 'bg-blue-100 text-blue-700' },
@@ -11,7 +12,7 @@ const DURUM: Record<string, { t: string; c: string }> = {
 
 export default function DestekTalepleri() {
   const [list, setList] = useState<any[]>([]);
-  const [filter, setFilter] = useState<'hepsi' | 'acik' | 'islemde' | 'cozuldu'>('hepsi');
+  const [filter, setFilter] = useUrlState<'hepsi' | 'acik' | 'islemde' | 'cozuldu'>('durum', 'hepsi');
   const [detail, setDetail] = useState<any | null>(null);
   const [modal, setModal] = useState(false);
   const [form, setForm] = useState({ musteriAd: '', baslik: '', konu: '', detay: '' });
@@ -30,14 +31,14 @@ export default function DestekTalepleri() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center"><Headphones className="text-indigo-600" size={22} /></div>
+        <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><Headphones className="text-emerald-600" size={22} /></div>
         <div className="flex-1"><h1 className="text-xl font-bold text-slate-800">Destek Talepleri</h1><p className="text-sm text-slate-400">Müşterilerinizden gelen destek/şikayet talepleri</p></div>
-        <button onClick={() => setModal(true)} className="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700"><Plus size={18} /> Talep Ekle</button>
+        <button onClick={() => setModal(true)} className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-emerald-700"><Plus size={18} /> Talep Ekle</button>
       </div>
 
       <div className="flex gap-2 mb-4">
         {([['hepsi', `Tümü ${list.length}`], ['acik', `Açık ${cnt('acik')}`], ['islemde', `İşlemde ${cnt('islemde')}`], ['cozuldu', `Çözüldü ${cnt('cozuldu')}`]] as const).map(([f, l]) => (
-          <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-lg text-sm ${filter === f ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{l}</button>
+          <button key={f} onClick={() => setFilter(f)} className={`px-3 py-1.5 rounded-lg text-sm ${filter === f ? 'bg-emerald-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{l}</button>
         ))}
       </div>
 
@@ -47,7 +48,7 @@ export default function DestekTalepleri() {
           <tbody>
             {filtered.map((t) => (
               <tr key={t.id} className="border-t border-slate-100">
-                <td className="px-4 py-3 font-mono text-xs text-indigo-600">{t.no || '-'}</td>
+                <td className="px-4 py-3 font-mono text-xs text-emerald-600">{t.no || '-'}</td>
                 <td className="px-4 py-3 font-medium text-slate-800">{t.baslik}</td>
                 <td className="px-4 py-3 text-slate-500 max-w-xs truncate">{t.konu || '-'}</td>
                 <td className="px-4 py-3 text-slate-600">{t.musteriAd || '-'}</td>
@@ -70,20 +71,20 @@ export default function DestekTalepleri() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setDetail(null)}>
           <div className="w-full max-w-lg bg-white rounded-2xl p-6 max-h-[85vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-2"><h3 className="text-lg font-bold text-slate-800">{detail.baslik}</h3><button onClick={() => setDetail(null)}><X size={20} className="text-slate-400" /></button></div>
-            {detail.no && <p className="text-xs font-mono text-indigo-600 mb-1">Kayıt No: {detail.no}</p>}
+            {detail.no && <p className="text-xs font-mono text-emerald-600 mb-1">Kayıt No: {detail.no}</p>}
             <p className="text-xs text-slate-400 mb-3">{detail.musteriAd || 'Müşteri'} · {detail.kaynak === 'chatbot' ? 'Chatbot' : 'Manuel'} · {new Date(detail.createdAt).toLocaleString('tr-TR')}</p>
             {detail.konu && <p className="text-sm text-slate-600 mb-2"><strong>Konu:</strong> {detail.konu}</p>}
             <div className="bg-slate-50 rounded-lg p-3 text-sm text-slate-700 whitespace-pre-line">{detail.detay || '-'}</div>
             <div className="flex gap-2 mt-4">
               {['acik', 'islemde', 'cozuldu'].map((d) => (
-                <button key={d} onClick={() => setDurum(detail.id, d)} className={`px-3 py-1.5 rounded-lg text-sm ${detail.durum === d ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{DURUM[d].t}</button>
+                <button key={d} onClick={() => setDurum(detail.id, d)} className={`px-3 py-1.5 rounded-lg text-sm ${detail.durum === d ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600'}`}>{DURUM[d].t}</button>
               ))}
             </div>
             <div className="mt-4">
               <label className="block text-sm font-medium text-slate-700 mb-1">Müşteriye Not / Yanıt</label>
               <p className="text-[10px] text-slate-400 mb-1">Müşteri sohbette kayıt numarasını yazınca bu notu ve güncel durumu görür.</p>
               <textarea rows={3} value={detail.yanit || ''} onChange={(e) => setDetail({ ...detail, yanit: e.target.value })} placeholder="Örn: Talebiniz incelendi, kargonuz yeniden gönderildi." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
-              <button onClick={saveYanit} className="mt-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700">Notu Kaydet</button>
+              <button onClick={saveYanit} className="mt-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700">Notu Kaydet</button>
             </div>
           </div>
         </div>
@@ -97,7 +98,7 @@ export default function DestekTalepleri() {
             <input required value={form.baslik} onChange={(e) => setForm({ ...form, baslik: e.target.value })} placeholder="Başlık *" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
             <input value={form.konu} onChange={(e) => setForm({ ...form, konu: e.target.value })} placeholder="Konu" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
             <textarea rows={3} value={form.detay} onChange={(e) => setForm({ ...form, detay: e.target.value })} placeholder="Detay" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
-            <button type="submit" className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700">Oluştur</button>
+            <button type="submit" className="w-full bg-emerald-600 text-white py-2.5 rounded-lg font-medium hover:bg-emerald-700">Oluştur</button>
           </form>
         </div>
       )}

@@ -24,7 +24,7 @@ const STMAP: Record<string, { t: string; c: string }> = {
   kapali: { t: 'Kapalı', c: 'bg-slate-100 text-slate-500' },
 };
 
-function Donut({ pct, color = '#6366f1', label, sub }: { pct: number; color?: string; label: string; sub?: string }) {
+function Donut({ pct, color = '#0F7C45', label, sub }: { pct: number; color?: string; label: string; sub?: string }) {
   const r = 42, c = 2 * Math.PI * r, off = c - (Math.min(100, Math.max(0, pct)) / 100) * c;
   return (
     <div className="relative w-28 h-28 shrink-0">
@@ -46,6 +46,7 @@ export default function MusteriDetay() {
   const { customers, orders, products, discountCodes, reload } = useStore();
   const [tab, setTab] = useState('gecmis');
   const [ledger, setLedger] = useState<any[]>([]);
+  const [iadeKayitlar, setIadeKayitlar] = useState<any[]>([]);
   const [balModal, setBalModal] = useState(false);
   const [balForm, setBalForm] = useState({ tip: 'yukleme', tutar: '', aciklama: '' });
   const [menu, setMenu] = useState(false);
@@ -54,7 +55,7 @@ export default function MusteriDetay() {
   const prodCost = useMemo(() => new Map(products.map((p) => [p.id, p.alisFiyat || 0])), [products]);
 
   const loadLedger = async () => { if (!id) return; try { const r = await api.get(`/store/customers/${id}/ledger`); setLedger(r.data || []); } catch { /* */ } };
-  useEffect(() => { loadLedger(); /* eslint-disable-next-line */ }, [id]);
+  useEffect(() => { loadLedger(); if (id) api.get('/store/iade', { params: { customerId: id } }).then((r) => setIadeKayitlar(r.data?.rows || [])).catch(() => {}); /* eslint-disable-next-line */ }, [id]);
 
   const myOrders = useMemo(() => orders.filter((o) => o.customerId === id), [orders, id]);
 
@@ -81,7 +82,7 @@ export default function MusteriDetay() {
   }, [myOrders, ledger, prodCost]);
 
   if (!customer) {
-    return <div className="p-6"><button onClick={() => nav('/musterilerim')} className="text-indigo-600 inline-flex items-center gap-1"><ArrowLeft size={16} /> Müşterilerim</button><p className="mt-6 text-slate-400">Müşteri bulunamadı.</p></div>;
+    return <div className="p-6"><button onClick={() => nav('/musterilerim')} className="text-emerald-600 inline-flex items-center gap-1"><ArrowLeft size={16} /> Müşterilerim</button><p className="mt-6 text-slate-400">Müşteri bulunamadı.</p></div>;
   }
 
   const ig = customer.instagram ? String(customer.instagram).replace(/^@/, '') : '';
@@ -118,7 +119,7 @@ export default function MusteriDetay() {
           <button onClick={notEkle} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white hover:bg-slate-50"><FileText size={15} /> Not Ekle</button>
           <button onClick={sohbet} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white hover:bg-slate-50"><MessageCircle size={15} /> Mesaj Gönder</button>
           <div className="relative">
-            <button onClick={() => setMenu(!menu)} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"><Plus size={15} /> İşlem Yap <ChevronDown size={14} /></button>
+            <button onClick={() => setMenu(!menu)} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"><Plus size={15} /> İşlem Yap <ChevronDown size={14} /></button>
             {menu && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setMenu(false)} />
@@ -139,7 +140,7 @@ export default function MusteriDetay() {
         <div className="grid grid-cols-1 xl:grid-cols-[340px_1fr] gap-5">
           {/* Profil */}
           <div className="flex items-start gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-100 text-indigo-700 flex items-center justify-center text-xl font-bold">{initials(customer.ad)}</div>
+            <div className="w-16 h-16 rounded-2xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-xl font-bold">{initials(customer.ad)}</div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-lg font-bold text-slate-800">{customer.ad}</h1>
@@ -174,14 +175,14 @@ export default function MusteriDetay() {
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Bakiye Durumu</p>
-          <p className="text-2xl font-bold text-indigo-600">{fmt(customer.bakiye || 0)}</p>
+          <p className="text-2xl font-bold text-emerald-600">{fmt(customer.bakiye || 0)}</p>
           <p className="text-xs text-slate-400 mb-3">Mevcut Bakiye</p>
           <div className="space-y-1 text-sm">
             <div className="flex justify-between"><span className="text-slate-400">Toplam Yükleme</span><span className="text-slate-700">{fmt(k.yukleme)}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">Toplam Harcama</span><span className="text-slate-700">{fmt(k.harcama)}</span></div>
             <div className="flex justify-between"><span className="text-slate-400">Varsayılan İndirim</span><span className="text-slate-700">%{customer.indirimYuzde || 0}</span></div>
           </div>
-          <button onClick={() => { setBalForm({ tip: 'yukleme', tutar: '', aciklama: '' }); setBalModal(true); }} className="mt-3 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm border border-indigo-200 text-indigo-600 rounded-lg hover:bg-indigo-50"><Plus size={14} /> Bakiye Yükle</button>
+          <button onClick={() => { setBalForm({ tip: 'yukleme', tutar: '', aciklama: '' }); setBalModal(true); }} className="mt-3 w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm border border-emerald-200 text-emerald-600 rounded-lg hover:bg-emerald-50"><Plus size={14} /> Bakiye Yükle</button>
         </div>
         <div className="bg-white rounded-xl border border-slate-200 p-4">
           <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Ödeme Alışkanlığı</p>
@@ -210,7 +211,7 @@ export default function MusteriDetay() {
           <div className="bg-white rounded-xl border border-slate-200">
             <div className="flex items-center gap-1 border-b border-slate-200 px-2 overflow-x-auto">
               {TABS.map((t) => (
-                <button key={t.k} onClick={() => setTab(t.k)} className={`px-3 py-3 text-sm font-medium border-b-2 whitespace-nowrap ${tab === t.k ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>{t.t}</button>
+                <button key={t.k} onClick={() => setTab(t.k)} className={`px-3 py-3 text-sm font-medium border-b-2 whitespace-nowrap ${tab === t.k ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>{t.t}</button>
               ))}
             </div>
             <div className="p-4">
@@ -263,22 +264,40 @@ export default function MusteriDetay() {
                 </Table>
               )}
               {tab === 'iade' && (
-                <Table head={['Tarih', 'Açıklama', 'Tutar']}>
-                  {ledger.filter((l) => l.tip === 'iade').map((l) => (
-                    <tr key={l.id} className="border-t border-slate-100">
-                      <td className="px-3 py-2.5 text-slate-500">{dt(l.createdAt)}</td>
-                      <td className="px-3 py-2.5 text-slate-500">{l.aciklama || '-'}</td>
-                      <td className="px-3 py-2.5 font-medium text-blue-600">+{fmt(l.tutar)}</td>
-                    </tr>
-                  ))}
-                  {ledger.filter((l) => l.tip === 'iade').length === 0 && <tr><td colSpan={3} className="px-3 py-10 text-center text-slate-400">İade kaydı yok</td></tr>}
-                </Table>
+                <div className="space-y-4">
+                  <Table head={['Tarih', 'Açıklama', 'Tutar']}>
+                    {ledger.filter((l) => l.tip === 'iade').map((l) => (
+                      <tr key={l.id} className="border-t border-slate-100">
+                        <td className="px-3 py-2.5 text-slate-500">{dt(l.createdAt)}</td>
+                        <td className="px-3 py-2.5 text-slate-500">{l.aciklama || '-'}</td>
+                        <td className="px-3 py-2.5 font-medium text-blue-600">+{fmt(l.tutar)}</td>
+                      </tr>
+                    ))}
+                    {ledger.filter((l) => l.tip === 'iade').length === 0 && <tr><td colSpan={3} className="px-3 py-10 text-center text-slate-400">İade kaydı yok</td></tr>}
+                  </Table>
+                  {iadeKayitlar.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 uppercase mb-2">Ürün Bazlı İade / Değişim Kayıtları</p>
+                      <Table head={['Tarih', 'Sipariş', 'Tip', 'Ürünler', 'Tutar']}>
+                        {iadeKayitlar.map((h) => (
+                          <tr key={h.id} className="border-t border-slate-100">
+                            <td className="px-3 py-2.5 text-slate-500">{dt(h.createdAt)}</td>
+                            <td className="px-3 py-2.5 font-mono text-xs">{h.sipNo || '-'}</td>
+                            <td className="px-3 py-2.5"><span className={`text-[11px] px-2 py-0.5 rounded-full ${h.tip === 'iade' ? 'bg-blue-100 text-blue-700' : 'bg-violet-100 text-violet-700'}`}>{h.tip === 'iade' ? 'İade' : 'Değişim'}</span></td>
+                            <td className="px-3 py-2.5 text-slate-600">{(Array.isArray(h.items) ? h.items : []).map((it: any) => `${it.ad}${it.defo ? ' (defo)' : ''} ×${it.adet}${it.sebep ? ' — ' + it.sebep : ''}`).join('; ')}</td>
+                            <td className="px-3 py-2.5 font-medium text-blue-600">{h.iadeTutar ? '+' + fmt(h.iadeTutar) : '-'}</td>
+                          </tr>
+                        ))}
+                      </Table>
+                    </div>
+                  )}
+                </div>
               )}
               {tab === 'kupon' && (
                 <Table head={['Kod', 'İndirim', 'Tip', 'Durum']}>
                   {discountCodes.map((d: any) => (
                     <tr key={d.id} className="border-t border-slate-100">
-                      <td className="px-3 py-2.5 font-mono text-xs font-semibold text-indigo-600">{d.code}</td>
+                      <td className="px-3 py-2.5 font-mono text-xs font-semibold text-emerald-600">{d.code}</td>
                       <td className="px-3 py-2.5 text-slate-700">{d.tip === 'yuzde' ? '%' + d.deger : fmt(d.deger)}</td>
                       <td className="px-3 py-2.5 text-slate-500">{d.tip === 'yuzde' ? 'Yüzde' : 'Tutar'}</td>
                       <td className="px-3 py-2.5"><span className={`text-xs px-2 py-0.5 rounded-full font-medium ${d.aktif ? 'bg-green-100 text-green-700' : 'bg-slate-100 text-slate-500'}`}>{d.aktif ? 'Aktif' : 'Pasif'}</span></td>
@@ -318,7 +337,7 @@ export default function MusteriDetay() {
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <p className="text-xs font-semibold text-slate-500 uppercase mb-3">İade & Değişim Özeti</p>
             <div className="flex items-center gap-3 mb-3">
-              <Donut pct={k.count ? (k.iadeAdet / Math.max(1, k.count)) * 100 : 0} color="#a78bfa" label={`%${k.count ? ((k.iadeAdet / Math.max(1, k.count)) * 100).toFixed(1) : '0'}`} sub="İade Oranı" />
+              <Donut pct={k.count ? (k.iadeAdet / Math.max(1, k.count)) * 100 : 0} color="#34D399" label={`%${k.count ? ((k.iadeAdet / Math.max(1, k.count)) * 100).toFixed(1) : '0'}`} sub="İade Oranı" />
               <div className="flex-1 space-y-1.5 text-sm">
                 <div className="flex justify-between"><span className="text-slate-500">İade İşlemi</span><span className="font-medium">{k.iadeAdet}</span></div>
                 <div className="flex justify-between"><span className="text-slate-500">İade Tutarı</span><span className="font-medium">{fmt0(k.iadeTutar)}</span></div>
@@ -338,9 +357,9 @@ export default function MusteriDetay() {
               ))}
               {discountCodes.filter((d: any) => d.aktif).length === 0 && <p className="text-sm text-slate-400">Aktif kupon yok.</p>}
               {(customer.indirimYuzde || 0) > 0 && (
-                <div className="flex items-center justify-between border border-indigo-100 bg-indigo-50 rounded-lg px-3 py-2">
-                  <span className="text-xs font-semibold text-indigo-700">Müşteriye Özel</span>
-                  <span className="text-sm text-indigo-700">%{customer.indirimYuzde} sabit indirim</span>
+                <div className="flex items-center justify-between border border-emerald-100 bg-emerald-50 rounded-lg px-3 py-2">
+                  <span className="text-xs font-semibold text-emerald-700">Müşteriye Özel</span>
+                  <span className="text-sm text-emerald-700">%{customer.indirimYuzde} sabit indirim</span>
                 </div>
               )}
             </div>
@@ -355,12 +374,12 @@ export default function MusteriDetay() {
             <div className="flex items-center justify-between"><h3 className="text-lg font-semibold">Bakiye İşlemi</h3><button type="button" onClick={() => setBalModal(false)}><X size={20} className="text-slate-400" /></button></div>
             <div className="grid grid-cols-3 gap-2">
               {[{ k: 'yukleme', t: 'Yükleme' }, { k: 'harcama', t: 'Harcama' }, { k: 'iade', t: 'İade' }].map((x) => (
-                <button type="button" key={x.k} onClick={() => setBalForm((f) => ({ ...f, tip: x.k }))} className={`py-2 text-sm rounded-lg border ${balForm.tip === x.k ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium' : 'border-slate-200 text-slate-500'}`}>{x.t}</button>
+                <button type="button" key={x.k} onClick={() => setBalForm((f) => ({ ...f, tip: x.k }))} className={`py-2 text-sm rounded-lg border ${balForm.tip === x.k ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-medium' : 'border-slate-200 text-slate-500'}`}>{x.t}</button>
               ))}
             </div>
             <input autoFocus type="number" value={balForm.tutar} onChange={(e) => setBalForm((f) => ({ ...f, tutar: e.target.value }))} placeholder="Tutar" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
             <input value={balForm.aciklama} onChange={(e) => setBalForm((f) => ({ ...f, aciklama: e.target.value }))} placeholder="Açıklama (ops.)" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
-            <button type="submit" className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700">Kaydet</button>
+            <button type="submit" className="w-full bg-emerald-600 text-white py-2.5 rounded-lg font-medium hover:bg-emerald-700">Kaydet</button>
           </form>
         </div>
       )}
@@ -382,5 +401,5 @@ function Table({ head, children }: any) {
   );
 }
 function Behav({ icon: Ic, label, value }: any) {
-  return <div className="flex items-center gap-3 border border-slate-100 rounded-lg p-3"><div className="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center"><Ic size={18} /></div><div><p className="text-xs text-slate-400">{label}</p><p className="text-lg font-bold text-slate-800">{value}</p></div></div>;
+  return <div className="flex items-center gap-3 border border-slate-100 rounded-lg p-3"><div className="w-9 h-9 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center"><Ic size={18} /></div><div><p className="text-xs text-slate-400">{label}</p><p className="text-lg font-bold text-slate-800">{value}</p></div></div>;
 }

@@ -1,9 +1,15 @@
 @import "tailwindcss";
 
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+
 @layer base {
   :root {
     --sidebar-bg: #1a1a2e;
-    --sidebar-active: #6c63ff;
+    --sidebar-active: #1F9D57;
     --card-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   }
 
@@ -20,20 +26,20 @@
 .wt-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
 .wt-scroll::-webkit-scrollbar-track { background: transparent; }
 .wt-scroll::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #a78bfa, #6366f1);
+  background: linear-gradient(180deg, #34D399, #0F7C45);
   border-radius: 9999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 .wt-scroll::-webkit-scrollbar-thumb:hover {
-  background: linear-gradient(180deg, #8b5cf6, #4f46e5);
+  background: linear-gradient(180deg, #10B981, #0E7C45);
   background-clip: padding-box;
 }
 body.theme-dark .wt-scroll {
   scrollbar-color: rgba(139, 92, 246, 0.55) transparent;
 }
 body.theme-dark .wt-scroll::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #7c3aed, #4338ca);
+  background: linear-gradient(180deg, #22A95C, #0B5E35);
   background-clip: padding-box;
 }
 
@@ -41,7 +47,7 @@ body.theme-dark .wt-scroll::-webkit-scrollbar-thumb {
 body.theme-dark::-webkit-scrollbar { width: 10px; height: 10px; }
 body.theme-dark::-webkit-scrollbar-track { background: #0b1020; }
 body.theme-dark::-webkit-scrollbar-thumb {
-  background: linear-gradient(180deg, #7c3aed, #4338ca);
+  background: linear-gradient(180deg, #22A95C, #0B5E35);
   border-radius: 9999px;
 }
 

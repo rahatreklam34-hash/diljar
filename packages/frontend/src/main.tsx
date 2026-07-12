@@ -2,6 +2,22 @@ import { Component } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 
+// Stale-chunk (yeni deploy sonrası eski dosya isteme) hatasını yakala ve oturumda bir kez otomatik yenile.
+function isChunkError(err: any): boolean {
+  const msg = String((err && (err.message || err.stack)) || err || '');
+  return /dynamically imported module|Importing a module script failed|Failed to fetch|Loading chunk|error loading dynamically/i.test(msg);
+}
+function tryAutoReload(): boolean {
+  const key = 'chunk_reload_at';
+  const last = Number(sessionStorage.getItem(key) || '0');
+  if (Date.now() - last > 10000) {
+    sessionStorage.setItem(key, String(Date.now()));
+    window.location.reload();
+    return true;
+  }
+  return false;
+}
+
 class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error?: string }> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
@@ -12,6 +28,7 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
   }
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error(error, info);
+    if (isChunkError(error)) tryAutoReload();
   }
   render() {
     if (this.state.hasError) {
@@ -53,5 +70,12 @@ import('./App')
   })
   .catch((e: any) => {
     console.error(e);
+    if (isChunkError(e) && tryAutoReload()) return;
     showFatalError((e && (e.stack || e.message || String(e))) || 'Bilinmeyen hata');
   });
+
+// Vite, preload edilen bir chunk yüklenemezse bu event'i fırlatır (yeni deploy senaryosu).
+window.addEventListener('vite:preloadError', (e: any) => {
+  e.preventDefault?.();
+  tryAutoReload();
+});

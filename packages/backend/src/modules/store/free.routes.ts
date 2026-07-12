@@ -123,6 +123,22 @@ router.post('/products/bulk-price', asyncHandler(async (req: Request, res: Respo
   res.json({ ok: true, count });
 }));
 
+router.post('/products/bulk-edit', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const { ids, ad, marka, cinsiyet } = req.body || {};
+  if (!Array.isArray(ids) || ids.length === 0) throw new ApiError(400, 'Ürün seçilmedi');
+  const setAd = typeof ad === 'string' && ad.trim() !== '';
+  const setMarka = typeof marka === 'string' && marka.trim() !== '';
+  const setCinsiyet = typeof cinsiyet === 'string' && cinsiyet.trim() !== '';
+  if (!setAd && !setMarka && !setCinsiyet) throw new ApiError(400, 'Değiştirilecek alan yok');
+  const data: any = {};
+  if (setAd) data.ad = ad.trim();
+  if (setMarka) data.marka = marka.trim();
+  if (setCinsiyet) data.cinsiyet = cinsiyet.trim();
+  const r = await prisma.freeProduct.updateMany({ where: { tenantId: t, aktif: true, id: { in: ids } }, data });
+  res.json({ ok: true, count: r.count });
+}));
+
 router.post('/products', asyncHandler(async (req: Request, res: Response) => {
   const t = req.tenantId!;
   const { ad, images, bedenler, satisFiyat, alisFiyat, supplierId, variations, cinsiyet, aciklama } = req.body || {};
@@ -165,10 +181,12 @@ router.post('/products', asyncHandler(async (req: Request, res: Response) => {
 
 router.patch('/products/:id', asyncHandler(async (req: Request, res: Response) => {
   const t = req.tenantId!;
-  const { ad, images, variations, satisFiyat, alisFiyat, aktif, cinsiyet, aciklama } = req.body || {};
+  const { ad, images, variations, satisFiyat, alisFiyat, aktif, cinsiyet, aciklama, marka, kategoriId } = req.body || {};
   const data: any = {};
   if (ad !== undefined) data.ad = ad;
   if (cinsiyet !== undefined) data.cinsiyet = cinsiyet || null;
+  if (marka !== undefined) data.marka = marka || null;
+  if (kategoriId !== undefined) data.kategoriId = kategoriId || null;
   if (aciklama !== undefined) data.aciklama = aciklama || null;
   if (images !== undefined) data.images = images;
   if (variations !== undefined) data.variations = variations;
@@ -247,6 +265,49 @@ router.post('/supplier-login', asyncHandler(async (req: Request, res: Response) 
   const jwt = await import('jsonwebtoken');
   const token = jwt.default.sign({ supplierId: s.id, tenantId: s.tenantId, type: 'supplier' }, process.env.JWT_SECRET || 'secret', { expiresIn: '30d' });
   res.json({ token, supplier: { id: s.id, ad: s.ad } });
+}));
+
+// ─── Paylaşılabilir Katalog (admin) ──────────────────────────────────────────
+
+router.get('/catalogs', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const list = await prisma.freeCatalog.findMany({ where: { tenantId: t }, orderBy: { createdAt: 'desc' } });
+  res.json(list.map((c) => ({ ...c, urunSayisi: Array.isArray(c.productIds) ? (c.productIds as any[]).length : 0 })));
+}));
+
+router.post('/catalogs', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const { ad, whatsapp, productIds } = req.body || {};
+  if (!ad) throw new ApiError(400, 'Katalog adı zorunludur');
+  const c = await prisma.freeCatalog.create({
+    data: {
+      tenantId: t,
+      ad: String(ad),
+      token: genToken(),
+      whatsapp: whatsapp ? String(whatsapp) : '05334413472',
+      productIds: Array.isArray(productIds) ? productIds : [],
+    },
+  });
+  res.status(201).json(c);
+}));
+
+router.patch('/catalogs/:id', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const { ad, aktif, whatsapp, productIds } = req.body || {};
+  const data: any = {};
+  if (ad !== undefined) data.ad = String(ad);
+  if (aktif !== undefined) data.aktif = !!aktif;
+  if (whatsapp !== undefined) data.whatsapp = whatsapp ? String(whatsapp) : null;
+  if (productIds !== undefined) data.productIds = Array.isArray(productIds) ? productIds : [];
+  await prisma.freeCatalog.updateMany({ where: { id: req.params.id, tenantId: t }, data });
+  const c = await prisma.freeCatalog.findFirst({ where: { id: req.params.id, tenantId: t } });
+  res.json(c);
+}));
+
+router.delete('/catalogs/:id', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  await prisma.freeCatalog.deleteMany({ where: { id: req.params.id, tenantId: t } });
+  res.json({ ok: true });
 }));
 
 export default router;

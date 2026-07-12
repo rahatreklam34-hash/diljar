@@ -3,16 +3,23 @@ import express from 'express';
 import https from 'https';
 import jwt from 'jsonwebtoken';
 import bcrypt from 'bcryptjs';
+import { trackVisitor } from '../store/catalog.live';
 import { prisma } from '../../lib/prisma';
 import { env } from '../../config/env';
 import { asyncHandler, ApiError } from '../../lib/http';
 import { createPaytrToken, verifyPaytrCallback, PaytrConfig } from '../payment/paytr';
+import { getIyzico, queryInstallment, initThreeDS, completeThreeDS } from '../payment/iyzico.service';
 import { getTami, tamiInitAuth, tamiComplete3ds, verifyTamiCallback } from '../tami/tami.service';
 import { botReply, offeredTicket } from '../bot/engine';
 import { summarizeTicket } from '../bot/llm';
-import { promoteReserved, campaignAdjust, promoteWaitingStock } from '../store/live.routes';
-import { nextOrderNo } from '../store/store.routes';
+import { promoteReserved, campaignAdjust, campaignPerItem, promoteWaitingStock, lockedCampaignIds } from '../store/live.routes';
+import { nextOrderNo, generateSipNo, logStok, genToken } from '../store/store.routes';
+import { cancelLinkedOrder } from '../store/catalog.trigger';
+import { queryShipment } from '../cargo/cargo.service';
 import { sendSms } from '../sms/netgsm.service';
+import { enqueueOrderNotification, resolveStoreWaTargetPhone } from '../whatsapp/wa.service';
+import { startWorkflowRuns } from '../whatsapp/wa.workflow';
+import { apiSendTemplate } from '../whatsapp/wa.cloud';
 
 // ───── Üyelik SMS doğrulama kodu (bellekte; tek süreç/pm2 fork) ─────
 const uyeKodlar = new Map<string, { kod: string; exp: number; lastSent: number; tries: number }>();
@@ -117,7 +124,10 @@ async function loadStore(slug: string) {
       return (ia === -1 ? 999 : ia) - (ib === -1 ? 999 : ib);
     });
   }
-  const categories = await prisma.productCategory.findMany({ where: { tenantId: store.tenantId }, select: { id: true, ad: true, image: true } });
+  const allCats = await prisma.productCategory.findMany({ where: { tenantId: store.tenantId }, select: { id: true, ad: true, image: true } });
+  // Yalnizca yayindaki (onlineMagaza+aktif+stok>0) urunu olan kategorileri dondur
+  const usedCatIds = new Set(products.map((p: any) => p.kategoriId).filter(Boolean));
+  const categories = allCats.filter((c: any) => usedCatIds.has(c.id));
   // Ürün puanları (onaylı yorumların ortalaması + adedi)
   const pids = products.map((p) => p.id);
   let ratings: Record<string, { avg: number; count: number }> = {};
@@ -132,9 +142,16 @@ async function loadStore(slug: string) {
 router.get('/store/:slug', asyncHandler(async (req: Request, res: Response) => {
   const data = await loadStore(req.params.slug);
   if (!data) throw new ApiError(404, 'Magaza bulunamadi veya yayinda degil');
+  const cfg: any = data.store.config || {};
   res.json({
     name: data.tenant?.name || 'Magaza',
     logoText: data.store.logoText || data.tenant?.name,
+    topBarText: cfg.topBarText || null,
+    kuponKodu: cfg.kuponKodu || null,
+    kargoText: cfg.kargoText || null,
+    topBarSag: cfg.topBarSag || null,
+    guvenKargo: cfg.guvenKargo || null,
+    guvenKargoAlt: cfg.guvenKargoAlt || null,
     hero: { title: data.store.heroTitle, subtitle: data.store.heroSubtitle, image: data.store.heroImage, video: data.store.heroVideo },
     slides: Array.isArray(data.store.slides) ? data.store.slides : [],
     stories: Array.isArray(data.store.stories) ? data.store.stories : [],
@@ -164,6 +181,8 @@ async function shopAuth(req: Request, tenantId: string) {
   try { const p: any = jwt.verify(tok, env.JWT_SECRET); if (p.type !== 'shopper' || p.tenantId !== tenantId) return null; return p.customerId as string; } catch { return null; }
 }
 const digits = (s: string) => (s || '').replace(/\D/g, '');
+const tk10 = (s?: string | null) => { const d = digits(s || ''); return d.length >= 10 ? d.slice(-10) : (d || null); };
+const igk = (s?: string | null) => { const k = (s || '').toLowerCase().replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ğ/g, 'g').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/^@+/, '').trim(); return k || null; };
 
 // Müşteri bu ürünü gerçekten satın almış mı? (değerlendirme yetkisi)
 async function customerBoughtProduct(tenantId: string, customerId: string, productId: string): Promise<boolean> {
@@ -185,16 +204,17 @@ router.post('/store/:slug/uye-kayit', asyncHandler(async (req: Request, res: Res
   const { ad, telefon, sifre, instagram, email } = req.body || {};
   if (!ad || !telefon || !sifre) throw new ApiError(422, 'Ad, telefon ve şifre zorunlu');
   const tel = digits(telefon);
-  // Mevcut müşteriyi telefonla bul (önceki siparişlerle eşleşsin)
+  const tkey = tk10(telefon); const ikey = igk(instagram);
+  // Mevcut müşteriyi telefon veya Instagram kullanıcı adıyla bul (mükerrer açma)
   const all = await prisma.customer.findMany({ where: { tenantId: t } });
-  let c = all.find((x) => digits(x.telefon || '') === tel && tel.length >= 7) || null;
+  let c = all.find((x) => tkey && tk10(x.telefon) === tkey) || (ikey ? all.find((x) => igk(x.instagram) === ikey) : null) || null;
   const passwordHash = await bcrypt.hash(String(sifre), 10);
   if (c) {
-    if (c.passwordHash) throw new ApiError(409, 'Bu telefon zaten kayıtlı. Giriş yapın.');
-    c = await prisma.customer.update({ where: { id: c.id }, data: { passwordHash, ad: ad || c.ad, instagram: instagram || c.instagram, email: email || c.email } });
+    if (c.passwordHash) throw new ApiError(409, 'Bu telefon veya Instagram zaten kayıtlı. Giriş yapın.');
+    c = await prisma.customer.update({ where: { id: c.id }, data: { passwordHash, ad: ad || c.ad, instagram: instagram || c.instagram, igKey: (c as any).igKey || ikey, telKey: c.telKey || tkey, email: email || c.email } });
   } else {
     const count = await prisma.customer.count({ where: { tenantId: t } });
-    c = await prisma.customer.create({ data: { tenantId: t, musteriNo: 1000 + count + 1, ad, telefon, instagram: instagram || null, email: email || null, passwordHash, not: 'Mağaza üyesi' } });
+    c = await prisma.customer.create({ data: { tenantId: t, musteriNo: 1000 + count + 1, ad, telefon, telKey: tkey, instagram: instagram || null, igKey: ikey, email: email || null, passwordHash, not: 'Mağaza üyesi' } });
   }
   res.status(201).json({ token: shopToken(c.id, t), musteri: { id: c.id, ad: c.ad, telefon: c.telefon, instagram: c.instagram, bakiye: c.bakiye, musteriNo: c.musteriNo } });
 }));
@@ -221,9 +241,13 @@ router.get('/store/:slug/hesabim', asyncHandler(async (req: Request, res: Respon
   const c = await prisma.customer.findFirst({ where: { id: cid, tenantId: store.tenantId } });
   if (!c) throw new ApiError(404, 'Müşteri bulunamadi');
   const orders = await prisma.storeOrder.findMany({ where: { tenantId: store.tenantId, customerId: cid, durum: { not: 'sepet' } }, orderBy: { createdAt: 'desc' }, take: 50 });
+  // Kalem gorsellerini urun kayitlarindan zenginlestir (yeni tablo/iliski yok, mevcut Product.images)
+  const prodIds = [...new Set(orders.flatMap((o) => (Array.isArray(o.items) ? (o.items as any[]) : []).map((it: any) => it.productId)).filter(Boolean))] as string[];
+  const imgProds = prodIds.length ? await prisma.product.findMany({ where: { tenantId: store.tenantId, id: { in: prodIds } }, select: { id: true, images: true } }) : [];
+  const imgMap = new Map(imgProds.map((p) => [p.id, (Array.isArray(p.images) ? (p.images as any)[0] : '') || '']));
   res.json({
     musteri: { id: c.id, ad: c.ad, telefon: c.telefon, instagram: c.instagram, email: c.email, adres: c.adres, bakiye: c.bakiye, indirimYuzde: c.indirimYuzde, musteriNo: c.musteriNo },
-    siparisler: orders.map((o) => ({ id: o.id, token: o.token, orderNo: o.orderNo, orderYil: o.orderYil, durum: o.durum, kanal: o.kanal, toplam: o.toplam, araToplam: o.araToplam, indirim: o.indirim, tahsilat: o.tahsilat, adres: o.adres, kargoTakip: o.kargoTakip, kargoFirmasi: o.kargoFirmasi, createdAt: o.createdAt, items: o.items })),
+    siparisler: orders.map((o) => ({ id: o.id, token: o.token, sipNo: o.sipNo, orderNo: o.orderNo, orderYil: o.orderYil, durum: o.durum, kanal: o.kanal, toplam: o.toplam, araToplam: o.araToplam, indirim: o.indirim, kargoUcreti: o.kargoUcreti, tahsilat: o.tahsilat, odemeYontemi: o.odemeYontemi, adres: o.adres, il: o.il, ilce: o.ilce, kargoTakip: o.kargoTakip, kargoFirmasi: o.kargoFirmasi, kargoDurum: o.kargoDurum, kargoAsama: o.kargoAsama, kargoZamani: o.kargoZamani, createdAt: o.createdAt, items: (Array.isArray(o.items) ? (o.items as any[]) : []).map((it: any) => ({ ...it, img: imgMap.get(it.productId) || '' })) })),
   });
 }));
 
@@ -308,6 +332,86 @@ router.get('/katalog/:slug', asyncHandler(async (req: Request, res: Response) =>
   const cfg: any = store.config || {};
   res.json({ ad: store.logoText || 'Ürün Kataloğu', logo: cfg.logo || store.heroImage || '', slug: store.slug, magazaAktif: store.active, items: list });
 }));
+// Yayına özel katalog — o canlı yayında satışa sunulan ürünler (LiveStream.token ile)
+router.get('/katalog/stream/:token', asyncHandler(async (req: Request, res: Response) => {
+  const stream = await prisma.liveStream.findFirst({ where: { token: req.params.token } });
+  if (!stream) throw new ApiError(404, 'Yayin bulunamadi');
+  const t = stream.tenantId;
+  const los = await prisma.liveOrder.findMany({ where: { tenantId: t, streamId: stream.id }, orderBy: { createdAt: 'asc' } });
+  // distinct ürünler: productId varsa ona göre, yoksa urun adına göre
+  const prodIds = Array.from(new Set(los.map((o) => o.productId).filter(Boolean))) as string[];
+  const prods = prodIds.length
+    ? await prisma.product.findMany({ where: { tenantId: t, id: { in: prodIds }, aktif: true }, include: { variations: { select: { ad: true, deger: true, stok: true, ekFiyat: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } } })
+    : [];
+  const pMap = new Map(prods.map((p) => [p.id, p]));
+  const seen = new Set<string>();
+  const items: any[] = [];
+  for (const o of los) {
+    const key = o.productId || ('ad:' + o.urun);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const p: any = o.productId ? pMap.get(o.productId) : null;
+    if (p) {
+      items.push({ id: p.id, ad: p.ad, salesCode: p.salesCode, marka: p.marka, images: p.images, satisFiyat: p.satisFiyat, eskiFiyat: p.eskiFiyat, stokAdeti: p.stokAdeti, variations: p.variations });
+    } else {
+      items.push({ id: key, ad: o.urun, salesCode: o.kod || null, marka: null, images: o.gorsel ? [o.gorsel] : [], satisFiyat: o.tutar, eskiFiyat: null, stokAdeti: null, variations: o.variation ? [{ ad: 'Beden', deger: o.variation, stok: 0, ekFiyat: 0 }] : [] });
+    }
+  }
+  // Ek olarak: bu yayın sırasında "Ürün Bul"da açılan/okutulan ürünler de yansısın.
+  // Bunlar liveOrder oluşturmadan CatalogItem'a yazılır (/store/catalog/add). Yayın başlangıcından
+  // sonra güncellenen katalog kalemlerini de listeye ekle (sipariş olmasa bile katalogda görünsün).
+  try {
+    const since = stream.startedAt || new Date(0);
+    const citems = await prisma.catalogItem.findMany({ where: { tenantId: t, updatedAt: { gte: since } }, orderBy: { updatedAt: 'desc' }, take: 200 });
+    const catIds = Array.from(new Set(citems.map((c) => c.productId).filter(Boolean))) as string[];
+    const need = catIds.filter((id) => !seen.has(id));
+    if (need.length) {
+      const flashMap = new Map(citems.map((c) => [c.productId, c]));
+      const cprods = await prisma.product.findMany({ where: { tenantId: t, id: { in: need }, aktif: true }, include: { variations: { select: { ad: true, deger: true, stok: true, ekFiyat: true }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] } } });
+      const cpMap = new Map(cprods.map((p) => [p.id, p]));
+      const missing = need.filter((id) => !cpMap.has(id));
+      const cfree = missing.length ? await prisma.freeProduct.findMany({ where: { tenantId: t, id: { in: missing }, aktif: true } }) : [];
+      for (const id of need) {
+        if (seen.has(id)) continue;
+        const ci: any = flashMap.get(id);
+        const flashActive = ci?.flashFiyat && ci?.flashBitis && new Date(ci.flashBitis).getTime() > Date.now();
+        const p: any = cpMap.get(id);
+        if (p) {
+          seen.add(id);
+          items.push({ id: p.id, ad: p.ad, salesCode: p.salesCode, marka: p.marka, images: p.images, satisFiyat: flashActive ? ci.flashFiyat : p.satisFiyat, eskiFiyat: flashActive ? p.satisFiyat : p.eskiFiyat, stokAdeti: p.stokAdeti, variations: p.variations, flashBitis: flashActive ? ci.flashBitis : null });
+          continue;
+        }
+        const fp: any = cfree.find((f) => f.id === id);
+        if (fp) {
+          seen.add(id);
+          const vars: any[] = Array.isArray(fp.variations) ? (fp.variations as any[]) : [];
+          const stokTop = vars.length ? vars.reduce((s, v) => s + (Number(v.stok) || 0), 0) : 1;
+          items.push({ id: fp.id, ad: fp.ad, salesCode: fp.salesCode, marka: null, images: fp.images, satisFiyat: flashActive ? ci.flashFiyat : fp.satisFiyat, eskiFiyat: flashActive ? fp.satisFiyat : null, stokAdeti: stokTop, variations: vars.map((v) => ({ ad: v.ad || 'Beden', deger: v.deger, stok: Number(v.stok) || 0, ekFiyat: Number(v.ekFiyat) || 0 })), flashBitis: flashActive ? ci.flashBitis : null });
+        }
+      }
+    }
+  } catch { /* katalog ek listesi opsiyonel */ }
+  res.json({ ad: stream.baslik || 'Canlı Yayın Kataloğu', baslik: stream.baslik || '', token: stream.token, startedAt: stream.startedAt, endedAt: stream.endedAt, aktif: stream.status === 'active', items });
+}));
+
+// Tedarikçi ürünlerinden derlenen, dışarıya paylaşılabilir özel katalog (FreeCatalog.token ile)
+router.get('/katalog/tedarikci/:token', asyncHandler(async (req: Request, res: Response) => {
+  const cat = await prisma.freeCatalog.findFirst({ where: { token: req.params.token, aktif: true } });
+  if (!cat) throw new ApiError(404, 'Katalog bulunamadi');
+  const ids = Array.isArray(cat.productIds) ? (cat.productIds as any[]).map(String) : [];
+  let items: any[] = [];
+  if (ids.length) {
+    const prods = await prisma.freeProduct.findMany({ where: { tenantId: cat.tenantId, id: { in: ids }, aktif: true } });
+    const pMap = new Map(prods.map((p) => [p.id, p]));
+    items = ids
+      .map((id) => pMap.get(id))
+      .filter(Boolean)
+      .filter((p: any) => { const vs = Array.isArray(p.variations) ? p.variations : []; return vs.length === 0 || vs.some((v: any) => (v?.stok || 0) > 0); })
+      .map((p: any) => ({ id: p.id, ad: p.ad, salesCode: p.salesCode, satisFiyat: p.satisFiyat, images: p.images, variations: p.variations, marka: p.marka, cinsiyet: p.cinsiyet }));
+  }
+  res.json({ ad: cat.ad, whatsapp: cat.whatsapp || '05334413472', token: cat.token, items });
+}));
+
 // Dışarıya açık Landing Page (link-in-bio destek paneli)
 router.get('/landing/:slug', asyncHandler(async (req: Request, res: Response) => {
   const store = await prisma.storeSetting.findFirst({ where: { slug: req.params.slug } });
@@ -375,12 +479,18 @@ router.post('/store/:slug/cart-order', asyncHandler(async (req: Request, res: Re
   // müşteri (opsiyonel hızlı kayıt)
   let customerId: string | null = null; let handle: string | null = null;
   if (musteri && (musteri.telefon || musteri.instagram || musteri.ad)) {
-    const ccount = await prisma.customer.count({ where: { tenantId } });
-    const c = await prisma.customer.create({ data: { tenantId, musteriNo: 1000 + ccount + 1, ad: musteri.ad || musteri.instagram || musteri.telefon || 'Mağaza Müşterisi', telefon: musteri.telefon || null, instagram: musteri.instagram || null, not: 'Videolu mağaza' } });
+    const tkey = tk10(musteri.telefon); const ikey = igk(musteri.instagram);
+    let c = tkey ? await prisma.customer.findFirst({ where: { tenantId, telKey: tkey } }) : null;
+    if (!c && ikey) c = await prisma.customer.findFirst({ where: { tenantId, igKey: ikey } });
+    if (!c) {
+      const ccount = await prisma.customer.count({ where: { tenantId } });
+      c = await prisma.customer.create({ data: { tenantId, musteriNo: 1000 + ccount + 1, ad: musteri.ad || musteri.instagram || musteri.telefon || 'Mağaza Müşterisi', telefon: musteri.telefon || null, telKey: tkey, instagram: musteri.instagram || null, igKey: ikey, not: 'Videolu mağaza' } });
+    }
     customerId = c.id; handle = musteri.instagram || musteri.ad || null;
   }
-  const token = Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 6);
-  const order = await prisma.storeOrder.create({ data: { tenantId, ...(await nextOrderNo(prisma, tenantId)), kanal: 'online', durum: 'sepet', token, customerId, musteriHandle: handle, items: orderItems, araToplam: kamp.araToplam, indirim: kamp.indirim, kampanyalar: kamp.kampanyalar, toplam: kamp.toplam } });
+  const token = genToken();
+  const sipNo = await generateSipNo(prisma);
+  const order = await prisma.storeOrder.create({ data: { tenantId, ...(await nextOrderNo(prisma, tenantId)), sipNo, kanal: 'online', durum: 'sepet', token, customerId, musteriHandle: handle, items: orderItems, araToplam: kamp.araToplam, indirim: kamp.indirim, kampanyalar: kamp.kampanyalar, toplam: kamp.toplam } });
   res.status(201).json({ token: order.token, sohbet: store.slug });
 }));
 
@@ -421,10 +531,26 @@ router.post('/store/:slug/order', asyncHandler(async (req: Request, res: Respons
   if (!data) throw new ApiError(404, 'Magaza bulunamadi');
   const tenantId = data.store.tenantId;
   const { customer, items, discountCode } = req.body || {};
-  if (!customer?.ad || !customer?.telefon) throw new ApiError(422, 'Ad ve telefon zorunludur');
+  // Server-side zorunlu alan dogrulamasi: ad soyad, telefon, adres, instagram
+  const cAd = String(customer?.ad || '').trim();
+  const cTel = String(customer?.telefon || '').trim();
+  const cAdres = String(customer?.adres || '').trim();
+  const cInsta = String(customer?.instagram || '').trim();
+  if (!cAd) throw new ApiError(422, 'Ad soyad zorunludur');
+  if (!cTel) throw new ApiError(422, 'Telefon zorunludur');
+  if (cTel.replace(/\D/g, '').length < 10) throw new ApiError(422, 'Geçerli bir telefon girin (en az 10 hane)');
+  if (!cAdres) throw new ApiError(422, 'Teslimat adresi zorunludur');
+  if (!cInsta) throw new ApiError(422, 'Instagram kullanıcı adı zorunludur');
   if (!Array.isArray(items) || items.length === 0) throw new ApiError(422, 'Sepet bos');
 
-  // Fiyatlari DB'den dogrula
+  // ── KATALOG AKIŞIYLA AYNI MODEL: "Talebi Gönder" HİÇBİR sipariş/StoreOrder/stok
+  //    değişikliği YAPMAZ. Yalnızca bir TASLAK CatalogRequest (talepNo) oluşturulur ve
+  //    müşteriye wa.me linki + hazır (prefilled) metin döner. Müşteri bu mesajı KENDİ
+  //    WhatsApp'ından mağaza numarasına gönderdiğinde, GELEN mesaj webhook'u talepNo'yu
+  //    tanır ve catalogOrderTrigger ASIL siparişi oluşturur + stok düşer + 14 dk sayaç
+  //    O AN başlar. Mesaj gelmezse taslak beklemede kalır → HİÇBİR sipariş/stok oluşmaz. ─
+
+  // Fiyatlari DB'den dogrula (yalnızca metin/tutar için — stok DÜŞÜLMEZ)
   const prodMap = new Map(data.products.map((p) => [p.id, p]));
   const orderItems: any[] = [];
   let araToplam = 0;
@@ -436,80 +562,107 @@ router.post('/store/:slug/order', asyncHandler(async (req: Request, res: Respons
     const birim = (p.satisFiyat || 0) + (v?.ekFiyat || 0);
     araToplam += birim * adet;
     const adAd = it.varyasyon ? `${p.ad} (${it.varyasyon})` : p.ad;
+    // stokDusuldu: true → siparişi tetikleyen webhook iptal ederse stok iadesi doğru çalışır.
     orderItems.push({ productId: p.id, ad: adAd, varyasyon: it.varyasyon || null, adet, fiyat: birim, stokDusuldu: true });
   }
   if (orderItems.length === 0) throw new ApiError(422, 'Gecerli urun yok');
 
-  // Indirim: kupon + aktif kampanyalar
+  // Indirim: kupon (kampanya indirimi asıl sipariş oluşurken uygulanır)
   let indirim = 0;
+  let kuponKodu: string | null = null;
   if (discountCode) {
     const d = await prisma.discountCode.findFirst({ where: { tenantId, code: String(discountCode).toUpperCase(), aktif: true } });
-    if (d) indirim = d.tip === 'yuzde' ? (araToplam * d.deger) / 100 : d.deger;
+    if (d) { indirim = d.tip === 'yuzde' ? (araToplam * d.deger) / 100 : d.deger; kuponKodu = String(discountCode).toUpperCase(); }
   }
-  const result = await prisma.$transaction(async (tx) => {
-    // Stok kontrolü + düşüm
-    for (const oi of orderItems) {
-      const p = prodMap.get(oi.productId)!;
-      if (oi.varyasyon) {
-        const v = await tx.productVariation.findFirst({ where: { productId: oi.productId, tenantId, deger: oi.varyasyon } });
-        if (!v || v.stok < oi.adet) throw new ApiError(400, `Stok yetersiz: ${p.ad} (${oi.varyasyon})`);
-        await tx.productVariation.update({ where: { id: v.id }, data: { stok: { decrement: oi.adet } } });
-      } else if ((p.stokAdeti || 0) < oi.adet) {
-        throw new ApiError(400, `Stok yetersiz: ${p.ad}`);
-      }
-      await tx.product.update({ where: { id: oi.productId }, data: { stokAdeti: { decrement: oi.adet } } });
-    }
-    const kamp = await campaignAdjust(tx, tenantId, orderItems);
-    indirim = Math.min(araToplam, indirim + (kamp.indirim || 0));
-    const toplam = Math.max(0, araToplam - indirim);
-    // Mükerrer müşteri önleme: aynı telefon zaten varsa onu kullan
-    const telN = String(customer.telefon || '').replace(/\D/g, '');
-    const mevcutlar = await tx.customer.findMany({ where: { tenantId } });
-    let cust = mevcutlar.find((c) => telN.length >= 7 && (c.telefon || '').replace(/\D/g, '') === telN) || null;
+  indirim = Math.min(araToplam, indirim);
+  const toplam = Math.max(0, araToplam - indirim);
+
+  // ── Müşteriyi taslak anında upsert et (STOK DEĞİŞMEZ) ─────────────────────────
+  // Böylece adres/instagram bilgisi kaybolmaz ve webhook siparişi tetiklerken
+  // müşteriyi telKey (son 10 hane) ile bulup StoreOrder'a bağlar (katalog mantığı).
+  const telKeyN = tk10(cTel); const igKeyN = igk(cInsta);
+  let custId: string | null = null;
+  try {
+    const mevcutlar = await prisma.customer.findMany({ where: { tenantId } });
+    let cust = (telKeyN ? mevcutlar.find((c) => tk10(c.telefon) === telKeyN) : null)
+      || (igKeyN ? mevcutlar.find((c) => igk(c.instagram) === igKeyN) : null) || null;
     if (!cust) {
-      cust = await tx.customer.create({
-        data: { tenantId, musteriNo: 1000 + mevcutlar.length + 1, ad: customer.ad, telefon: customer.telefon, email: customer.email || null, adres: customer.adres || null, not: 'Online magaza siparisi' },
+      cust = await prisma.customer.create({
+        data: { tenantId, musteriNo: 1000 + mevcutlar.length + 1, ad: cAd, telefon: cTel, telKey: telKeyN, instagram: cInsta, igKey: igKeyN, email: customer?.email || null, adres: cAdres, not: 'Online mağaza talebi (taslak)' },
       });
-    } else if (!cust.adres && customer.adres) {
-      await tx.customer.update({ where: { id: cust.id }, data: { adres: customer.adres } });
+    } else {
+      const upd: any = {};
+      if (!cust.adres && cAdres) upd.adres = cAdres;
+      if (!cust.instagram && cInsta) { upd.instagram = cInsta; upd.igKey = igKeyN; }
+      if (Object.keys(upd).length > 0) await prisma.customer.update({ where: { id: cust.id }, data: upd });
     }
-    const order = await tx.storeOrder.create({
-      data: { tenantId, ...(await nextOrderNo(tx, tenantId)), customerId: cust.id, kanal: 'online', durum: 'yeni', items: orderItems, araToplam, indirim, toplam, not: customer.not || null },
-    });
-    return order;
-  });
-  const toplam = result.toplam;
+    custId = cust.id;
+  } catch { /* müşteri upsert hatası taslağı engellemesin */ }
 
-  // PayTR yapilandirildiysa odeme tokeni uret
-  const paytr = await getPaytr(tenantId);
-  if (paytr) {
-    const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
-    const basket: [string, string, number][] = orderItems.map((it) => [String(it.ad).slice(0, 60), it.fiyat.toFixed(2), it.adet]);
-    const tok = await createPaytrToken({
-      config: paytr.config,
-      testMode: paytr.testMode,
-      merchantOid: result.id.replace(/[^a-zA-Z0-9]/g, ''),
-      email: customer.email || `siparis-${result.id}@diljar.com`,
-      amountKurus: Math.round(toplam * 100),
-      userName: customer.ad,
-      userAddress: customer.adres || '-',
-      userPhone: customer.telefon,
-      userIp: ip,
-      okUrl: `${env.APP_DOMAIN}/?payment=success`,
-      failUrl: `${env.APP_DOMAIN}/?payment=fail`,
-      basket,
-    });
-    if (tok.ok) {
-      // merchant_oid eslemesi icin orderId'yi sadelesmis haliyle sakla
-      await prisma.storeOrder.update({ where: { id: result.id }, data: { not: `paytr_oid:${result.id.replace(/[^a-zA-Z0-9]/g, '')}` } });
-      return res.status(201).json({ ok: true, orderId: result.id, toplam, paytr: true, iframeUrl: `https://www.paytr.com/odeme/guvenli/${tok.token}` });
-    }
-    // token alinamazsa normal siparis olarak devam (test/credential hatasi)
-    return res.status(201).json({ ok: true, orderId: result.id, toplam, paytrError: tok.reason });
+  // ── Taslak CatalogRequest oluştur (wpIletildi:false, durum:'beklemede') ────────
+  // Katalog talebiyle BİREBİR aynı: talepNo = T + 6 alfanumerik; rezervBitis:null
+  // (sayaç HENÜZ başlamaz — asıl siparişi webhook tetiklediğinde başlar).
+  const catSetting = await prisma.catalogSetting.findUnique({ where: { tenantId } }).catch(() => null);
+  const rezervDk = catSetting?.rezervSureDk || 14;
+  const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let talepNo = '';
+  for (let attempt = 0; attempt < 20; attempt++) {
+    let code = 'T';
+    for (let i = 0; i < 6; i++) code += CHARS[Math.floor(Math.random() * CHARS.length)];
+    const ex = await prisma.catalogRequest.findFirst({ where: { talepNo: code } });
+    if (!ex) { talepNo = code; break; }
   }
+  if (!talepNo) throw new ApiError(500, 'Talep numarası üretilemedi');
 
-  const tamiAvailable = !!(await getTami(tenantId));
-  res.status(201).json({ ok: true, orderId: result.id, toplam, tamiAvailable });
+  await prisma.catalogRequest.create({
+    data: {
+      tenantId,
+      catalogId: 'online', // online mağaza kaynaklı — gerçek katalog analizini kirletmez
+      talepNo,
+      items: orderItems,
+      toplam, // indirim düşülmüş net tutar
+      indirim,
+      kuponKodu,
+      musteri: cAd || null,
+      telefon: cTel || null,
+      customerId: custId,
+      durum: 'beklemede',   // TASLAK — asıl sipariş yok
+      wpIletildi: false,    // müşteri mesajı gelene kadar false; gelince catalogOrderTrigger true yapar
+      rezervBitis: null,    // sayaç müşteri mesaj gönderince (webhook) başlar
+    },
+  });
+
+  // ── Müşterinin GERÇEKTEN göndereceği prefilled WhatsApp metni ─────────────────
+  // "Talep No: XXXXXXX" formatı KRİTİK: webhook extractTalepNo() bu metinden talepNo'yu
+  // tanır ve asıl siparişi tetikler. (Katalog talep mesajıyla aynı desen.)
+  const satirlar = orderItems.map((it: any) => `• ${it.ad}${it.varyasyon ? '' : ''} x${it.adet} → ${(Number(it.fiyat) * Number(it.adet)).toLocaleString('tr-TR')}₺`).join('\n');
+  const whatsappMsg =
+    `🛒 *Yeni Online Sipariş Talebi*\n\n` +
+    `🔢 Talep No: *${talepNo}*\n` +
+    `👤 ${cAd}${cInsta ? ' (@' + cInsta.replace(/^@/, '') + ')' : ''}\n` +
+    `📞 ${cTel}\n` +
+    `📍 ${cAdres}\n\n` +
+    `📦 Ürünler:\n${satirlar}\n\n` +
+    `${indirim > 0 ? '🏷️ İndirim: -' + indirim.toLocaleString('tr-TR') + '₺\n' : ''}` +
+    `💰 *Toplam: ${toplam.toLocaleString('tr-TR')}₺*\n\n` +
+    `⏱️ Rezerv Süresi: ${rezervDk} dakika\n\n` +
+    `⚠️ Bu mesajı göndererek siparişimi iletiyorum. İletilmeden sipariş oluşmaz.`;
+
+  // wa.me hedefi: mağazanın WhatsApp panel hattı numarası (yoksa STORE_WA_PANEL_PHONE=05323093472).
+  // Numara katalog/panel altyapısından çözülür; sabit gömülmez.
+  const waTarget = await resolveStoreWaTargetPhone(tenantId).catch(() => null);
+
+  // HİÇBİR StoreOrder/PayTR/stok işlemi YOK — sadece taslak + wa.me yönlendirme verisi döner.
+  res.status(201).json({
+    ok: true,
+    draft: true,
+    talepNo,
+    toplam,
+    indirim,
+    rezervDk,
+    whatsapp: waTarget,     // 90XXXXXXXXXX (wa.me hedefi)
+    whatsappMsg,            // prefilled metin (Talep No dahil)
+  });
 }));
 
 // PayTR bildirim (callback) — PayTR sunucusu buraya POST eder
@@ -522,19 +675,166 @@ router.post('/paytr/callback', express.urlencoded({ extended: false }), asyncHan
   const paytr = await getPaytr(order.tenantId);
   if (!paytr || !verifyPaytrCallback(paytr.config, body)) { res.send('OK'); return; }
   if (body.status === 'success') {
-    const already = (order.gelirKaydedilen || 0) > 0;
+    // Idempotency: ayni merchant_oid ile gelen tekrar bildirimi (cift tahsilat) engelle
+    const gecmis: any[] = Array.isArray(order.odemeGecmisi) ? [...(order.odemeGecmisi as any[])] : [];
+    const dup = gecmis.some((g) => g && (g.oid === oid || g.id === oid));
+    if (dup) { res.send('OK'); return; }
+    // PayTR payment_amount kurus cinsinden; yoksa siparis toplamina dus
+    const tutar = body.payment_amount ? Number(body.payment_amount) / 100 : (order.toplam || 0);
+    gecmis.push({ id: oid, oid, tutar, yontem: 'paytr', tarih: new Date().toISOString() });
+    const yeniTahsilat = (order.tahsilat || 0) + tutar;
+    const tamOdeme = yeniTahsilat >= (order.toplam || 0) - 0.01;
     await prisma.$transaction(async (tx) => {
-      await tx.storeOrder.update({ where: { id: order.id }, data: { durum: 'hazirlaniyor', tahsilat: order.toplam, gelirKaydedilen: order.toplam, odemeYontemi: 'Kredi Kartı (PayTR)', not: 'Odeme alindi (PayTR)' } });
-      if (!already && (order.toplam || 0) > 0) {
+      await tx.storeOrder.update({ where: { id: order.id }, data: { durum: tamOdeme ? 'hazirlaniyor' : order.durum, tahsilat: yeniTahsilat, gelirKaydedilen: yeniTahsilat, odemeGecmisi: gecmis, odemeYontemi: 'Kredi Kartı (PayTR)', odemeBildirim: null, not: 'Odeme alindi (PayTR)' } });
+      if (tutar > 0) {
         const now = new Date();
         const no = order.orderNo ? `${order.orderYil}-${String(order.orderNo).padStart(3, '0')}` : order.id.slice(-5);
-        await tx.hareket.create({ data: { tenantId: order.tenantId, tarih: now.toISOString().slice(0, 10), saat: now.toTimeString().slice(0, 5), aciklama: `Online ödeme (PayTR) #${no}`, tutar: order.toplam, tip: 'gelir', kategori: 'Online Satış', createdBy: null } });
+        await tx.hareket.create({ data: { tenantId: order.tenantId, tarih: now.toISOString().slice(0, 10), saat: now.toTimeString().slice(0, 5), aciklama: `Online ödeme (PayTR) #${no}`, tutar, tip: 'gelir', kategori: 'Online Satış', createdBy: null } });
       }
     });
+    // Görsel workflow: ödeme alındı + durum (hazırlanıyor) tetikleyicileri
+    void startWorkflowRuns(order.tenantId, 'payment_received', { orderId: order.id });
+    if (tamOdeme) void startWorkflowRuns(order.tenantId, 'status', { orderId: order.id, durum: 'hazirlaniyor' });
   } else {
     await prisma.storeOrder.update({ where: { id: order.id }, data: { durum: 'iptal', not: 'Odeme basarisiz (PayTR)' } });
   }
   res.send('OK');
+}));
+
+// ───── iyzico 3D Secure Ödeme ─────
+
+// Taksit bilgisi sorgula (BIN ilk 6 hane)
+router.post('/sepet/:token/iyzico-installment', asyncHandler(async (req: Request, res: Response) => {
+  const cart = await prisma.storeOrder.findFirst({ where: { token: req.params.token } });
+  if (!cart) throw new ApiError(404, 'Sepet bulunamadi');
+  const iyz = await getIyzico(cart.tenantId);
+  if (!iyz) return res.json({ ok: false, configured: false });
+  const bin = String(req.body.binNumber || '').replace(/\s/g, '');
+  if (bin.length < 6) return res.json({ ok: false, error: 'Kart numarasının ilk 6 hanesini girin' });
+  try {
+    const result = await queryInstallment(iyz.iyzipay, bin, cart.toplam || 0);
+    if (result.status !== 'success') return res.json({ ok: false, error: result.errorMessage || 'Taksit sorgulanamadı' });
+    const details = (result.installmentDetails || []).map((d: any) => ({
+      bankName: d.bankName || '',
+      bankCode: d.bankCode || '',
+      cardType: d.cardType || '',
+      cardAssociation: d.cardAssociation || '',
+      cardFamilyName: d.cardFamilyName || '',
+      installments: (d.installmentPrices || []).map((ip: any) => ({
+        count: ip.installmentNumber || 1,
+        totalPrice: Number(ip.totalPrice) || 0,
+        perInstallment: Number(ip.installmentPrice) || 0,
+      })),
+    }));
+    return res.json({ ok: true, details });
+  } catch (e: any) { return res.json({ ok: false, error: e.message || 'iyzico taksit sorgu hatası' }); }
+}));
+
+// 3D Secure başlat
+router.post('/sepet/:token/iyzico-init', asyncHandler(async (req: Request, res: Response) => {
+  const cart = await prisma.storeOrder.findFirst({ where: { token: req.params.token }, include: { customer: true } });
+  if (!cart) throw new ApiError(404, 'Sepet bulunamadi');
+  assertNotCancelled(cart);
+  const items: any[] = Array.isArray(cart.items) ? (cart.items as any) : [];
+  if (items.length === 0) throw new ApiError(422, 'Sepet boş');
+  const toplam = cart.toplam || 0;
+  if (toplam <= 0) throw new ApiError(422, 'Geçersiz tutar');
+  const iyz = await getIyzico(cart.tenantId);
+  if (!iyz) return res.json({ ok: false, configured: false });
+  const { card, installment } = req.body || {};
+  if (!card?.number || !card?.expMonth || !card?.expYear || !card?.cvc || !card?.holderName) throw new ApiError(422, 'Kart bilgileri eksik');
+  const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() || req.socket.remoteAddress || '127.0.0.1';
+  const custName = cart.customer?.ad || cart.musteriHandle || 'Müşteri';
+  const names = custName.trim().split(/\s+/);
+  const firstName = names[0] || 'Müşteri';
+  const lastName = names.length > 1 ? names.slice(1).join(' ') : firstName;
+  const addr = cart.adres || cart.customer?.adres || 'Türkiye';
+  const city = cart.il || 'Istanbul';
+  const convId = `ord_${cart.id.slice(-8)}_${Date.now()}`;
+  try {
+    const result = await initThreeDS(iyz.iyzipay, {
+      conversationId: convId,
+      price: toplam,
+      paidPrice: toplam,
+      installment: Number(installment) || 1,
+      basketId: cart.sipNo || cart.id.slice(-8),
+      callbackUrl: `${env.APP_DOMAIN}/api/v1/public/iyzico/callback?token=${cart.token}`,
+      buyer: { id: cart.customerId || cart.id, name: firstName, surname: lastName, email: cart.customer?.email || `sepet-${cart.id.slice(-6)}@diljar.com`, phone: cart.customer?.telefon || '+905000000000', ip, address: addr, city, country: 'Turkey' },
+      shippingAddress: { address: addr, city, country: 'Turkey', contactName: custName },
+      billingAddress: { address: addr, city, country: 'Turkey', contactName: custName },
+      basketItems: items.map((it, i) => ({ id: `item_${i}`, name: String(it.ad || 'Ürün').slice(0, 50), category1: 'Genel', itemType: 'PHYSICAL', price: Number(it.toplam || it.fiyat || 0) })),
+      card: { holderName: card.holderName, number: card.number, expMonth: String(card.expMonth).padStart(2, '0'), expYear: String(card.expYear), cvc: String(card.cvc) },
+    });
+    if (result.status !== 'success') return res.json({ ok: false, error: result.errorMessage || 'iyzico 3D başlatılamadı' });
+    // iyzico conversationId'yi sakla
+    await prisma.storeOrder.update({ where: { id: cart.id }, data: { not: `iyzico_conv:${convId}` } });
+    return res.json({ ok: true, htmlContent: result.threeDSHtmlContent || result.htmlContent || '' });
+  } catch (e: any) { return res.json({ ok: false, error: e.message || 'iyzico ödeme hatası' }); }
+}));
+
+// 3D Secure callback (iyzico banka doğrulama sonrası buraya yönlendirir)
+router.post('/iyzico/callback', express.urlencoded({ extended: false }), asyncHandler(async (req: Request, res: Response) => {
+  const token = (req.query.token || req.body.token || '') as string;
+  const paymentId = req.body.paymentId || '';
+  const status3d = req.body.status || req.body.mdStatus || '';
+  if (!token) { res.redirect(`${env.APP_DOMAIN}/?payment=fail`); return; }
+  const cart = await prisma.storeOrder.findFirst({ where: { token } });
+  if (!cart) { res.redirect(`${env.APP_DOMAIN}/?payment=fail`); return; }
+  if (status3d !== 'success' && status3d !== '1') {
+    res.redirect(`${env.APP_DOMAIN}/sepet/${token}?payment=fail`);
+    return;
+  }
+  const iyz = await getIyzico(cart.tenantId);
+  if (!iyz) { res.redirect(`${env.APP_DOMAIN}/sepet/${token}?payment=fail`); return; }
+  try {
+    const result = await completeThreeDS(iyz.iyzipay, paymentId, req.body.conversationId);
+    if (result.status === 'success') {
+      const tutar = Number(result.paidPrice) || cart.toplam || 0;
+      const gecmis: any[] = Array.isArray(cart.odemeGecmisi) ? [...(cart.odemeGecmisi as any[])] : [];
+      gecmis.push({ id: result.paymentId || paymentId, tutar, yontem: 'iyzico', tarih: new Date().toISOString(), paymentId: result.paymentId, installment: result.installment || 1 });
+      const yeniTahsilat = (cart.tahsilat || 0) + tutar;
+      const tamOdeme = yeniTahsilat >= (cart.toplam || 0);
+      const already = (cart.gelirKaydedilen || 0) > 0;
+      await prisma.$transaction(async (tx) => {
+        await tx.storeOrder.update({
+          where: { id: cart.id },
+          data: {
+            tahsilat: yeniTahsilat,
+            gelirKaydedilen: yeniTahsilat,
+            odemeGecmisi: gecmis,
+            odemeYontemi: 'Kredi Kartı (iyzico)',
+            odemeBildirim: null,
+            durum: tamOdeme ? 'hazirlaniyor' : cart.durum,
+            not: `iyzico ödeme alındı (${result.paymentId})`,
+          },
+        });
+        if (!already && tutar > 0) {
+          const now = new Date();
+          const no = cart.sipNo || cart.id.slice(-5);
+          await tx.hareket.create({
+            data: {
+              tenantId: cart.tenantId,
+              tarih: now.toISOString().slice(0, 10),
+              saat: now.toTimeString().slice(0, 5),
+              aciklama: `Online ödeme (iyzico) #${no}`,
+              tutar,
+              tip: 'gelir',
+              kategori: 'Online Satış',
+              createdBy: null,
+            },
+          });
+        }
+      });
+      void startWorkflowRuns(cart.tenantId, 'payment_received', { orderId: cart.id });
+      if (tamOdeme) void startWorkflowRuns(cart.tenantId, 'status', { orderId: cart.id, durum: 'hazirlaniyor' });
+      res.redirect(`${env.APP_DOMAIN}/sepet/${token}?payment=success`);
+    } else {
+      res.redirect(`${env.APP_DOMAIN}/sepet/${token}?payment=fail`);
+    }
+  } catch (e: any) {
+    console.error('iyzico callback error', e);
+    res.redirect(`${env.APP_DOMAIN}/sepet/${token}?payment=fail`);
+  }
 }));
 
 // ───── Chatbot (public) ─────
@@ -680,11 +980,25 @@ router.post('/uye/:slug/kod-gonder', asyncHandler(async (req: Request, res: Resp
   const kod = String(Math.floor(1000 + Math.random() * 9000));
   const tenant = await prisma.tenant.findUnique({ where: { id: tenantId }, select: { name: true } });
   const firma = (tenant?.name || '').trim();
-  const msg = `Uyelik dogrulama kodunuz: ${kod}${firma ? ' - ' + firma : ''}`;
-  const r = await sendSms(tenantId, [norm], msg);
-  if (!r.ok) throw new ApiError(400, r.message || 'Doğrulama SMS\'i gönderilemedi. Numaranızı kontrol edin.');
+
+  // Öncelik: WhatsApp API şablonu ile gönder; başarısız olursa SMS'e düş.
+  let kanal = 'telefonunuza';
+  let gonderildi = false;
+  try {
+    const line = await prisma.whatsappLine.findFirst({ where: { tenantId, channel: 'api', wabaId: { not: null }, accessToken: { not: null } }, orderBy: { apiVerified: 'desc' } });
+    if (line) {
+      const mid = await apiSendTemplate(line as any, norm, 'uyelik_kodu', 'tr', [kod], undefined, kod);
+      if (mid) { gonderildi = true; kanal = 'WhatsApp numaranıza'; }
+    }
+  } catch (e) { /* WhatsApp gönderimi başarısız → SMS yedeğine düş */ }
+
+  if (!gonderildi) {
+    const msg = `Uyelik dogrulama kodunuz: ${kod}${firma ? ' - ' + firma : ''}`;
+    const r = await sendSms(tenantId, [norm], msg);
+    if (!r.ok) throw new ApiError(400, r.message || 'Doğrulama kodu gönderilemedi. Numaranızı kontrol edin.');
+  }
   uyeKodlar.set(key, { kod, exp: now + 5 * 60_000, lastSent: now, tries: 0 });
-  res.json({ ok: true, message: 'Doğrulama kodu telefonunuza gönderildi.' });
+  res.json({ ok: true, message: `Doğrulama kodu ${kanal} gönderildi.` });
 }));
 
 router.post('/uye/:slug', asyncHandler(async (req: Request, res: Response) => {
@@ -717,7 +1031,11 @@ router.post('/uye/:slug', asyncHandler(async (req: Request, res: Response) => {
   if (existing) {
     // Otomatik oluşmuş kayıt (canlı yayın/online sipariş) -> üyeliği tamamla, mükerrer kayıt açma.
     const patch: any = { not: 'Üyelik formu' };
-    if (igClean) patch.instagram = igClean;
+    // Instagram: mevcut değer varsa DOKUNMA (müşteri daha önce farklı formatta kaydetmiş olabilir).
+    // Mevcut değer boşsa güvenle yaz.
+    if (igClean && !existing.instagram) patch.instagram = igClean;
+    if (!(existing as any).igKey && (igClean || existing.instagram)) patch.igKey = igk(igClean || existing.instagram);
+    if (!existing.telKey && existing.telefon) patch.telKey = tk10(existing.telefon);
     if (!existing.cinsiyet && cinsiyetClean) patch.cinsiyet = cinsiyetClean;
     if (!existing.telefon && telefon) patch.telefon = telefon;
     if ((!existing.ad || igNorm(existing.ad) === igNorm(existing.instagram || '')) && ad) patch.ad = ad;
@@ -732,13 +1050,17 @@ router.post('/uye/:slug', asyncHandler(async (req: Request, res: Response) => {
   const igFmt = igClean.toLowerCase().replace(/^@+/, '').trim();
   const igFormatGecerli = /^[a-z0-9._]{1,30}$/.test(igFmt) && !/\.\./.test(igFmt) && !igFmt.startsWith('.') && !igFmt.endsWith('.');
   if (!igFormatGecerli) throw new ApiError(422, `"${igClean}" geçerli bir Instagram kullanıcı adı değil. Sadece harf, rakam, nokta ve alt çizgi kullanın (örn. kullanici_adi).`);
-  const customer = await prisma.customer.create({ data: { tenantId, musteriNo: 1000 + mevcutlar.length + 1, ad, instagram: igClean, telefon, cinsiyet: cinsiyetClean, adres: adres || null, not: 'Üyelik formu' } });
+  const customer = await prisma.customer.create({ data: { tenantId, musteriNo: 1000 + mevcutlar.length + 1, ad, instagram: igClean, igKey: igk(igClean), telefon, telKey: tk10(telefon), cinsiyet: cinsiyetClean, adres: adres || null, not: 'Üyelik formu' } });
   await promoteReserved(tenantId, customer);
   res.status(201).json({ ok: true });
 }));
 
 // ───── Sepet (public link) ─────
 const cartModifiable = (durum: string) => durum === 'sepet' || durum === 'yeni';
+// İptal edilmiş sepete ödeme/işlem yapılamaz
+const assertNotCancelled = (cart: { durum: string }) => {
+  if (cart.durum === 'iptal') throw new ApiError(409, 'Bu sepet iptal edilmiştir; ödeme veya işlem yapılamaz.');
+};
 
 router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => {
   const cart = await prisma.storeOrder.findFirst({ where: { token: req.params.token }, include: { customer: true } });
@@ -750,6 +1072,21 @@ router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => 
   const prods = ids.length ? await prisma.product.findMany({ where: { tenantId: cart.tenantId, id: { in: ids } }, select: { id: true, images: true, barkod: true, salesCode: true, sku: true } }) : [];
   const pMap = new Map(prods.map((p) => [p.id, p]));
   const itemsWithImg = items.map((it) => { const p: any = pMap.get(it.productId); return { ...it, img: (Array.isArray(p?.images) ? (p.images as any)[0] : '') || it.gorsel || it.img || '', barkod: p?.barkod || '', salesCode: p?.salesCode || '', sku: p?.sku || '' }; });
+  // Ürün başına kampanya indirimi: müşteri her kalemde normal + kampanya sonrası fiyatı görsün
+  let perItemDisc: number[] = [];
+  try { perItemDisc = await campaignPerItem(prisma, cart.tenantId, items, { lockedIds: lockedCampaignIds(cart) }); } catch { perItemDisc = []; }
+  itemsWithImg.forEach((it: any, i: number) => {
+    const lineDisc = perItemDisc[i] || 0;
+    const adet = Number(it.adet) || 1;
+    const birim = Number(it.fiyat) || 0;
+    if (lineDisc > 0.009 && birim > 0) {
+      const birimIndirimli = Math.max(0, Math.round((birim - lineDisc / adet) * 100) / 100);
+      it.kampanyaIndirim = lineDisc;                 // satır toplam indirim
+      it.birimNormal = birim;                        // normal birim fiyat
+      it.birimIndirimli = birimIndirimli;            // kampanya sonrası birim fiyat
+      it.satirIndirimli = Math.max(0, Math.round((birim * adet - lineDisc) * 100) / 100); // satır toplam (kampanya sonrası)
+    }
+  });
   // Öneriler (canlı yayına özel fırsatlar) — admin'den aç/kapa + kaynak seçimi (mağaza ⇄ katalog) + elle seçim
   const oneriCfg: any = (setting?.config as any) || {};
   const oneriEnabled = oneriCfg.oneriEnabled !== false; // varsayılan açık
@@ -781,8 +1118,11 @@ router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => 
   let cfgObj: any = setting?.config || {};
   if (typeof cfgObj === 'string') { try { cfgObj = JSON.parse(cfgObj); } catch { cfgObj = {}; } }
   const malToplam = cart.toplam || 0; // araToplam - indirim
+  // Bakiyeden ödenen tutar kargo eşik değerine sayılmaz; yalnız bakiye dışı ödemeler eşiğe tabidir
+  const bakiyeOdenen = (Array.isArray(cart.odemeGecmisi) ? (cart.odemeGecmisi as any[]) : []).filter((r) => String(r?.yontem || '').toLocaleLowerCase('tr').includes('bakiye')).reduce((s, r) => s + (Number(r?.tutar) || 0), 0);
+  const esikTutar = Math.max(0, malToplam - bakiyeOdenen);
   const freeShip = setting?.freeShipThreshold || 0;
-  const kargoEtiket = (freeShip > 0 && malToplam >= freeShip) ? 'ucretsiz' : 'alici_odemeli';
+  const kargoEtiket = (freeShip > 0 && esikTutar >= freeShip) ? 'ucretsiz' : 'alici_odemeli';
   const kargoUcreti = 0; // sepet toplamına kargo eklenmez (alıcı ödemeli teslimatta tahsil edilir)
   const banka = {
     ad: setting?.bankaAd || '',
@@ -807,10 +1147,14 @@ router.get('/sepet/:token', asyncHandler(async (req: Request, res: Response) => 
     odemeLinki: cart.odemeLinki || null,
     odemeLinkiSon: cart.odemeLinkiSon || null,
     toplam: malToplam,
+    tahsilat: (cart as any).tahsilat || 0,
+    odendi: ((cart as any).tahsilat || 0) >= (malToplam || 0) - 0.01 && (malToplam || 0) > 0,
+    odemeYontemi: (cart as any).odemeYontemi || null,
     createdAt: cart.createdAt,
+    sipNo: cart.sipNo || (cart.orderNo ? `${cart.orderYil}-${String(cart.orderNo).padStart(3, '0')}` : null),
     adres: cart.adres || cart.customer?.adres || '',
-    il: cart.il || '',
-    ilce: cart.ilce || '',
+    il: cart.il || cart.customer?.il || '',
+    ilce: cart.ilce || cart.customer?.ilce || '',
     odemeBildirim: cart.odemeBildirim || null,
     banka,
     musteri: cart.customer?.ad || cart.musteriHandle || '',
@@ -831,11 +1175,13 @@ router.patch('/sepet/:token', asyncHandler(async (req: Request, res: Response) =
   if (il !== undefined) upd.il = il;
   if (ilce !== undefined) upd.ilce = ilce;
   if (Object.keys(upd).length) await prisma.storeOrder.update({ where: { id: cart.id }, data: upd });
-  if (cart.customerId && (req.body?.telefon !== undefined || req.body?.musteri !== undefined || adres !== undefined)) {
+  if (cart.customerId && (req.body?.telefon !== undefined || req.body?.musteri !== undefined || adres !== undefined || il !== undefined || ilce !== undefined)) {
     const cd: any = {};
     if (req.body?.telefon !== undefined) cd.telefon = String(req.body.telefon).slice(0, 30);
     if (req.body?.musteri !== undefined) cd.ad = String(req.body.musteri).slice(0, 120);
     if (adres !== undefined) cd.adres = adres;
+    if (il !== undefined) cd.il = il;
+    if (ilce !== undefined) cd.ilce = ilce;
     if (Object.keys(cd).length) await prisma.customer.update({ where: { id: cart.customerId }, data: cd }).catch(() => null);
   }
   res.json({ ok: true });
@@ -961,6 +1307,30 @@ router.get('/sepet/:token/siparislerim', asyncHandler(async (req: Request, res: 
   res.json({ siparisler, ozet });
 }));
 
+// Müşteri kargo takibi — gerçek Yurtiçi durumu + son hareketler
+router.get('/sepet/:token/kargo/:orderId', asyncHandler(async (req: Request, res: Response) => {
+  const cart = await prisma.storeOrder.findFirst({ where: { token: req.params.token } });
+  if (!cart) throw new ApiError(404, 'Sepet bulunamadi');
+  const order = await prisma.storeOrder.findFirst({ where: { id: req.params.orderId, tenantId: cart.tenantId, ...(cart.customerId ? { customerId: cart.customerId } : { id: cart.id }) } });
+  if (!order) throw new ApiError(404, 'Siparis bulunamadi');
+  const takip = order.kargoTakip || order.cargoKey || null;
+  const base = { takip, kargoFirmasi: order.kargoFirmasi || null, kargoTip: order.kargoTip || null, kargoZamani: order.kargoZamani || null };
+  if (!takip) return res.json({ ...base, durum: order.kargoDurum || (order.durum === 'kargoda' ? 'Kargoya verildi' : 'Henüz kargolanmadı'), teslim: false, hareketler: [], live: false });
+  const isYurtici = order.kargoFirmasi ? /(yurtiçi|yurtici)/i.test(order.kargoFirmasi) : false;
+  if (isYurtici) {
+    try {
+      const sonuc = await queryShipment(cart.tenantId, 'yurtici', order.cargoKey || takip);
+      const data: any = { kargoDurum: sonuc.durum };
+      if (sonuc.teslim && order.durum !== 'teslim') data.durum = 'teslim';
+      try { await prisma.storeOrder.update({ where: { id: order.id }, data }); } catch { /* */ }
+      return res.json({ ...base, durum: sonuc.durum, teslim: sonuc.teslim, hareketler: sonuc.hareketler, live: true });
+    } catch (e: any) {
+      return res.json({ ...base, durum: order.kargoDurum || 'Kargoda', teslim: order.durum === 'teslim', hareketler: [], live: false });
+    }
+  }
+  return res.json({ ...base, durum: order.kargoDurum || 'Kargoda', teslim: order.durum === 'teslim', hareketler: [], live: false });
+}));
+
 // ── Destek Talepleri (müşteri) ──
 router.get('/sepet/:token/destek', asyncHandler(async (req: Request, res: Response) => {
   const cart = await prisma.storeOrder.findFirst({ where: { token: req.params.token }, include: { customer: true } });
@@ -1021,8 +1391,10 @@ router.post('/sepet/:token/add', asyncHandler(async (req: Request, res: Response
   const ex = items.find((it) => it.productId === p.id && (it.varyasyon || '') === beden);
   if (ex) ex.adet = (ex.adet || 1) + 1;
   else items.push({ productId: p.id, ad: p.ad + (beden ? ` (${beden})` : ''), varyasyon: beden || null, adet: 1, fiyat, stokDusuldu: true });
-  await prisma.product.update({ where: { id: p.id }, data: { stokAdeti: { decrement: 1 } } });
-  const adj = await campaignAdjust(prisma, cart.tenantId, items);
+  const prAdd = await prisma.product.update({ where: { id: p.id }, data: { stokAdeti: { decrement: 1 } }, select: { stokAdeti: true } });
+  const cAdd = cart.customerId ? (await prisma.customer.findUnique({ where: { id: cart.customerId }, select: { ad: true } }))?.ad : null;
+  await logStok(prisma, cart.tenantId, { productId: p.id, varyasyon: beden || null, yon: 'cikis', tip: 'satis', kanal: 'online', miktar: 1, stokSonra: prAdd.stokAdeti, orderId: cart.id, sipNo: cart.sipNo || null, customerId: cart.customerId || null, customerAd: cAdd || null, kullanici: 'Müşteri (sepet linki)', aciklama: `${p.ad}${beden ? ` (${beden})` : ''} sepete eklendi` });
+  const adj = await campaignAdjust(prisma, cart.tenantId, items, { lockedIds: lockedCampaignIds(cart) });
   await prisma.storeOrder.update({ where: { id: cart.id }, data: { items, araToplam: adj.araToplam, indirim: adj.indirim, kampanyalar: adj.kampanyalar, toplam: Math.max(0, adj.toplam + (cart.kargoUcreti || 0)) } });
   try { await prisma.orderEvent.create({ data: { tenantId: cart.tenantId, orderId: cart.id, kullanici: 'Müşteri', islem: 'Ürün eklendi (sepet linki)', detay: p.ad } }); } catch { /* */ }
   res.json({ ok: true });
@@ -1043,7 +1415,9 @@ router.post('/sepet/:token/item', asyncHandler(async (req: Request, res: Respons
     if (!it.stokDusuldu || n === 0) return;
     if (it.productId) {
       if (it.varyasyon) { const v = await prisma.productVariation.findFirst({ where: { productId: it.productId, tenantId: cart.tenantId, deger: it.varyasyon } }); if (v) await prisma.productVariation.update({ where: { id: v.id }, data: { stok: { increment: n } } }); }
-      await prisma.product.updateMany({ where: { id: it.productId, tenantId: cart.tenantId }, data: { stokAdeti: { increment: n } } });
+      const prR = await prisma.product.update({ where: { id: it.productId }, data: { stokAdeti: { increment: n } }, select: { stokAdeti: true } }).catch(() => null);
+      const cR = cart.customerId ? (await prisma.customer.findUnique({ where: { id: cart.customerId }, select: { ad: true } }))?.ad : null;
+      await logStok(prisma, cart.tenantId, { productId: it.productId, varyasyon: it.varyasyon || null, yon: 'giris', tip: 'sepet_cikar', kanal: 'online', miktar: n, stokSonra: prR?.stokAdeti ?? null, orderId: cart.id, sipNo: cart.sipNo || null, customerId: cart.customerId || null, customerAd: cR || null, kullanici: 'Müşteri (sepet linki)', aciklama: `${it.ad || 'Ürün'} sepetten çıkarıldı` });
     } else if (it.freeProductId) {
       // Drop (freeProduct) stoğunu iade et
       const fp = await prisma.freeProduct.findFirst({ where: { id: it.freeProductId, tenantId: cart.tenantId } });
@@ -1055,10 +1429,10 @@ router.post('/sepet/:token/item', asyncHandler(async (req: Request, res: Respons
   let newItems = items;
   if (remove) { await restoreStock(it.adet || 1); await cancelLive(); newItems = items.filter((_, i) => i !== idx); }
   else if (delta !== null) {
-    if (delta > 0) { if (it.productId && (await prisma.product.findFirst({ where: { id: it.productId, tenantId: cart.tenantId } }))!.stokAdeti < 1) throw new ApiError(400, 'Stok yetersiz'); if (it.productId && it.stokDusuldu) await prisma.product.updateMany({ where: { id: it.productId, tenantId: cart.tenantId }, data: { stokAdeti: { decrement: 1 } } }); it.adet = (it.adet || 1) + 1; }
+    if (delta > 0) { if (it.productId && (await prisma.product.findFirst({ where: { id: it.productId, tenantId: cart.tenantId } }))!.stokAdeti < 1) throw new ApiError(400, 'Stok yetersiz'); if (it.productId && it.stokDusuldu) { const prD = await prisma.product.update({ where: { id: it.productId }, data: { stokAdeti: { decrement: 1 } }, select: { stokAdeti: true } }); await logStok(prisma, cart.tenantId, { productId: it.productId, varyasyon: it.varyasyon || null, yon: 'cikis', tip: 'satis', kanal: 'online', miktar: 1, stokSonra: prD.stokAdeti, orderId: cart.id, sipNo: cart.sipNo || null, customerId: cart.customerId || null, kullanici: 'Müşteri (sepet linki)', aciklama: `${it.ad || 'Ürün'} adet artırıldı` }); } it.adet = (it.adet || 1) + 1; }
     else { if ((it.adet || 1) <= 1) { await restoreStock(1); await cancelLive(); newItems = items.filter((_, i) => i !== idx); } else { await restoreStock(1); it.adet = (it.adet || 1) - 1; } }
   }
-  const adj = await campaignAdjust(prisma, cart.tenantId, newItems);
+  const adj = await campaignAdjust(prisma, cart.tenantId, newItems, { lockedIds: lockedCampaignIds(cart) });
   if (newItems.length === 0 && cart.durum === 'sepet') {
     // Sepette ürün kalmadı -> açık sepeti iptal et (sil), bağlı canlı yayın satırlarını iptal et
     await prisma.liveOrder.updateMany({ where: { storeOrderId: cart.id }, data: { durum: 'iptal', storeOrderId: null } });
@@ -1074,6 +1448,7 @@ router.post('/sepet/:token/item', asyncHandler(async (req: Request, res: Respons
 router.post('/sepet/:token/odeme-bildir', asyncHandler(async (req: Request, res: Response) => {
   const cart = await prisma.storeOrder.findFirst({ where: { token: req.params.token } });
   if (!cart) throw new ApiError(404, 'Sepet bulunamadi');
+  assertNotCancelled(cart);
   // Ödeme bildirimi sepet DURUMUNU değiştirmez; yalnız bildirim bayrağı set edilir.
   const data: any = { odemeBildirim: 'bekliyor' };
   await prisma.storeOrder.update({ where: { id: cart.id }, data });
@@ -1085,6 +1460,7 @@ router.post('/sepet/:token/odeme-bildir', asyncHandler(async (req: Request, res:
 router.post('/sepet/:token/paytr', asyncHandler(async (req: Request, res: Response) => {
   const cart = await prisma.storeOrder.findFirst({ where: { token: req.params.token }, include: { customer: true } });
   if (!cart) throw new ApiError(404, 'Sepet bulunamadi');
+  assertNotCancelled(cart);
   const items: any[] = Array.isArray(cart.items) ? (cart.items as any) : [];
   if (items.length === 0) throw new ApiError(422, 'Sepet boş');
   const toplam = cart.toplam || 0;
@@ -1179,6 +1555,9 @@ router.post('/tami/callback', express.urlencoded({ extended: false }), asyncHand
   if ((order.gelirKaydedilen || 0) <= 0) {
     await prisma.storeOrder.update({ where: { id: order.id }, data: { durum: 'hazirlaniyor', tahsilat: order.toplam, gelirKaydedilen: order.toplam, odemeYontemi: 'Kredi Kartı (Tami)', not: 'Odeme alindi (Tami)' } });
   }
+  // Görsel workflow: ödeme alındı + durum (hazırlanıyor) tetikleyicileri
+  void startWorkflowRuns(order.tenantId, 'payment_received', { orderId: order.id });
+  void startWorkflowRuns(order.tenantId, 'status', { orderId: order.id, durum: 'hazirlaniyor' });
   res.redirect(`${env.APP_DOMAIN}/?payment=success`);
 }));
 
@@ -1312,6 +1691,175 @@ router.get('/supplier/account', supplierAuth as any, asyncHandler(async (req: Re
   const payments = await prisma.supplierPayment.findMany({ where: { tenantId: t, supplierId: sid }, orderBy: { createdAt: 'desc' } });
   const odenen = supRound2(payments.reduce((s, p) => s + (p.tutar || 0), 0));
   res.json({ borc, odenen, kalan: supRound2(borc - odenen), adet: orders.length, payments });
+}));
+
+// ═══════════ Özel Katalog (Public) ═══════════
+
+// Müşterinin gördüğü katalog sayfası
+router.get('/custom-katalog/:slug', asyncHandler(async (req: Request, res: Response) => {
+  const cat = await prisma.customCatalog.findFirst({ where: { slug: req.params.slug, aktif: true } });
+  if (!cat) throw new ApiError(404, 'Katalog bulunamadı');
+  // Görüntülenme kaydı (fire & forget)
+  prisma.catalogView.create({ data: { tenantId: cat.tenantId, catalogId: cat.id, ip: (req.headers['x-forwarded-for'] as string || req.ip || '').split(',')[0].trim().slice(0, 45), ua: (req.headers['user-agent'] || '').slice(0, 200) } }).catch(() => {});
+  const ids: string[] = Array.isArray(cat.productIds) ? (cat.productIds as any[]).map(String) : [];
+  let products: any[] = [];
+  if (ids.length) {
+    const [prods, cats] = await Promise.all([
+      prisma.product.findMany({
+        where: { tenantId: cat.tenantId, id: { in: ids }, aktif: true },
+        select: { id: true, ad: true, satisFiyat: true, eskiFiyat: true, images: true, marka: true, cinsiyet: true, kategoriId: true, salesCode: true, sku: true, barkod: true, stokAdeti: true, variations: { select: { id: true, deger: true, stok: true, ekFiyat: true } } }
+      }),
+      prisma.productCategory.findMany({ where: { tenantId: cat.tenantId }, select: { id: true, ad: true } })
+    ]);
+    const pMap = new Map(prods.map((p) => [p.id, p]));
+    const catMap = new Map(cats.map((c) => [c.id, c.ad]));
+    products = ids.map((id) => pMap.get(id)).filter(Boolean)
+      .filter((p: any) => {
+        // Stok kontrolü: stokAdeti > 0 VEYA en az 1 varyasyonun stoğu > 0 ise göster
+        if ((p.stokAdeti || 0) > 0) return true;
+        if ((p.variations || []).some((v: any) => (v.stok || 0) > 0)) return true;
+        return false;
+      })
+      .map((p: any) => {
+      const imgs = Array.isArray(p.images) ? p.images : [];
+      // base64 data URI varsa sadece URL olanları al (performans koruması)
+      const cleanImgs = imgs.filter((i: any) => typeof i === 'string' && !i.startsWith('data:'));
+      return {
+      id: p.id, ad: p.ad, satisFiyat: p.satisFiyat, eskiFiyat: p.eskiFiyat,
+      images: cleanImgs.length > 0 ? [cleanImgs[0]] : [], marka: p.marka || null, cinsiyet: p.cinsiyet || 'unisex',
+      kategori: catMap.get(p.kategoriId) || null, salesCode: p.salesCode || p.sku || null,
+      barkod: p.barkod || null, stokAdeti: p.stokAdeti || 0,
+      variations: (p.variations || []).filter((v: any) => v.stok > 0).map((v: any) => ({ id: v.id, deger: v.deger, stok: v.stok, ekFiyat: v.ekFiyat || 0 }))
+    };
+    });
+  }
+  // Filtreleme seçenekleri çıkar
+  const markalar = [...new Set(products.map((p) => p.marka).filter(Boolean))].sort();
+  const kategoriler = [...new Set(products.map((p) => p.kategori).filter(Boolean))].sort();
+  const cinsiyetler = [...new Set(products.map((p) => p.cinsiyet).filter(Boolean))].sort();
+  const bedenler = [...new Set(products.flatMap((p) => (p.variations || []).map((v: any) => v.deger)).filter(Boolean))].sort();
+  res.json({ catalog: { id: cat.id, ad: cat.ad, slug: cat.slug }, ad: cat.ad, slug: cat.slug, whatsapp: cat.whatsapp, kampanyalar: cat.kampanyalar || [], products, filters: { markalar, kategoriler, cinsiyetler, bedenler } });
+}));
+
+// Kupon doğrulama
+router.post('/custom-katalog/:slug/validate-coupon', asyncHandler(async (req: Request, res: Response) => {
+  const cat = await prisma.customCatalog.findFirst({ where: { slug: req.params.slug, aktif: true } });
+  if (!cat) throw new ApiError(404, 'Katalog bulunamadı');
+  const { code } = req.body || {};
+  if (!code || typeof code !== 'string') return res.json({ valid: false, message: 'Kupon kodu giriniz' });
+
+  const cleanCode = code.trim().toUpperCase();
+  const coupon = await prisma.catalogCoupon.findFirst({
+    where: { catalogId: cat.id, code: cleanCode, aktif: true }
+  });
+
+  if (!coupon) return res.json({ valid: false, message: 'Geçersiz kupon kodu' });
+
+  const now = new Date();
+  if (coupon.baslangic && now < coupon.baslangic) return res.json({ valid: false, message: 'Kupon henüz aktif değil' });
+  if (coupon.bitis && now > coupon.bitis) return res.json({ valid: false, message: 'Kupon süresi dolmuş' });
+  if (coupon.maxKullanim !== null && coupon.kullanim >= coupon.maxKullanim) return res.json({ valid: false, message: 'Kupon kullanım limiti dolmuş' });
+
+  const label = coupon.tip === 'yuzde' ? `%${coupon.deger} indirim` : `${coupon.deger} ₺ indirim`;
+  res.json({ valid: true, tip: coupon.tip, deger: coupon.deger, message: label });
+}));
+
+// Müşteriden gelen sipariş talebi
+router.post('/custom-katalog/:slug/talep', asyncHandler(async (req: Request, res: Response) => {
+  const cat = await prisma.customCatalog.findFirst({ where: { slug: req.params.slug, aktif: true } });
+  if (!cat) throw new ApiError(404, 'Katalog bulunamadı');
+  const { items, musteri, telefon, kuponKodu } = req.body || {};
+  if (!Array.isArray(items) || items.length === 0) throw new ApiError(422, 'Sepet boş');
+  // Stok kontrolü
+  for (const it of items) {
+    const productId = it.productId;
+    if (!productId) continue;
+    const adet = Number(it.adet) || 1;
+    const product = await prisma.product.findFirst({ where: { id: productId, tenantId: cat.tenantId } });
+    if (!product) throw new ApiError(422, `Ürün bulunamadı: ${it.ad || productId}`);
+    if (it.varyasyon) {
+      const v = await prisma.productVariation.findFirst({ where: { productId, tenantId: cat.tenantId, deger: it.varyasyon } });
+      if (!v || v.stok < adet) throw new ApiError(422, `${it.ad || product.ad} - ${it.varyasyon} stoğu yetersiz`);
+    } else {
+      if ((product.stokAdeti || 0) < adet) throw new ApiError(422, `${it.ad || product.ad} stoğu yetersiz`);
+    }
+  }
+  // Toplam ve indirim hesapla
+  let toplam = items.reduce((s: number, it: any) => s + (Number(it.fiyat) || 0) * (Number(it.adet) || 1), 0);
+  let indirim = 0;
+  // Kampanya indirimi
+  const kampanyalar: any[] = Array.isArray(cat.kampanyalar) ? (cat.kampanyalar as any[]) : [];
+  const toplamAdet = items.reduce((s: number, it: any) => s + (Number(it.adet) || 1), 0);
+  for (const k of kampanyalar) {
+    let uygulanir = false;
+    if (k.tip === 'adetIndirim' && toplamAdet >= (Number(k.kosul) || 0)) uygulanir = true;
+    if (k.tip === 'tutarIndirim' && toplam >= (Number(k.kosul) || 0)) uygulanir = true;
+    if (uygulanir) {
+      if (k.indirimTip === 'yuzde') indirim += toplam * (Number(k.indirimDeger) || 0) / 100;
+      else indirim += Number(k.indirimDeger) || 0;
+    }
+  }
+  // Kupon indirim: önce CatalogCoupon, sonra DiscountCode
+  let usedCatalogCouponId: string | null = null;
+  if (kuponKodu) {
+    const cleanCode = String(kuponKodu).trim().toUpperCase();
+    // 1. Katalog bazlı kupon
+    const catCoupon = await prisma.catalogCoupon.findFirst({ where: { catalogId: cat.id, code: cleanCode, aktif: true } });
+    if (catCoupon) {
+      const now = new Date();
+      const valid = (!catCoupon.baslangic || now >= catCoupon.baslangic) &&
+                    (!catCoupon.bitis || now <= catCoupon.bitis) &&
+                    (catCoupon.maxKullanim === null || catCoupon.kullanim < catCoupon.maxKullanim);
+      if (valid) {
+        indirim += catCoupon.tip === 'yuzde' ? toplam * catCoupon.deger / 100 : catCoupon.deger;
+        usedCatalogCouponId = catCoupon.id;
+      }
+    } else {
+      // 2. Fallback: genel DiscountCode
+      const d = await prisma.discountCode.findFirst({ where: { tenantId: cat.tenantId, code: cleanCode, aktif: true } });
+      if (d) { indirim += d.tip === 'yuzde' ? toplam * d.deger / 100 : d.deger; }
+    }
+  }
+  indirim = Math.min(toplam, indirim);
+  // TalepNo üret (T + 6 alfanumerik)
+  const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let talepNo = '';
+  for (let attempt = 0; attempt < 20; attempt++) {
+    let code = 'T';
+    for (let i = 0; i < 6; i++) code += CHARS[Math.floor(Math.random() * CHARS.length)];
+    const ex = await prisma.catalogRequest.findFirst({ where: { talepNo: code } });
+    if (!ex) { talepNo = code; break; }
+  }
+  if (!talepNo) throw new ApiError(500, 'Talep numarası üretilemedi');
+  // Rezerv süresi hesapla
+  const catSetting = await prisma.catalogSetting.findUnique({ where: { tenantId: cat.tenantId } }).catch(() => null);
+  const rezervDk = catSetting?.rezervSureDk || 30;
+  const request = await prisma.catalogRequest.create({
+    data: { tenantId: cat.tenantId, catalogId: cat.id, talepNo, items, toplam: toplam - indirim, indirim, kuponKodu: kuponKodu || null, musteri: musteri || null, telefon: telefon || null, durum: 'beklemede', rezervBitis: null, wpIletildi: false }
+  });
+  // Katalog kuponu kullanıldıysa kullanım sayısını artır
+  if (usedCatalogCouponId) {
+    await prisma.catalogCoupon.update({ where: { id: usedCatalogCouponId }, data: { kullanim: { increment: 1 } } });
+  }
+  // WhatsApp mesaj metni oluştur
+  const satirlar = items.map((it: any) => `• ${it.ad}${it.varyasyon ? ' (' + it.varyasyon + ')' : ''} x${it.adet} → ${(Number(it.fiyat) * Number(it.adet)).toLocaleString('tr-TR')}₺`).join('\n');
+  const msg = `📋 *Yeni Katalog Talebi*\n\n🔢 Talep No: *${talepNo}*\n👤 ${musteri || '-'}\n📞 ${telefon || '-'}\n\n${satirlar}\n\n${indirim > 0 ? '🏷️ İndirim: -' + indirim.toLocaleString('tr-TR') + '₺\n' : ''}💰 *Toplam: ${(toplam - indirim).toLocaleString('tr-TR')}₺*\n\n⏱️ Rezerv Süresi: ${rezervDk} dakika\n\n⚠️ Bu mesajı WhatsApp üzerinden ileterek siparişinizi onaylayın. İletilmeden sipariş oluşmaz.`;
+  res.json({ ok: true, talepNo, toplam: toplam - indirim, indirim, whatsappMsg: msg, whatsapp: cat.whatsapp, rezervDk });
+}));
+
+// ─── Katalog canlı izleme tracking ───
+router.post('/catalog-track', asyncHandler(async (req: Request, res: Response) => {
+  const { visitorId, catalogId, sayfaNo, sonGorulen, sonGorulenImg, sepetUrunSayisi, sepetToplam, sepetUrunler, durum } = req.body || {};
+  if (!visitorId || !catalogId) throw new ApiError(422, 'visitorId ve catalogId gerekli');
+  const cat = await prisma.customCatalog.findFirst({ where: { id: catalogId }, select: { tenantId: true } });
+  if (!cat) throw new ApiError(404, 'Katalog bulunamadı');
+  trackVisitor({
+    visitorId, catalogId, tenantId: cat.tenantId,
+    ip: (req.headers['x-forwarded-for'] as string || req.ip || '').split(',')[0].trim(),
+    userAgent: req.headers['user-agent'],
+    sayfaNo, sonGorulen, sonGorulenImg, sepetUrunSayisi, sepetToplam, sepetUrunler, durum,
+  });
+  res.json({ ok: true });
 }));
 
 export default router;

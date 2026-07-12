@@ -1,6 +1,7 @@
 import MoneyInput from '../components/MoneyInput';
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
+import { useUrlState } from '../lib/useUrlState';
 import { useQuickAction } from '../lib/quickAction';
 import { useFocusTrap } from '../lib/useFocusTrap';
 import { Cek } from '../types';
@@ -18,13 +19,13 @@ export default function Cekler() {
   const [hizliMenuOpen, setHizliMenuOpen] = useState(false);
   const [editItem, setEditItem] = useState<Cek | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [tab, setTab] = useState('islemdeki');
-  const [filterCari, setFilterCari] = useState('all');
-  const [filterTur, setFilterTur] = useState('all');
-  const [filterDurum, setFilterDurum] = useState('all');
-  const [filterBanka, setFilterBanka] = useState('all');
-  const [search, setSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const [tab, setTab] = useUrlState('tab', 'islemdeki');
+  const [filterCari, setFilterCari] = useUrlState('cari', 'all');
+  const [filterTur, setFilterTur] = useUrlState('tur', 'all');
+  const [filterDurum, setFilterDurum] = useUrlState('durum', 'all');
+  const [filterBanka, setFilterBanka] = useUrlState('banka', 'all');
+  const [search, setSearch] = useUrlState('q', '');
+  const [page, setPage] = useUrlState('page', 1);
   const perPage = 10;
 
   // Hizli islem form
@@ -122,7 +123,7 @@ export default function Cekler() {
         <div className="flex flex-wrap items-center gap-2">
           <span className="hidden sm:flex text-xs text-gray-500 px-3 py-2 bg-white border border-gray-200 rounded-lg items-center gap-1.5"><Calendar size={12} />{new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}</span>
           <button onClick={() => setHizliMenuOpen(true)} className="flex items-center gap-1 px-3 py-2 bg-amber-50 text-amber-600 rounded-lg text-[10px] font-medium hover:bg-amber-100" title="Ctrl+Space"><Zap size={12} /> Hizli Islem <span className="text-[8px] text-amber-400 ml-1">(Ctrl+Space)</span></button>
-          <button onClick={openCreate} className="flex items-center gap-1.5 px-4 py-2 bg-[#6c63ff] text-white rounded-lg text-xs font-medium hover:bg-[#5b54e6]"><Plus size={14} /> Yeni Cek</button>
+          <button onClick={openCreate} className="flex items-center gap-1.5 px-4 py-2 bg-[#1F9D57] text-white rounded-lg text-xs font-medium hover:bg-[#178A49]"><Plus size={14} /> Yeni Cek</button>
         </div>
       </div>
 
@@ -133,7 +134,7 @@ export default function Cekler() {
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
             <div className="flex items-center gap-4 mb-3">
               {[{ k: 'ozet', l: 'Ozet' }, { k: 'alinan', l: 'Alinan Cekler' }, { k: 'verilen', l: 'Verilen Cekler' }].map(t => (
-                <button key={t.k} onClick={() => { if (t.k === 'alinan') setFilterTur('alinan'); else if (t.k === 'verilen') setFilterTur('verilen'); else setFilterTur('all'); }} className={`text-[11px] font-medium pb-1 border-b-2 ${(t.k === 'ozet' && filterTur === 'all') || (t.k === 'alinan' && filterTur === 'alinan') || (t.k === 'verilen' && filterTur === 'verilen') ? 'border-[#6c63ff] text-[#6c63ff]' : 'border-transparent text-gray-400'}`}>{t.l}</button>
+                <button key={t.k} onClick={() => { if (t.k === 'alinan') setFilterTur('alinan'); else if (t.k === 'verilen') setFilterTur('verilen'); else setFilterTur('all'); }} className={`text-[11px] font-medium pb-1 border-b-2 ${(t.k === 'ozet' && filterTur === 'all') || (t.k === 'alinan' && filterTur === 'alinan') || (t.k === 'verilen' && filterTur === 'verilen') ? 'border-[#1F9D57] text-[#1F9D57]' : 'border-transparent text-gray-400'}`}>{t.l}</button>
               ))}
               <span className="ml-auto text-[9px] text-gray-400">Bu Ay</span>
             </div>
@@ -148,7 +149,7 @@ export default function Cekler() {
               </div>
               <div>
                 <div className="flex items-center gap-3 mb-2"><div className="w-10 h-10 rounded-xl bg-purple-50 flex items-center justify-center"><ArrowDownRight size={18} className="text-purple-500" /></div><div><p className="text-[9px] text-gray-400">Net Acik Cek Bakiyesi</p><p className="text-lg font-bold text-gray-800">{fmt(netBakiye)}</p><p className="text-[9px] text-gray-400">{acikCekler.length} cek</p></div></div>
-                <div className="h-[50px]"><Line data={{ labels: ['1', '5', '10', '15', '20', '25', '30'], datasets: [{ data: [100000, 150000, 200000, 350000, 400000, 500000, netBakiye], borderColor: '#8b5cf6', backgroundColor: 'rgba(139,92,246,0.05)', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 1.5 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { y: { display: false }, x: { display: false } } }} /></div>
+                <div className="h-[50px]"><Line data={{ labels: ['1', '5', '10', '15', '20', '25', '30'], datasets: [{ data: [100000, 150000, 200000, 350000, 400000, 500000, netBakiye], borderColor: '#10B981', backgroundColor: 'rgba(139,92,246,0.05)', fill: true, tension: 0.4, pointRadius: 0, borderWidth: 1.5 }] }} options={{ responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { enabled: false } }, scales: { y: { display: false }, x: { display: false } } }} /></div>
               </div>
             </div>
           </div>
@@ -175,7 +176,7 @@ export default function Cekler() {
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="flex items-center gap-4 px-4 border-b border-gray-100 overflow-x-auto">
               {[{ k: 'islemdeki', l: 'Islemdeki Cekler' }, { k: 'tahsil', l: 'Tahsil Edilen Cekler' }, { k: 'odenen', l: 'Odenen Cekler' }, { k: 'vadesi', l: 'Vadesi Gelen Cekler' }, { k: 'all', l: 'Tumu' }].map(t => (
-                <button key={t.k} onClick={() => { setTab(t.k); setPage(1); }} className={`py-3 text-[11px] font-medium border-b-2 whitespace-nowrap ${tab === t.k ? 'border-[#6c63ff] text-[#6c63ff]' : 'border-transparent text-gray-400'}`}>{t.l}</button>
+                <button key={t.k} onClick={() => { setTab(t.k); setPage(1); }} className={`py-3 text-[11px] font-medium border-b-2 whitespace-nowrap ${tab === t.k ? 'border-[#1F9D57] text-[#1F9D57]' : 'border-transparent text-gray-400'}`}>{t.l}</button>
               ))}
             </div>
 
@@ -244,7 +245,7 @@ export default function Cekler() {
               <div className="flex items-center gap-0.5">
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-1 text-gray-400 disabled:opacity-30"><ChevronLeft size={13} /></button>
                 {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(p => (
-                  <button key={p} onClick={() => setPage(p)} className={`w-7 h-7 rounded text-[10px] font-medium ${page === p ? 'bg-[#6c63ff] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{p}</button>
+                  <button key={p} onClick={() => setPage(p)} className={`w-7 h-7 rounded text-[10px] font-medium ${page === p ? 'bg-[#1F9D57] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{p}</button>
                 ))}
                 {totalPages > 5 && <span className="px-1 text-gray-400">...</span>}
                 <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-1 text-gray-400 disabled:opacity-30"><ChevronRight size={13} /></button>
@@ -257,12 +258,12 @@ export default function Cekler() {
         {/* Right: Vadesi Yaklasan */}
         <div className="lg:col-span-3">
           <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 sticky top-4">
-            <div className="flex items-center justify-between mb-4"><h3 className="text-[12px] font-semibold text-gray-700">Vadesi Yaklasan 5 Cek</h3><button className="text-[9px] text-[#6c63ff] font-medium hover:underline">Tumu</button></div>
+            <div className="flex items-center justify-between mb-4"><h3 className="text-[12px] font-semibold text-gray-700">Vadesi Yaklasan 5 Cek</h3><button className="text-[9px] text-[#1F9D57] font-medium hover:underline">Tumu</button></div>
             <div className="space-y-3">
               {vadesiYaklasan.map(c => {
                 const gun = gunKaldi(c.vadeTarihi);
                 return (
-                  <div key={c.id} className="flex items-center justify-between p-2.5 rounded-lg border border-gray-100 hover:border-[#6c63ff]/20 hover:bg-[#6c63ff]/[0.02] transition-all">
+                  <div key={c.id} className="flex items-center justify-between p-2.5 rounded-lg border border-gray-100 hover:border-[#1F9D57]/20 hover:bg-[#1F9D57]/[0.02] transition-all">
                     <div className="flex items-center gap-2.5">
                       <div className={`w-2 h-8 rounded-full ${c.tip === 'alacak' ? 'bg-green-400' : 'bg-red-400'}`} />
                       <div>
@@ -305,7 +306,7 @@ export default function Cekler() {
             <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Keside Tarihi</label><input type="date" value={form.kesideTarihi} onChange={e => setForm({...form, kesideTarihi: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none" /></div>
           </div>
           <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Aciklama</label><input value={form.aciklama} onChange={e => setForm({...form, aciklama: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none" /></div>
-          <div className="flex gap-2 justify-end pt-2"><button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button><button type="submit" className="px-5 py-2 text-sm bg-[#6c63ff] text-white rounded-lg hover:bg-[#5b54e6]">{editItem ? 'Guncelle' : 'Kaydet'}</button></div>
+          <div className="flex gap-2 justify-end pt-2"><button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button><button type="submit" className="px-5 py-2 text-sm bg-[#1F9D57] text-white rounded-lg hover:bg-[#178A49]">{editItem ? 'Guncelle' : 'Kaydet'}</button></div>
         </form>
       </Modal>
       <ConfirmDialog isOpen={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={() => { if (deleteId) deleteCek(deleteId); setDeleteId(null); }} title="Cek Sil" message="Bu ceki silmek istediginizden emin misiniz?" />
@@ -318,19 +319,19 @@ export default function Cekler() {
             <p className="text-[10px] text-gray-400 mb-3">Tab ile alanlar arasi gecis, Enter ile kaydet. (Ctrl+Space)</p>
             <form onSubmit={handleHizliSubmit} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Tur</label><select autoFocus value={hizliForm.tip} onChange={e => setHizliForm({...hizliForm, tip: e.target.value as any})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#6c63ff]/30"><option value="alacak">Alinan Cek (Ben aldim)</option><option value="borc">Verilen Cek (Ben verdim)</option></select></div>
-                <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Banka</label><select value={hizliForm.banka} onChange={e => setHizliForm({...hizliForm, banka: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#6c63ff]/30"><option>Is Bankasi</option><option>Garanti BBVA</option><option>Yapi Kredi</option><option>Akbank</option><option>VakifBank</option></select></div>
+                <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Tur</label><select autoFocus value={hizliForm.tip} onChange={e => setHizliForm({...hizliForm, tip: e.target.value as any})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#1F9D57]/30"><option value="alacak">Alinan Cek (Ben aldim)</option><option value="borc">Verilen Cek (Ben verdim)</option></select></div>
+                <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Banka</label><select value={hizliForm.banka} onChange={e => setHizliForm({...hizliForm, banka: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#1F9D57]/30"><option>Is Bankasi</option><option>Garanti BBVA</option><option>Yapi Kredi</option><option>Akbank</option><option>VakifBank</option></select></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Kesideci (Ceki Kesen)</label><input required value={hizliForm.kesideci} onChange={e => setHizliForm({...hizliForm, kesideci: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#6c63ff]/30" placeholder="Ceki duzenleyen kisi/firma" /></div>
-                <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Kime Kesildi</label><input required value={hizliForm.kisiAd} onChange={e => setHizliForm({...hizliForm, kisiAd: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#6c63ff]/30" placeholder="Cek kimin adina kesildi" /></div>
+                <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Kesideci (Ceki Kesen)</label><input required value={hizliForm.kesideci} onChange={e => setHizliForm({...hizliForm, kesideci: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#1F9D57]/30" placeholder="Ceki duzenleyen kisi/firma" /></div>
+                <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Kime Kesildi</label><input required value={hizliForm.kisiAd} onChange={e => setHizliForm({...hizliForm, kisiAd: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#1F9D57]/30" placeholder="Cek kimin adina kesildi" /></div>
               </div>
-              <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Islenecek Cari Hesap (Opsiyonel)</label><select value={hizliForm.cariHesapId} onChange={e => setHizliForm({...hizliForm, cariHesapId: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#6c63ff]/30"><option value="">Cari hesap secin (opsiyonel)</option>{cariHesaplar.map(c => <option key={c.id} value={c.id}>{c.ad} ({c.bakiye > 0 ? 'Borclu' : c.bakiye < 0 ? 'Alacakli' : 'Notr'})</option>)}</select></div>
+              <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Islenecek Cari Hesap (Opsiyonel)</label><select value={hizliForm.cariHesapId} onChange={e => setHizliForm({...hizliForm, cariHesapId: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#1F9D57]/30"><option value="">Cari hesap secin (opsiyonel)</option>{cariHesaplar.map(c => <option key={c.id} value={c.id}>{c.ad} ({c.bakiye > 0 ? 'Borclu' : c.bakiye < 0 ? 'Alacakli' : 'Notr'})</option>)}</select></div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Tutar</label><MoneyInput value={hizliForm.tutar} onChange={v => setHizliForm({...hizliForm, tutar: v})} required className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#6c63ff]/30" /></div>
-                <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Vade Tarihi</label><input type="date" required value={hizliForm.vadeTarihi} onChange={e => setHizliForm({...hizliForm, vadeTarihi: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#6c63ff]/30" /></div>
+                <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Tutar</label><MoneyInput value={hizliForm.tutar} onChange={v => setHizliForm({...hizliForm, tutar: v})} required className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#1F9D57]/30" /></div>
+                <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Vade Tarihi</label><input type="date" required value={hizliForm.vadeTarihi} onChange={e => setHizliForm({...hizliForm, vadeTarihi: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#1F9D57]/30" /></div>
               </div>
-              <button type="submit" className="w-full py-2.5 bg-[#6c63ff] text-white rounded-lg font-medium hover:bg-[#5b54e6]">Kaydet (Enter)</button>
+              <button type="submit" className="w-full py-2.5 bg-[#1F9D57] text-white rounded-lg font-medium hover:bg-[#178A49]">Kaydet (Enter)</button>
             </form>
           </div>
         </div>

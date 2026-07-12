@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { Bell, CheckCheck, Trash2, AlertTriangle, Clock, CreditCard, TrendingDown, Users, Info, CheckCircle, X } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useUrlState } from '../lib/useUrlState';
 
 type BildirimTip = 'odeme' | 'uyari' | 'hatirlatma' | 'sistem';
 
@@ -65,7 +66,7 @@ export default function Bildirimler() {
     gecikencek: true, yaklasancek: true, yuksekborc: true, dusukbakiye: true, maas: true, butce: true,
   }));
 
-  const [activeTab, setActiveTab] = useState<Tab>('tumu');
+  const [activeTab, setActiveTab] = useUrlState<Tab>('tab', 'tumu');
 
   useEffect(() => { saveLS('bildirimler', userBildirimler); }, [userBildirimler]);
   useEffect(() => { saveLS('bildirimRead', readIds); }, [readIds]);
@@ -202,7 +203,7 @@ export default function Bildirimler() {
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         {[
-          { label: 'Toplam', val: allBildirimler.length, color: 'from-indigo-500 to-indigo-600', icon: Bell },
+          { label: 'Toplam', val: allBildirimler.length, color: 'from-emerald-500 to-emerald-600', icon: Bell },
           { label: 'Okunmamis', val: okunmamisCount, color: 'from-blue-500 to-blue-600', icon: Bell },
           { label: 'Yaklasan Odeme', val: yaklasakOdemeler.length, color: 'from-red-500 to-red-600', icon: CreditCard },
           { label: 'Uyarilar', val: uyariCount, color: 'from-yellow-500 to-yellow-600', icon: AlertTriangle },

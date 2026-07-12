@@ -1,6 +1,8 @@
 import MoneyInput from '../components/MoneyInput';
 import React, { useState, useMemo, useRef, useEffect } from 'react';
+import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
+import { useUrlState } from '../lib/useUrlState';
 import { useQuickAction } from '../lib/quickAction';
 import { CariHesap, CariHareket, paraCinsleri } from '../types';
 import Modal from '../components/Modal';
@@ -41,10 +43,10 @@ export default function CariHesaplar() {
   const [selectedCari, setSelectedCari] = useState<CariHesap | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
 
-  const [search, setSearch] = useState('');
-  const [filterGrup, setFilterGrup] = useState('all');
-  const [filterBakiye, setFilterBakiye] = useState('all');
-  const [page, setPage] = useState(1);
+  const [search, setSearch] = useUrlState('q', '');
+  const [filterGrup, setFilterGrup] = useUrlState('grup', 'all');
+  const [filterBakiye, setFilterBakiye] = useUrlState('bakiye', 'all');
+  const [page, setPage] = useUrlState('page', 1);
   const [perPage, setPerPage] = useState(10);
 
   const [panelTab, setPanelTab] = useState('genel');
@@ -72,6 +74,7 @@ export default function CariHesaplar() {
   const [deleteHareketId, setDeleteHareketId] = useState<string | null>(null);
 
   const [detailTab, setDetailTab] = useState('dokum');
+  const [detailSearch, setDetailSearch] = useState('');
   const [detailDateFrom, setDetailDateFrom] = useState('');
   const [detailDateTo, setDetailDateTo] = useState('');
   const [detailFilter, setDetailFilter] = useState('all');
@@ -98,7 +101,7 @@ export default function CariHesaplar() {
   useQuickAction('pending_cari_action', (action) => {
     if (!action || !action.tip) return;
     if (action.tip === 'yeni_cari') { openCariModal(); return; }
-    if (cariHesaplar.length === 0) { alert('Once bir cari hesap olusturun.'); return; }
+    if (cariHesaplar.length === 0) { toast.error('Once bir cari hesap olusturun.'); return; }
     openHizliModal(action.tip as CariHareket['tip'], action.label || action.tip);
   });
 
@@ -260,7 +263,7 @@ export default function CariHesaplar() {
     if (t === 'satis_fatura') return <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-green-100 text-green-700">Satis Faturasi</span>;
     if (t === 'odeme') return <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-blue-100 text-blue-700">Odeme</span>;
     if (t === 'tahsilat') return <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-purple-100 text-purple-700">Tahsilat</span>;
-    if (t === 'iade_al') return <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-indigo-100 text-indigo-700">Iade Al</span>;
+    if (t === 'iade_al') return <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-emerald-100 text-emerald-700">Iade Al</span>;
     if (t === 'iade_ver') return <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-pink-100 text-pink-700">Iade Ver</span>;
     return <span className="px-2 py-0.5 rounded-full text-[9px] font-medium bg-gray-100 text-gray-600">{t}</span>;
   };
@@ -286,6 +289,16 @@ export default function CariHesaplar() {
     else if (detailFilter === 'tahsilat') dokumItems = dokumItems.filter(h => h.tip === 'tahsilat');
     if (detailDateFrom) dokumItems = dokumItems.filter(h => h.tarih >= detailDateFrom);
     if (detailDateTo) dokumItems = dokumItems.filter(h => h.tarih <= detailDateTo);
+    // Serbest metin arama: aciklama / tutar / tarih / islem turu uzerinde (buyuk-kucuk harf duyarsiz)
+    const q = detailSearch.trim().toLowerCase();
+    if (q) {
+      dokumItems = dokumItems.filter(h =>
+        (h.aciklama || '').toLowerCase().includes(q) ||
+        String(h.tutar).includes(q) ||
+        (h.tarih || '').toLowerCase().includes(q) ||
+        tipLabel(h.tip).toLowerCase().includes(q)
+      );
+    }
 
     const acikIslemler = allH.filter(h => h.tip === 'alis_fatura' || h.tip === 'satis_fatura');
 
@@ -300,7 +313,7 @@ export default function CariHesaplar() {
     return (
       <div className="space-y-4">
         <div className="flex items-center gap-2 text-[11px] text-gray-400">
-          <button onClick={() => setDetailOpen(false)} className="hover:text-[#6c63ff] flex items-center gap-1"><ChevronLeft size={12} /> Cari Hesaplar</button>
+          <button onClick={() => setDetailOpen(false)} className="hover:text-[#1F9D57] flex items-center gap-1"><ChevronLeft size={12} /> Cari Hesaplar</button>
           <span>{'>'}</span>
           <span className="text-gray-700 font-medium">{selectedCari.ad}</span>
         </div>
@@ -345,7 +358,7 @@ export default function CariHesaplar() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
           <div className="flex items-center gap-1 px-4 border-b border-gray-100 overflow-x-auto">
             {dokumTabs.map(t => (
-              <button key={t} onClick={() => setDetailTab(t)} className={`px-3 py-3 text-[11px] font-medium border-b-2 whitespace-nowrap transition-colors ${detailTab === t ? 'border-[#6c63ff] text-[#6c63ff]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>{dokumTabLabels[t]}</button>
+              <button key={t} onClick={() => setDetailTab(t)} className={`px-3 py-3 text-[11px] font-medium border-b-2 whitespace-nowrap transition-colors ${detailTab === t ? 'border-[#1F9D57] text-[#1F9D57]' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>{dokumTabLabels[t]}</button>
             ))}
           </div>
 
@@ -355,7 +368,7 @@ export default function CariHesaplar() {
                 <div className="flex items-center gap-2 mb-4 flex-wrap">
                   <div className="relative flex-1 min-w-[150px]">
                     <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                    <input type="text" placeholder="Islem ara..." className="w-full pl-8 pr-3 py-1.5 text-[10px] border border-gray-200 rounded-lg outline-none" />
+                    <input type="text" value={detailSearch} onChange={e => setDetailSearch(e.target.value)} placeholder="Islem ara..." className="w-full pl-8 pr-3 py-1.5 text-[10px] border border-gray-200 rounded-lg outline-none" />
                   </div>
                   <select value={detailFilter} onChange={e => setDetailFilter(e.target.value)} className="px-2.5 py-1.5 text-[10px] border border-gray-200 rounded-lg">
                     <option value="all">Islem Turu: Tumu</option>
@@ -444,7 +457,7 @@ export default function CariHesaplar() {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <p className="text-[11px] text-gray-500">Yuklu belgeler</p>
-                  <button onClick={addBelge} className="px-3 py-1.5 text-[10px] bg-[#6c63ff] text-white rounded-lg hover:bg-[#5b54e6] flex items-center gap-1"><Upload size={11} /> Belge Yukle</button>
+                  <button onClick={addBelge} className="px-3 py-1.5 text-[10px] bg-[#1F9D57] text-white rounded-lg hover:bg-[#178A49] flex items-center gap-1"><Upload size={11} /> Belge Yukle</button>
                 </div>
                 <div className="space-y-2">
                   {belgeler.map(b => (
@@ -472,8 +485,8 @@ export default function CariHesaplar() {
             {detailTab === 'notlar' && (
               <div>
                 <div className="flex gap-2 mb-3">
-                  <input value={notInput} onChange={e => setNotInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addNot()} placeholder="Not ekle..." className="flex-1 px-3 py-1.5 text-[11px] border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#6c63ff]/30" />
-                  <button onClick={addNot} className="px-3 py-1.5 text-[10px] bg-[#6c63ff] text-white rounded-lg hover:bg-[#5b54e6]">Ekle</button>
+                  <input value={notInput} onChange={e => setNotInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && addNot()} placeholder="Not ekle..." className="flex-1 px-3 py-1.5 text-[11px] border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#1F9D57]/30" />
+                  <button onClick={addNot} className="px-3 py-1.5 text-[10px] bg-[#1F9D57] text-white rounded-lg hover:bg-[#178A49]">Ekle</button>
                 </div>
                 <div className="space-y-2 max-h-[300px] overflow-y-auto">
                   {cariNotlar.map(n => (
@@ -497,7 +510,7 @@ export default function CariHesaplar() {
             </div>
             <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Tutar</label><MoneyInput value={hareketForm.tutar} onChange={v => setHareketForm({...hareketForm, tutar: v})} required className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none" /></div>
             <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Aciklama</label><input required value={hareketForm.aciklama} onChange={e => setHareketForm({...hareketForm, aciklama: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none" /></div>
-            <div className="flex gap-2 justify-end"><button type="button" onClick={() => setHareketModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button><button type="submit" className="px-5 py-2 text-sm bg-[#6c63ff] text-white rounded-lg">Kaydet</button></div>
+            <div className="flex gap-2 justify-end"><button type="button" onClick={() => setHareketModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button><button type="submit" className="px-5 py-2 text-sm bg-[#1F9D57] text-white rounded-lg">Kaydet</button></div>
           </form>
         </Modal>
         <ConfirmDialog isOpen={!!deleteHareketId} onClose={() => setDeleteHareketId(null)} onConfirm={() => { if (deleteHareketId) deleteCariHareket(deleteHareketId); setDeleteHareketId(null); }} title="Hareket Sil" message="Bu hareketi silmek istediginizden emin misiniz?" />
@@ -519,7 +532,7 @@ export default function CariHesaplar() {
             <Calendar size={13} />
             {new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}
           </div>
-          <button onClick={() => openCariModal()} className="flex items-center gap-1.5 px-3.5 py-2 bg-[#6c63ff] text-white rounded-lg text-xs font-medium hover:bg-[#5b54e6] transition-colors">
+          <button onClick={() => openCariModal()} className="flex items-center gap-1.5 px-3.5 py-2 bg-[#1F9D57] text-white rounded-lg text-xs font-medium hover:bg-[#178A49] transition-colors">
             <Plus size={14} /> Yeni Cari
           </button>
         </div>
@@ -527,12 +540,12 @@ export default function CariHesaplar() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm flex items-center justify-between hover:border-[#6c63ff]/30 transition-colors cursor-default">
+        <div className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm flex items-center justify-between hover:border-[#1F9D57]/30 transition-colors cursor-default">
           <div>
             <p className="text-[9px] text-gray-400 uppercase font-semibold tracking-wide">Toplam Cari</p>
             <p className="text-xl font-bold text-gray-800 mt-0.5">{cariHesaplar.length}</p>
           </div>
-          <div className="w-8 h-8 rounded-lg bg-violet-50 flex items-center justify-center"><Users size={15} className="text-violet-500" /></div>
+          <div className="w-8 h-8 rounded-lg bg-green-50 flex items-center justify-center"><Users size={15} className="text-green-500" /></div>
         </div>
         <div className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm flex items-center justify-between hover:border-green-200 transition-colors cursor-default">
           <div>
@@ -576,9 +589,9 @@ export default function CariHesaplar() {
           );
         })}
         <button onClick={() => openCariModal()} className="flex items-center gap-2.5 pl-2.5 pr-4 py-2 bg-white rounded-2xl border border-gray-100 shadow-[0_2px_8px_rgba(0,0,0,0.05)] hover:shadow-[0_6px_18px_rgba(0,0,0,0.10)] hover:-translate-y-0.5 transition-all">
-          <div className="w-9 h-9 rounded-full flex items-center justify-center text-[#6c63ff] bg-[#6c63ff]/10 shrink-0"><Plus size={18} /></div>
+          <div className="w-9 h-9 rounded-full flex items-center justify-center text-[#1F9D57] bg-[#1F9D57]/10 shrink-0"><Plus size={18} /></div>
           <div className="text-left">
-            <p className="text-[12px] font-semibold text-[#6c63ff] leading-tight">Yeni Cari</p>
+            <p className="text-[12px] font-semibold text-[#1F9D57] leading-tight">Yeni Cari</p>
             <p className="text-[9px] text-gray-400 leading-tight">Cari Ekle</p>
           </div>
         </button>
@@ -590,7 +603,7 @@ export default function CariHesaplar() {
         <div className="flex items-center gap-2 px-3 py-2.5 border-b border-gray-100 flex-wrap">
           <div className="relative flex-1 min-w-[140px]">
             <Search size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input type="text" placeholder="Cari ara..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="w-full pl-7 pr-3 py-1.5 text-[11px] border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#6c63ff]/30" />
+            <input type="text" placeholder="Cari ara..." value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} className="w-full pl-7 pr-3 py-1.5 text-[11px] border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#1F9D57]/30" />
           </div>
           <select value={filterGrup} onChange={e => { setFilterGrup(e.target.value); setPage(1); }} className="px-2.5 py-1.5 text-[11px] border border-gray-200 rounded-lg outline-none bg-white">
             <option value="all">Tum Gruplar</option>
@@ -632,7 +645,7 @@ export default function CariHesaplar() {
                     <td className="px-3 py-2.5">
                       <button onClick={() => setRowActionCari(item)} className="flex items-center gap-2 group">
                         <div className={`w-7 h-7 rounded-full flex items-center justify-center text-[8px] font-bold text-white shrink-0 ${avatarColor}`}>{initials}</div>
-                        <span className="font-medium text-gray-800 truncate max-w-[130px] group-hover:text-[#6c63ff] transition-colors">{item.ad}</span>
+                        <span className="font-medium text-gray-800 truncate max-w-[130px] group-hover:text-[#1F9D57] transition-colors">{item.ad}</span>
                       </button>
                     </td>
                     <td className="px-3 py-2.5 text-gray-400 text-[10px]">-</td>
@@ -647,8 +660,8 @@ export default function CariHesaplar() {
                     <td className="px-3 py-2.5 text-center text-gray-400 text-[9px]">{item.sonHareketTarihi || '-'}</td>
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-center gap-1">
-                        <button title="Hizli Islem" onClick={() => setRowActionCari(item)} className="flex items-center gap-1 px-2 py-1.5 text-[9px] font-semibold bg-[#6c63ff]/10 text-[#6c63ff] rounded-lg hover:bg-[#6c63ff]/20 transition-colors"><Zap size={11} /> Islem</button>
-                        <button title="Detay" onClick={() => { setSelectedCari(item); setDetailTab('dokum'); setDetailOpen(true); }} className="p-1.5 rounded-lg hover:bg-violet-100 text-violet-500 transition-colors"><Eye size={13} /></button>
+                        <button title="Hizli Islem" onClick={() => setRowActionCari(item)} className="flex items-center gap-1 px-2 py-1.5 text-[9px] font-semibold bg-[#1F9D57]/10 text-[#1F9D57] rounded-lg hover:bg-[#1F9D57]/20 transition-colors"><Zap size={11} /> Islem</button>
+                        <button title="Detay" onClick={() => { setSelectedCari(item); setDetailTab('dokum'); setDetailOpen(true); }} className="p-1.5 rounded-lg hover:bg-green-100 text-green-500 transition-colors"><Eye size={13} /></button>
                         <button title="Duzenle" onClick={() => openCariModal(item)} className="p-1.5 rounded-lg hover:bg-blue-100 text-blue-500 transition-colors"><Edit2 size={13} /></button>
                         <button title="Sil" onClick={() => setDeleteId(item.id)} className="p-1.5 rounded-lg hover:bg-red-100 text-red-500 transition-colors"><Trash2 size={13} /></button>
                       </div>
@@ -668,7 +681,7 @@ export default function CariHesaplar() {
           <div className="flex items-center gap-0.5">
             <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-1 text-gray-400 disabled:opacity-30 hover:text-gray-600"><ChevronLeft size={13} /></button>
             {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => i + 1).map(p => (
-              <button key={p} onClick={() => setPage(p)} className={`w-6 h-6 rounded text-[10px] font-medium ${page === p ? 'bg-[#6c63ff] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{p}</button>
+              <button key={p} onClick={() => setPage(p)} className={`w-6 h-6 rounded text-[10px] font-medium ${page === p ? 'bg-[#1F9D57] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{p}</button>
             ))}
             <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-1 text-gray-400 disabled:opacity-30 hover:text-gray-600"><ChevronRight size={13} /></button>
           </div>
@@ -692,7 +705,7 @@ export default function CariHesaplar() {
             <div><label className="block text-[10px] font-medium text-gray-600 mb-1">E-posta</label><input value={cariForm.email} onChange={e => setCariForm({...cariForm, email: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none" placeholder="info@..." /></div>
             <div className="col-span-2"><label className="block text-[10px] font-medium text-gray-600 mb-1">Adres</label><input value={cariForm.adres} onChange={e => setCariForm({...cariForm, adres: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none" placeholder="Sehir / Adres" /></div>
           </div>
-          <div className="flex gap-2 justify-end"><button type="button" onClick={() => setCariModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button><button type="submit" className="px-5 py-2 text-sm bg-[#6c63ff] text-white rounded-lg">{editCari ? 'Guncelle' : 'Kaydet'}</button></div>
+          <div className="flex gap-2 justify-end"><button type="button" onClick={() => setCariModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button><button type="submit" className="px-5 py-2 text-sm bg-[#1F9D57] text-white rounded-lg">{editCari ? 'Guncelle' : 'Kaydet'}</button></div>
         </form>
       </Modal>
 
@@ -704,7 +717,7 @@ export default function CariHesaplar() {
           </div>
           <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Tutar</label><MoneyInput value={hareketForm.tutar} onChange={v => setHareketForm({...hareketForm, tutar: v})} required className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none" /></div>
           <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Aciklama</label><input required value={hareketForm.aciklama} onChange={e => setHareketForm({...hareketForm, aciklama: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none" /></div>
-          <div className="flex gap-2 justify-end"><button type="button" onClick={() => setHareketModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button><button type="submit" className="px-5 py-2 text-sm bg-[#6c63ff] text-white rounded-lg">Kaydet</button></div>
+          <div className="flex gap-2 justify-end"><button type="button" onClick={() => setHareketModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button><button type="submit" className="px-5 py-2 text-sm bg-[#1F9D57] text-white rounded-lg">Kaydet</button></div>
         </form>
       </Modal>
 
@@ -712,7 +725,7 @@ export default function CariHesaplar() {
         <form onSubmit={handleHizliSubmit} className="space-y-3">
           <div>
             <label className="block text-[10px] font-medium text-gray-600 mb-1">Cari Sec</label>
-            <select required value={hizliSelectedCariId} onChange={e => setHizliSelectedCariId(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#6c63ff]/30">
+            <select required value={hizliSelectedCariId} onChange={e => setHizliSelectedCariId(e.target.value)} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-[#1F9D57]/30">
               <option value="">— Cari seciniz —</option>
               {cariHesaplar.map(c => (<option key={c.id} value={c.id}>{c.ad}</option>))}
             </select>
@@ -723,7 +736,7 @@ export default function CariHesaplar() {
           </div>
           <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Tutar</label><MoneyInput value={hizliForm.tutar} onChange={v => setHizliForm({...hizliForm, tutar: v})} required className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none" /></div>
           <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Aciklama</label><input required value={hizliForm.aciklama} onChange={e => setHizliForm({...hizliForm, aciklama: e.target.value})} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none" /></div>
-          <div className="flex gap-2 justify-end"><button type="button" onClick={() => setHizliModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button><button type="submit" className="px-5 py-2 text-sm bg-[#6c63ff] text-white rounded-lg">Kaydet</button></div>
+          <div className="flex gap-2 justify-end"><button type="button" onClick={() => setHizliModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button><button type="submit" className="px-5 py-2 text-sm bg-[#1F9D57] text-white rounded-lg">Kaydet</button></div>
         </form>
       </Modal>
 
@@ -756,7 +769,7 @@ export default function CariHesaplar() {
             </div>
 
             <div className="flex items-center gap-2 pt-1 border-t border-gray-100">
-              <button onClick={() => { const c = rowActionCari; setRowActionCari(null); setSelectedCari(c); setDetailTab('dokum'); setDetailOpen(true); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium bg-violet-50 text-violet-600 rounded-lg hover:bg-violet-100"><Eye size={13} /> Detay</button>
+              <button onClick={() => { const c = rowActionCari; setRowActionCari(null); setSelectedCari(c); setDetailTab('dokum'); setDetailOpen(true); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium bg-green-50 text-green-600 rounded-lg hover:bg-green-100"><Eye size={13} /> Detay</button>
               <button onClick={() => exportPDF(rowActionCari)} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100"><FileText size={13} /> PDF</button>
               <button onClick={() => { const c = rowActionCari; setRowActionCari(null); openCariModal(c); }} className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200"><Edit2 size={13} /> Duzenle</button>
               <button onClick={() => { const id = rowActionCari.id; setRowActionCari(null); setDeleteId(id); }} className="flex items-center justify-center gap-1.5 px-3 py-2 text-[11px] font-medium bg-red-50 text-red-600 rounded-lg hover:bg-red-100"><Trash2 size={13} /></button>

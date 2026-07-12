@@ -26,7 +26,7 @@ export default function UyeOl() {
   };
 
   // Kayıt sonrası açılacak WhatsApp linki (kaydolan IG kullanıcı adı + telefon ile)
-  const WA_NUMARA = '905334413472';
+  const WA_NUMARA = '905323093472';
   const waUrl = () => `https://wa.me/${WA_NUMARA}?text=${encodeURIComponent(`Kayıt oldum ✅\nInstagram: @${form.instagram}\nTelefon: ${form.telefon}`)}`;
 
   // Instagram kullanıcı adı: küçük harf, Türkçe karakter yok, @ yok, sadece a-z 0-9 . _
@@ -100,13 +100,13 @@ export default function UyeOl() {
   );
 
   const inputCls = (field: string) =>
-    `w-full px-4 py-2.5 border rounded-lg outline-none transition-colors ${errField === field ? 'border-red-400 ring-2 ring-red-100 bg-red-50/40' : 'border-slate-200 focus:border-indigo-400'}`;
+    `w-full px-4 py-2.5 border rounded-lg outline-none transition-colors ${errField === field ? 'border-red-400 ring-2 ring-red-100 bg-red-50/40' : 'border-slate-200 focus:border-emerald-400'}`;
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-600 to-purple-700 p-4">
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-emerald-600 to-emerald-700 p-4">
       <form onSubmit={step === 'form' ? kodGonder : uyeOl} className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-8 space-y-4">
         <div className="text-center">
-          <div className="w-14 h-14 rounded-2xl bg-indigo-100 flex items-center justify-center mx-auto mb-3"><UserPlus className="text-indigo-600" size={26} /></div>
+          <div className="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center mx-auto mb-3"><UserPlus className="text-emerald-600" size={26} /></div>
           <h1 className="text-xl font-bold text-slate-800">Üyelik Formu</h1>
           <p className="text-sm text-slate-400 mt-1">Bilgilerinizi bırakın, canlı yayın siparişleriniz hızlıca onaylansın.</p>
         </div>
@@ -155,7 +155,7 @@ export default function UyeOl() {
                 type="button"
                 disabled={step === 'kod'}
                 onClick={() => set('cinsiyet', c)}
-                className={`py-2.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-60 ${form.cinsiyet === c ? 'bg-indigo-600 text-white border-indigo-600' : (errField === 'cinsiyet' ? 'border-red-400 bg-red-50/40 text-slate-600' : 'border-slate-200 text-slate-600 hover:border-indigo-400')}`}
+                className={`py-2.5 rounded-lg border text-sm font-medium transition-colors disabled:opacity-60 ${form.cinsiyet === c ? 'bg-emerald-600 text-white border-emerald-600' : (errField === 'cinsiyet' ? 'border-red-400 bg-red-50/40 text-slate-600' : 'border-slate-200 text-slate-600 hover:border-emerald-400')}`}
               >
                 {c}
               </button>
@@ -177,14 +177,14 @@ export default function UyeOl() {
             {errField === 'kod' && <p className="flex items-center gap-1 text-[12px] text-red-600 mt-1"><AlertCircle size={13} /> {err}</p>}
             <div className="flex items-center justify-between mt-2">
               <button type="button" onClick={() => { setStep('form'); setForm((f) => ({ ...f, kod: '' })); setErr(''); setErrField(''); setInfo(''); }} className="text-[12px] text-slate-500 hover:text-slate-700">Bilgileri düzenle</button>
-              <button type="button" disabled={busy || bekle > 0} onClick={() => kodGonder()} className="text-[12px] text-indigo-600 font-medium disabled:text-slate-400">
+              <button type="button" disabled={busy || bekle > 0} onClick={() => kodGonder()} className="text-[12px] text-emerald-600 font-medium disabled:text-slate-400">
                 {bekle > 0 ? `Tekrar gönder (${bekle})` : 'Kodu tekrar gönder'}
               </button>
             </div>
           </div>
         )}
 
-        <button type="submit" disabled={busy} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-60">
+        <button type="submit" disabled={busy} className="w-full bg-emerald-600 text-white py-2.5 rounded-lg font-medium hover:bg-emerald-700 disabled:opacity-60">
           {busy ? (step === 'form' ? 'Kod gönderiliyor...' : 'Doğrulanıyor...') : (step === 'form' ? 'Doğrulama Kodu Gönder' : 'Üye Ol')}
         </button>
       </form>

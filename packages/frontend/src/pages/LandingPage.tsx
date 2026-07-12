@@ -7,7 +7,7 @@ import ImageDropzone from '../components/ImageDropzone';
 import { LANDING_ICON_LIST, landingIcon } from '../lib/landingIcons';
 
 const uid = () => 'b' + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
-const PALETTE = ['#0f172a', '#db2777', '#f97316', '#f59e0b', '#10b981', '#0ea5e9', '#6366f1', '#ef4444', '#7c3aed', '#14b8a6'];
+const PALETTE = ['#0f172a', '#db2777', '#f97316', '#f59e0b', '#10b981', '#0ea5e9', '#0F7C45', '#ef4444', '#22A95C', '#14b8a6'];
 
 const DEFAULT_BUTTONS = [
   { id: 'b1', label: 'WHATSAPP KAYIT', url: '', icon: 'phone', renk: '#db2777' },

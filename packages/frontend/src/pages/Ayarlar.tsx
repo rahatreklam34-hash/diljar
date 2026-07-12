@@ -1,5 +1,8 @@
 import { useState } from 'react';
+import toast from 'react-hot-toast';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
+import { apiErrorMessage } from '../lib/api';
 import { paraCinsleri, ParaCinsi } from '../types';
 import {
   User, Mail, Globe, Palette, Database,
@@ -14,26 +17,59 @@ interface AyarlarState {
   tema: 'light' | 'dark';
 }
 
-function loadAyarlar(): AyarlarState {
-  try {
-    const s = localStorage.getItem('ayarlar');
-    if (s) return JSON.parse(s);
-  } catch { /* empty */ }
-  return { ad: 'Ahmet Yilmaz', email: 'admin@firmam.com', firma: 'Firmam A.S.', defaultParaCinsi: 'TRY', tema: 'light' };
-}
-
 export default function Ayarlar() {
   const { cariHesaplar, hareketler, kasaBanka, cekler, personeller } = useApp();
+  const { user, updateProfile, updatePrefs } = useAuth();
   const [activeTab, setActiveTab] = useState<'profil' | 'genel' | 'veri' | 'tema'>('profil');
-  const [ayarlar, setAyarlar] = useState<AyarlarState>(loadAyarlar);
+  // Profil: backend'deki User (ad/e-posta), firma: tenant adi (salt-okunur gosterim)
+  // Tercihler (para birimi/tema): User.prefs.ayarlar altinda saklanir.
+  const initialAyarlar: AyarlarState = {
+    ad: user?.fullName || '',
+    email: user?.email || '',
+    firma: user?.tenant?.name || '',
+    defaultParaCinsi: (user?.prefs?.ayarlar?.defaultParaCinsi as ParaCinsi) || 'TRY',
+    tema: (user?.prefs?.ayarlar?.tema as 'light' | 'dark') || 'light',
+  };
+  const [ayarlar, setAyarlar] = useState<AyarlarState>(initialAyarlar);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [clearConfirm, setClearConfirm] = useState(false);
   const [exportDone, setExportDone] = useState(false);
 
-  const saveAyarlar = () => {
-    localStorage.setItem('ayarlar', JSON.stringify(ayarlar));
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  // Profil bilgilerini backend'e kaydeder (ProfileModal ile ayni PATCH /auth/me/profile).
+  // Not: e-posta/sifre degisikligi guvenlik icin ProfileModal uzerinden yapilir.
+  const saveProfil = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const body: { fullName?: string } = {};
+      if (ayarlar.ad.trim() && ayarlar.ad.trim() !== user?.fullName) body.fullName = ayarlar.ad.trim();
+      if (!Object.keys(body).length) { toast('Degisiklik yok'); setSaving(false); return; }
+      await updateProfile(body);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      toast.success('Profil guncellendi');
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    } finally { setSaving(false); }
+  };
+
+  // Tercihleri (para birimi / tema) backend'e kaydeder (PATCH /auth/me/prefs).
+  const savePrefs = async () => {
+    if (saving) return;
+    setSaving(true);
+    try {
+      const nextPrefs = {
+        ...(user?.prefs || {}),
+        ayarlar: { defaultParaCinsi: ayarlar.defaultParaCinsi, tema: ayarlar.tema },
+      };
+      await updatePrefs(nextPrefs);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      toast.success('Ayarlar kaydedildi');
+    } catch (err) {
+      toast.error(apiErrorMessage(err));
+    } finally { setSaving(false); }
   };
 
   const exportData = () => {
@@ -95,7 +131,7 @@ export default function Ayarlar() {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-left ${activeTab === tab.id ? 'bg-[#6c63ff] text-white shadow-md shadow-[#6c63ff]/20' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'}`}
+                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-left ${activeTab === tab.id ? 'bg-[#1F9D57] text-white shadow-md shadow-[#1F9D57]/20' : 'text-gray-600 hover:bg-gray-50 hover:text-gray-800'}`}
                 >
                   <tab.icon size={17} className="shrink-0" />
                   {tab.label}
@@ -117,13 +153,13 @@ export default function Ayarlar() {
               <div className="p-6 space-y-5">
                 {/* Avatar */}
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-[#6c63ff] to-purple-500 rounded-2xl flex items-center justify-center text-2xl font-bold text-white">
+                  <div className="w-16 h-16 bg-gradient-to-br from-[#22A95C] to-[#0F7C45] rounded-2xl flex items-center justify-center text-2xl font-bold text-white">
                     {(ayarlar.ad[0] || 'A').toUpperCase()}
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-gray-800">{ayarlar.ad || 'Kullanici'}</p>
                     <p className="text-xs text-gray-400">{ayarlar.email || '-'}</p>
-                    <p className="text-xs text-[#6c63ff] mt-0.5">Yonetici</p>
+                    <p className="text-xs text-[#1F9D57] mt-0.5">Yonetici</p>
                   </div>
                 </div>
 
@@ -137,7 +173,7 @@ export default function Ayarlar() {
                       value={ayarlar.ad}
                       onChange={e => setAyarlar({ ...ayarlar, ad: e.target.value })}
                       placeholder="Adinizi girin"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#6c63ff]/20 focus:border-[#6c63ff] outline-none transition-all"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#1F9D57]/20 focus:border-[#1F9D57] outline-none transition-all"
                     />
                   </div>
                   <div>
@@ -147,10 +183,11 @@ export default function Ayarlar() {
                     <input
                       type="email"
                       value={ayarlar.email}
-                      onChange={e => setAyarlar({ ...ayarlar, email: e.target.value })}
+                      readOnly
                       placeholder="e-posta@firma.com"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#6c63ff]/20 focus:border-[#6c63ff] outline-none transition-all"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-500 outline-none"
                     />
+                    <p className="text-[11px] text-gray-400 mt-1">E-posta ve sifre degisikligi ust menudeki "Profilim" penceresinden yapilir.</p>
                   </div>
                   <div className="sm:col-span-2">
                     <label className="flex items-center gap-2 text-sm font-medium text-gray-700 mb-1.5">
@@ -159,17 +196,18 @@ export default function Ayarlar() {
                     <input
                       type="text"
                       value={ayarlar.firma}
-                      onChange={e => setAyarlar({ ...ayarlar, firma: e.target.value })}
-                      placeholder="Firma adinizi girin"
-                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-[#6c63ff]/20 focus:border-[#6c63ff] outline-none transition-all"
+                      readOnly
+                      placeholder="Firma adiniz"
+                      className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm bg-gray-50 text-gray-500 outline-none"
                     />
                   </div>
                 </div>
 
                 <div className="flex justify-end pt-2">
                   <button
-                    onClick={saveAyarlar}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-lg ${saved ? 'bg-green-500 shadow-green-500/25 text-white' : 'bg-[#6c63ff] shadow-[#6c63ff]/25 text-white hover:bg-[#5b54e6]'}`}
+                    onClick={saveProfil}
+                    disabled={saving}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-lg disabled:opacity-60 ${saved ? 'bg-green-500 shadow-green-500/25 text-white' : 'bg-[#1F9D57] shadow-[#1F9D57]/25 text-white hover:bg-[#178A49]'}`}
                   >
                     {saved ? <><Check size={16} /> Kaydedildi</> : <><Save size={16} /> Degisiklikleri Kaydet</>}
                   </button>
@@ -194,7 +232,7 @@ export default function Ayarlar() {
                       <button
                         key={pc.value}
                         onClick={() => setAyarlar({ ...ayarlar, defaultParaCinsi: pc.value })}
-                        className={`flex flex-col items-center gap-1 p-4 rounded-xl border-2 transition-all ${ayarlar.defaultParaCinsi === pc.value ? 'border-[#6c63ff] bg-[#6c63ff]/5 text-[#6c63ff]' : 'border-gray-200 hover:border-gray-300 text-gray-600'}`}
+                        className={`flex flex-col items-center gap-1 p-4 rounded-xl border-2 transition-all ${ayarlar.defaultParaCinsi === pc.value ? 'border-[#1F9D57] bg-[#1F9D57]/5 text-[#1F9D57]' : 'border-gray-200 hover:border-gray-300 text-gray-600'}`}
                       >
                         <span className="text-xl font-bold">{pc.symbol}</span>
                         <span className="text-xs font-medium">{pc.value}</span>
@@ -224,8 +262,9 @@ export default function Ayarlar() {
 
                 <div className="flex justify-end pt-2">
                   <button
-                    onClick={saveAyarlar}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-lg ${saved ? 'bg-green-500 shadow-green-500/25 text-white' : 'bg-[#6c63ff] shadow-[#6c63ff]/25 text-white hover:bg-[#5b54e6]'}`}
+                    onClick={savePrefs}
+                    disabled={saving}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-lg disabled:opacity-60 ${saved ? 'bg-green-500 shadow-green-500/25 text-white' : 'bg-[#1F9D57] shadow-[#1F9D57]/25 text-white hover:bg-[#178A49]'}`}
                   >
                     {saved ? <><Check size={16} /> Kaydedildi</> : <><Save size={16} /> Kaydet</>}
                   </button>
@@ -278,7 +317,7 @@ export default function Ayarlar() {
                   </div>
                   <button
                     onClick={exportData}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-lg ${exportDone ? 'bg-green-500 shadow-green-500/25 text-white' : 'bg-[#6c63ff] shadow-[#6c63ff]/25 text-white hover:bg-[#5b54e6]'}`}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-lg ${exportDone ? 'bg-green-500 shadow-green-500/25 text-white' : 'bg-[#1F9D57] shadow-[#1F9D57]/25 text-white hover:bg-[#178A49]'}`}
                   >
                     {exportDone ? <><Check size={16} /> Indirildi!</> : <><Download size={16} /> Veriyi Indir (JSON)</>}
                   </button>
@@ -365,7 +404,7 @@ export default function Ayarlar() {
                       <button
                         key={theme.value}
                         onClick={() => setAyarlar({ ...ayarlar, tema: theme.value })}
-                        className={`p-3 rounded-xl border-2 transition-all text-left ${ayarlar.tema === theme.value ? 'border-[#6c63ff] bg-[#6c63ff]/5' : 'border-gray-200 hover:border-gray-300'}`}
+                        className={`p-3 rounded-xl border-2 transition-all text-left ${ayarlar.tema === theme.value ? 'border-[#1F9D57] bg-[#1F9D57]/5' : 'border-gray-200 hover:border-gray-300'}`}
                       >
                         {theme.preview}
                         <p className="text-xs font-medium text-gray-700 mt-2 text-center">{theme.label}</p>
@@ -375,32 +414,11 @@ export default function Ayarlar() {
                   </div>
                 </div>
 
-                <div className="border-t border-gray-100 pt-5">
-                  <label className="block text-sm font-medium text-gray-700 mb-3">Vurgu Rengi</label>
-                  <div className="flex flex-wrap gap-3">
-                    {[
-                      { color: '#6c63ff', label: 'Mor (Varsayilan)' },
-                      { color: '#3b82f6', label: 'Mavi' },
-                      { color: '#10b981', label: 'Yesil' },
-                      { color: '#f59e0b', label: 'Turuncu' },
-                      { color: '#ec4899', label: 'Pembe' },
-                    ].map(item => (
-                      <button
-                        key={item.color}
-                        title={item.label}
-                        className="w-8 h-8 rounded-full ring-2 ring-offset-2 ring-transparent hover:ring-gray-300 transition-all"
-                        style={{ backgroundColor: item.color }}
-                        onClick={() => {/* placeholder */}}
-                      />
-                    ))}
-                  </div>
-                  <p className="text-xs text-gray-400 mt-2">Vurgu rengi ozellestirmesi yakin zamanda eklenecektir.</p>
-                </div>
-
                 <div className="flex justify-end pt-2">
                   <button
-                    onClick={saveAyarlar}
-                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-lg ${saved ? 'bg-green-500 shadow-green-500/25 text-white' : 'bg-[#6c63ff] shadow-[#6c63ff]/25 text-white hover:bg-[#5b54e6]'}`}
+                    onClick={savePrefs}
+                    disabled={saving}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium transition-all shadow-lg disabled:opacity-60 ${saved ? 'bg-green-500 shadow-green-500/25 text-white' : 'bg-[#1F9D57] shadow-[#1F9D57]/25 text-white hover:bg-[#178A49]'}`}
                   >
                     {saved ? <><Check size={16} /> Kaydedildi</> : <><Save size={16} /> Kaydet</>}
                   </button>

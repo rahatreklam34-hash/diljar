@@ -43,10 +43,32 @@ function pushFeed(streamId: string, item: FbFeedItem) {
 
 // ── Sipariş ayıklama yardımcıları ──
 
-// Mesajı tokenlara böl (küçük harf, noktalama temizle)
+// Türkçe-güvenli BÜYÜK harf: tüm I-ailesini (i, ı, İ, I) ASCII 'I'ya katlar.
+// JS toLowerCase/toUpperCase, Türkçe 'İ' için birleştirici nokta (U+0307) üretip
+// satış kodu eşleşmesini bozuyordu. Kod eşleştirmede büyük/küçük + TR karakter farkı yok sayılır.
+const trUpper = (s: any): string => String(s ?? '')
+  .replace(/[ıİiI]/g, 'I')
+  .replace(/[şŞ]/g, 'S')
+  .replace(/[çÇ]/g, 'C')
+  .replace(/[ğĞ]/g, 'G')
+  .replace(/[öÖ]/g, 'O')
+  .replace(/[üÜ]/g, 'U')
+  .toUpperCase()
+  .trim();
+
+// Türkçe-güvenli küçük harf (niyet kelimeleri için ASCII'ye katlar)
+const asciiLower = (s: any): string => String(s ?? '')
+  .replace(/[ıİiI]/g, 'i')
+  .replace(/[şŞ]/g, 's')
+  .replace(/[çÇ]/g, 'c')
+  .replace(/[ğĞ]/g, 'g')
+  .replace(/[öÖ]/g, 'o')
+  .replace(/[üÜ]/g, 'u')
+  .toLowerCase();
+
+// Mesajı tokenlara böl (ham — büyük/küçük dönüşümü çağıran yerde yapılır)
 function tokenize(msg: string): string[] {
   return String(msg || '')
-    .toLowerCase()
     .split(/[\s,.;:!?()\[\]\/\\"'+]+/)
     .map((x) => x.trim())
     .filter(Boolean);
@@ -66,7 +88,7 @@ function hasBuyIntent(tokens: string[]): boolean {
 // Bedeni, kod indexine yakınlık (token mesafesi) içinde ara; en yakını döner
 function findBedenNear(upperTokens: string[], degerler: string[], codeIdx: number, maxDist: number): string | null {
   if (!degerler.length) return null;
-  const set = degerler.map((d) => String(d).toUpperCase());
+  const set = degerler.map((d) => trUpper(d));
   let best: string | null = null;
   let bestDist = Infinity;
   for (let j = 0; j < upperTokens.length; j++) {
@@ -90,8 +112,8 @@ const MAX_BEDEN_DIST = 3; // kod ile beden arası izinli token mesafesi
 async function resolveFromMessage(tenantId: string, text: string): Promise<any | null> {
   const tokens = tokenize(text);
   if (!tokens.length) return null;
-  const upper = tokens.map((x) => x.toUpperCase());
-  const intent = hasBuyIntent(tokens);
+  const upper = tokens.map((x) => trUpper(x));
+  const intent = hasBuyIntent(tokens.map((x) => asciiLower(x)));
 
   const [products, frees] = await Promise.all([
     prisma.product.findMany({
@@ -107,9 +129,8 @@ async function resolveFromMessage(tenantId: string, text: string): Promise<any |
   // 1) Doğrudan varyasyon barkodu (operatör/okutma) — tek güçlü sinyal, filtreye takılmaz
   for (const p of products) {
     for (const v of p.variations || []) {
-      if (v.barkod && upper.includes(String(v.barkod).toUpperCase())) {
-        if ((v.stok ?? 0) <= 0) continue; // stok yok
-        return { productId: p.id, variation: v.deger, beden: v.deger, urun: p.ad, kod: v.barkod };
+      if (v.barkod && upper.includes(trUpper(v.barkod))) {
+        return { productId: p.id, variation: v.deger, beden: v.deger, urun: p.ad, kod: v.barkod, stokYetersiz: (v.stok ?? 0) <= 0 };
       }
     }
   }
@@ -119,7 +140,7 @@ async function resolveFromMessage(tenantId: string, text: string): Promise<any |
     const code = upper[i];
     if (code.length < 2) continue;
 
-    const p = products.find((pp) => (pp.salesCode || '').toUpperCase() === code || (pp.barkod || '').toUpperCase() === code);
+    const p = products.find((pp) => (pp.salesCode && trUpper(pp.salesCode) === code) || (pp.barkod && trUpper(pp.barkod) === code));
     if (p) {
       const varList = (p.variations || []);
       const degerler = varList.map((v) => v.deger);
@@ -129,17 +150,15 @@ async function resolveFromMessage(tenantId: string, text: string): Promise<any |
         const beden = findBedenNear(upper, degerler, i, MAX_BEDEN_DIST);
         if (!beden) continue; // beden yok → sipariş açılmaz
         const vobj = varList.find((v) => v.deger === beden);
-        if (vobj && (vobj.stok ?? 0) <= 0) continue; // stok yok
-        return { productId: p.id, variation: beden, beden, urun: p.ad, kod: p.salesCode || code };
+        return { productId: p.id, variation: beden, beden, urun: p.ad, kod: p.salesCode || code, stokYetersiz: !!vobj && (vobj.stok ?? 0) <= 0 };
       }
       // VARYASYONSUZ: niyet yoksa kısa/net mesaj zorunlu
       if (tokens.length > (intent ? MAX_TOKENS_INTENT : MAX_TOKENS_NONVAR)) continue;
-      if ((p.stokAdeti ?? 0) <= 0) continue; // stok yok
-      return { productId: p.id, variation: null, beden: null, urun: p.ad, kod: p.salesCode || code };
+      return { productId: p.id, variation: null, beden: null, urun: p.ad, kod: p.salesCode || code, stokYetersiz: (p.stokAdeti ?? 0) <= 0 };
     }
 
     // Tedarikçi (drop) ürün satış kodu — aynı kurallar
-    const fp = frees.find((ff) => (ff.salesCode || '').toUpperCase() === code);
+    const fp = frees.find((ff) => ff.salesCode && trUpper(ff.salesCode) === code);
     if (fp) {
       const vars = Array.isArray(fp.variations) ? (fp.variations as any[]).map((v) => v.deger) : [];
       if (vars.length > 0) {
@@ -198,7 +217,7 @@ async function pollStream(s: { id: string; tenantId: string; fbVideoId: string |
     const resolved = await resolveFromMessage(s.tenantId, message);
     if (resolved) {
       try {
-        const lo = await placeLiveOrder(s.tenantId, { streamId: s.id, user: name, commentId: cid, ...resolved });
+        const lo = await placeLiveOrder(s.tenantId, { streamId: s.id, user: name, commentId: cid, saticiAd: (s as any).activeSatici || null, ...resolved });
         matched = true;
         urun = (lo as any)?.urun || resolved.urun || '';
       } catch (e: any) {
@@ -228,7 +247,7 @@ export async function pollFacebookComments() {
   try {
     const streams = await prisma.liveStream.findMany({
       where: { status: 'active', NOT: { fbVideoId: null } },
-      select: { id: true, tenantId: true, fbVideoId: true, fbToken: true, fbSince: true },
+      select: { id: true, tenantId: true, fbVideoId: true, fbToken: true, fbSince: true, activeSatici: true },
     });
     for (const s of streams) {
       await pollStream(s).catch((e) => console.error('[fb] poll', e?.message));
@@ -312,7 +331,7 @@ async function pollIgStream(s: { id: string; tenantId: string; igUserId: string 
     const resolved = await resolveFromMessage(s.tenantId, message);
     if (resolved) {
       try {
-        const lo = await placeLiveOrder(s.tenantId, { streamId: s.id, user: name, commentId: cid, ...resolved });
+        const lo = await placeLiveOrder(s.tenantId, { streamId: s.id, user: name, commentId: cid, saticiAd: (s as any).activeSatici || null, ...resolved });
         matched = true;
         urun = (lo as any)?.urun || resolved.urun || '';
       } catch (e: any) {
@@ -340,7 +359,7 @@ export async function pollInstagramComments() {
   try {
     const streams = await prisma.liveStream.findMany({
       where: { status: 'active', NOT: { igUserId: null } },
-      select: { id: true, tenantId: true, igUserId: true, igToken: true, igSince: true },
+      select: { id: true, tenantId: true, igUserId: true, igToken: true, igSince: true, activeSatici: true },
     });
     for (const s of streams) {
       await pollIgStream(s).catch((e) => console.error('[ig] poll', e?.message));

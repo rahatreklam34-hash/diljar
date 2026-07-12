@@ -1,7 +1,7 @@
 // Tedarikçi Portalı — /tedarikci (public, auth gerektirmez)
 // Toptancı: kod+PIN ile giriş → ürün yükle → ürünlerini gör → satışlarını gör (satış fiyatı GİZLİ)
 import { useState, useEffect } from 'react';
-import { Package, X, LogOut, Eye, EyeOff, Upload, BarChart3, Pencil, Trash2, ScanLine, Wallet } from 'lucide-react';
+import { Package, X, LogOut, Eye, EyeOff, Upload, BarChart3, Pencil, Trash2, ScanLine, Wallet, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import axios from 'axios';
 import ImageDropzone from '../components/ImageDropzone';
@@ -38,6 +38,7 @@ export default function TedarikciPortal() {
 
   // Ürünler
   const [products, setProducts] = useState<any[]>([]);
+  const [prodSearch, setProdSearch] = useState('');
   const [sales, setSales] = useState<any[]>([]);
   const [account, setAccount] = useState<any | null>(null);
 
@@ -176,31 +177,46 @@ export default function TedarikciPortal() {
                 <p className="font-medium text-slate-500">Henüz ürün yüklemediniz</p>
                 <button onClick={() => setTab('yukle')} className="mt-3 text-sm text-violet-600 hover:underline">Ürün Yükle →</button>
               </div>
-            ) : products.map((p) => {
-              const vars: any[] = Array.isArray(p.variations) ? p.variations : [];
-              const topStok = vars.reduce((s: number, v: any) => s + (v.stok || 0), 0);
-              const img = Array.isArray(p.images) ? p.images[0] : null;
+            ) : (() => {
+              const q = prodSearch.trim().toLocaleLowerCase('tr');
+              const shown = q ? products.filter((p) => [p.ad, p.salesCode, p.cinsiyet, p.aciklama].some((f) => (f || '').toLocaleLowerCase('tr').includes(q))) : products;
               return (
-                <div key={p.id} className="bg-white rounded-2xl border border-slate-200 p-4 flex items-start gap-3">
-                  {img ? <img src={img} className="w-16 h-16 rounded-xl object-cover shrink-0" /> : <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center shrink-0"><Package size={20} className="text-slate-300" /></div>}
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-800">{p.ad}{p.cinsiyet ? <span className="ml-1.5 text-[10px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full align-middle font-medium">{p.cinsiyet}</span> : null}</p>
-                    <p className="text-xs text-slate-400 mt-0.5">Kod: {p.salesCode || '-'} · Alış: {fmt(p.alisFiyat)} · Toplam Stok: {topStok}</p>
-                    {p.aciklama ? <p className="text-[11px] text-slate-400 mt-0.5 italic line-clamp-2">{p.aciklama}</p> : null}
-                    {vars.length > 0 && (
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {vars.map((v: any, i: number) => <span key={i} className={`text-xs px-2 py-0.5 rounded-lg border ${v.stok > 0 ? 'bg-white border-slate-200 text-slate-600' : 'bg-red-50 border-red-200 text-red-400 line-through'}`}>{v.deger}: {v.stok}</span>)}
+                <>
+                  <div className="relative">
+                    <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input value={prodSearch} onChange={(e) => setProdSearch(e.target.value)} placeholder="Ürün adı veya kod ara..." className="w-full pl-9 pr-9 py-2.5 text-sm border border-slate-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-violet-300" />
+                    {prodSearch && <button onClick={() => setProdSearch('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"><X size={15} /></button>}
+                  </div>
+                  {shown.length === 0 ? (
+                    <div className="bg-white rounded-2xl border border-slate-200 py-12 text-center text-slate-400 text-sm">"{prodSearch}" için ürün bulunamadı.</div>
+                  ) : shown.map((p) => {
+                    const vars: any[] = Array.isArray(p.variations) ? p.variations : [];
+                    const topStok = vars.reduce((s: number, v: any) => s + (v.stok || 0), 0);
+                    const img = Array.isArray(p.images) ? p.images[0] : null;
+                    return (
+                      <div key={p.id} className="bg-white rounded-2xl border border-slate-200 p-4 flex items-start gap-3">
+                        {img ? <img src={img} className="w-16 h-16 rounded-xl object-cover shrink-0" /> : <div className="w-16 h-16 rounded-xl bg-slate-100 flex items-center justify-center shrink-0"><Package size={20} className="text-slate-300" /></div>}
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-slate-800">{p.ad}{p.cinsiyet ? <span className="ml-1.5 text-[10px] bg-violet-100 text-violet-600 px-1.5 py-0.5 rounded-full align-middle font-medium">{p.cinsiyet}</span> : null}</p>
+                          <p className="text-xs text-slate-400 mt-0.5">Kod: {p.salesCode || '-'} · Alış: {fmt(p.alisFiyat)} · Toplam Stok: {topStok}</p>
+                          {p.aciklama ? <p className="text-[11px] text-slate-400 mt-0.5 italic line-clamp-2">{p.aciklama}</p> : null}
+                          {vars.length > 0 && (
+                            <div className="flex flex-wrap gap-1 mt-2">
+                              {vars.map((v: any, i: number) => <span key={i} className={`text-xs px-2 py-0.5 rounded-lg border ${v.stok > 0 ? 'bg-white border-slate-200 text-slate-600' : 'bg-red-50 border-red-200 text-red-400 line-through'}`}>{v.deger}: {v.stok}</span>)}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-1.5 shrink-0">
+                          <button onClick={() => openEdit(p)} title="Düzenle" className="p-1.5 rounded-lg bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 border border-slate-200"><Pencil size={15} /></button>
+                          <button onClick={() => printBarkod([p])} title="Barkod Yazdır" className="p-1.5 rounded-lg bg-slate-50 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 border border-slate-200"><ScanLine size={15} /></button>
+                          <button onClick={() => deleteProd(p)} title="Sil" className="p-1.5 rounded-lg bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-600 border border-slate-200"><Trash2 size={15} /></button>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col gap-1.5 shrink-0">
-                    <button onClick={() => openEdit(p)} title="Düzenle" className="p-1.5 rounded-lg bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 border border-slate-200"><Pencil size={15} /></button>
-                    <button onClick={() => printBarkod([p])} title="Barkod Yazdır" className="p-1.5 rounded-lg bg-slate-50 hover:bg-emerald-50 text-slate-500 hover:text-emerald-600 border border-slate-200"><ScanLine size={15} /></button>
-                    <button onClick={() => deleteProd(p)} title="Sil" className="p-1.5 rounded-lg bg-slate-50 hover:bg-red-50 text-slate-500 hover:text-red-600 border border-slate-200"><Trash2 size={15} /></button>
-                  </div>
-                </div>
+                    );
+                  })}
+                </>
               );
-            })}
+            })()}
           </div>
         )}
 

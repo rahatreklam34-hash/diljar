@@ -99,7 +99,7 @@ const COMMANDS: Command[] = [
     id: 'iade-al',
     label: 'Iade Al',
     description: 'Cari hesaptan iade al',
-    icon: <ArrowLeftRight size={16} className="text-indigo-600" />,
+    icon: <ArrowLeftRight size={16} className="text-emerald-600" />,
     hint: 'Cari Hesaplar',
     action: (nav) => {
       fireQuickAction('pending_cari_action', { tip: 'iade_al', label: 'Iade Al' });
@@ -137,7 +137,7 @@ const COMMANDS: Command[] = [
     id: 'personel-maas',
     label: 'Personel Maas',
     description: 'Personel maas islemleri',
-    icon: <Briefcase size={16} className="text-indigo-600" />,
+    icon: <Briefcase size={16} className="text-emerald-600" />,
     hint: 'Personel',
     action: (nav) => { fireQuickAction('pending_personel_action', { tip: 'maas' }); nav('/personel'); },
   },

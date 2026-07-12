@@ -61,7 +61,7 @@ export default function KasaSatis() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center"><ScanLine className="text-indigo-600" size={22} /></div>
+        <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><ScanLine className="text-emerald-600" size={22} /></div>
         <div><h1 className="text-2xl font-bold text-slate-800">Kasa Satışı</h1><p className="text-sm text-slate-400">Barkod okutarak hızlı mağaza satışı. (Barkodu okutmanız yeterli — tıklamaya/Enter'a gerek yok.)</p></div>
       </div>
 
@@ -75,12 +75,12 @@ export default function KasaSatis() {
                 <button key={p.id} onClick={() => { ekle(p); setQ(''); }} className="w-full flex items-center gap-2.5 p-2.5 hover:bg-slate-50 text-left">
                   <div className="w-10 h-10 rounded-lg bg-slate-100 overflow-hidden shrink-0">{(p.images || [])[0] && <img src={p.images[0]} className="w-full h-full object-cover" />}</div>
                   <div className="flex-1 min-w-0"><p className="text-sm font-medium text-slate-800 truncate">{p.ad}</p><p className="text-[11px] text-slate-400">{p.salesCode ? 'Kod: ' + p.salesCode + ' · ' : ''}{fmt(p.satisFiyat)} · {(p.stokAdeti || 0)} adet</p></div>
-                  <Plus size={16} className="text-indigo-600" />
+                  <Plus size={16} className="text-emerald-600" />
                 </button>
               ))}
             </div>
           )}
-          <div className="rounded-xl bg-indigo-50 border border-indigo-100 p-3 text-sm text-indigo-700 flex items-center gap-2"><ScanLine size={18} /> El terminaliyle barkodu okutun; ürün otomatik sepete eklenir.</div>
+          <div className="rounded-xl bg-emerald-50 border border-emerald-100 p-3 text-sm text-emerald-700 flex items-center gap-2"><ScanLine size={18} /> El terminaliyle barkodu okutun; ürün otomatik sepete eklenir.</div>
         </div>
 
         {/* Sepet / ödeme */}
@@ -103,7 +103,7 @@ export default function KasaSatis() {
             <label className="block text-[11px] text-slate-400 mb-1">Ödeme Şekli</label>
             <div className="grid grid-cols-3 gap-1.5 mb-3">
               {[{ k: 'Nakit', i: Banknote }, { k: 'K.Kartı', i: CreditCard }, { k: 'Havale', i: Building2 }].map(({ k, i: Ic }) => (
-                <button key={k} onClick={() => setOdeme(k)} className={`flex flex-col items-center gap-1 py-2 rounded-lg border text-xs ${odeme === k ? 'border-indigo-500 bg-indigo-50 text-indigo-700 font-medium' : 'border-slate-200 text-slate-500'}`}><Ic size={16} />{k}</button>
+                <button key={k} onClick={() => setOdeme(k)} className={`flex flex-col items-center gap-1 py-2 rounded-lg border text-xs ${odeme === k ? 'border-emerald-500 bg-emerald-50 text-emerald-700 font-medium' : 'border-slate-200 text-slate-500'}`}><Ic size={16} />{k}</button>
               ))}
             </div>
             <div className="flex items-center justify-between mb-3"><span className="text-slate-500">Toplam</span><span className="text-2xl font-extrabold text-slate-900">{fmt(toplam)}</span></div>
@@ -118,7 +118,7 @@ export default function KasaSatis() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setVarModal(null)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-white rounded-2xl p-5">
             <div className="flex items-center justify-between mb-3"><h3 className="font-bold text-slate-800">{varModal.ad} — Beden seç</h3><button onClick={() => setVarModal(null)}><X size={20} className="text-slate-400" /></button></div>
-            <div className="flex flex-wrap gap-2">{(varModal.variations || []).map((v: any) => <button key={v.deger} disabled={v.stok <= 0} onClick={() => { ekle(varModal, v.deger); setVarModal(null); }} className={`px-3.5 py-2 rounded-xl border text-sm ${v.stok <= 0 ? 'border-slate-200 text-slate-300 line-through' : 'border-slate-200 text-slate-700 hover:bg-indigo-50'}`}>{v.deger} <span className="text-[10px] text-slate-400">({v.stok})</span></button>)}</div>
+            <div className="flex flex-wrap gap-2">{(varModal.variations || []).map((v: any) => <button key={v.deger} disabled={v.stok <= 0} onClick={() => { ekle(varModal, v.deger); setVarModal(null); }} className={`px-3.5 py-2 rounded-xl border text-sm ${v.stok <= 0 ? 'border-slate-200 text-slate-300 line-through' : 'border-slate-200 text-slate-700 hover:bg-emerald-50'}`}>{v.deger} <span className="text-[10px] text-slate-400">({v.stok})</span></button>)}</div>
           </div>
         </div>
       )}

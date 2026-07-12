@@ -1,9 +1,9 @@
 import {
   LayoutDashboard, Users, FileText, TrendingUp, Landmark, RefreshCw,
-  Package, PackagePlus, Layers, Tag, Hash, Radio, ScanLine, Award,
+  Package, PackagePlus, Layers, Tag, Hash, Radio, ScanLine, Award, Bookmark,
   UserCheck, Megaphone, Store, Bot, LifeBuoy, ShoppingBag, Calendar,
   BarChart3, Target, ClipboardList, FolderOpen, Bell, Plug, UserCog,
-  MessageSquare, Settings, Banknote, Activity, LayoutTemplate,
+  MessageSquare, Settings, Banknote, Activity, LayoutTemplate, MessageCircle, DownloadCloud, Truck, Send, Clock, Network,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -50,6 +50,8 @@ export const navGroups: MenuGroup[] = [
       { to: '/landing-page', icon: LayoutTemplate, label: 'Landing Page' },
       { to: '/canli-akis', icon: Activity, label: 'Canli Akisi Izle' },
       { to: '/satici-performans', icon: Award, label: 'Satici Performansi' },
+      { to: '/satislar/iade-degisim', icon: RefreshCw, label: 'Iade ve Degisim' },
+      { to: '/siparis-talepleri', icon: FileText, label: 'Siparis Talepleri' },
     ],
   },
   {
@@ -68,6 +70,12 @@ export const navGroups: MenuGroup[] = [
     ],
   },
   {
+    title: 'Raporlamalar',
+    items: [
+      { to: '/raporlar/kargo-islemleri', icon: Truck, label: 'Kargo Islemleri' },
+    ],
+  },
+  {
     title: 'Musteriler',
     items: [
       { to: '/musterilerim', icon: Users, label: 'Musterilerim' },
@@ -82,7 +90,18 @@ export const navGroups: MenuGroup[] = [
       { to: '/depo/toplu-urun', icon: Layers, label: 'Toplu Urun Ekle' },
       { to: '/depo/varyasyonlar', icon: Layers, label: 'Varyasyonlarim' },
       { to: '/depo/kategoriler', icon: Tag, label: 'Urun Kategorileri' },
+      { to: '/depo/markalar', icon: Bookmark, label: 'Markalar' },
       { to: '/depo/satis-kodu', icon: Hash, label: 'Satis Kodu Havuzu' },
+      { to: '/depo/urun-ice-aktar', icon: DownloadCloud, label: 'Urun Ice Aktar' },
+      { to: '/depo/stok-hareketleri', icon: ClipboardList, label: 'Stok Hareketleri' },
+    ],
+  },
+  {
+    title: 'WhatsApp',
+    items: [
+      { to: '/whatsapp', icon: MessageCircle, label: 'WhatsApp Paneli' },
+      { to: '/whatsapp/toplu-mesaj', icon: Send, label: 'Toplu Mesaj' },
+      { to: '/whatsapp/ayarlar', icon: Settings, label: 'Panel Ayarlari' },
     ],
   },
   {
@@ -92,6 +111,22 @@ export const navGroups: MenuGroup[] = [
       { to: '/musteri-davranislari', icon: UserCheck, label: 'Musteri Davranislari' },
       { to: '/asistan', icon: Bot, label: 'Yapay Zeka Asistani' },
       { to: '/asistan-satislari', icon: Bot, label: 'Asistan Satislari' },
+      { to: '/etkilesim-agi', icon: Network, label: 'Etkilesim Agi' },
+      { to: '/ig-oto-yanit', icon: MessageCircle, label: 'Instagram Oto-Yanit' },
+    ],
+  },
+  {
+    title: 'KATALOG YÖNETİMİ',
+    items: [
+      { to: '/katalog-yonetimi', icon: FolderOpen, label: 'Kataloglarim' },
+      { to: '/zamanlayici-bildirim', icon: Clock, label: 'Zamanlayici & Bildirim' },
+    ],
+  },
+  {
+    title: 'Fatura',
+    items: [
+      { to: '/fatura', icon: FileText, label: 'Faturalarim' },
+      { to: '/fatura/ayarlar', icon: Settings, label: 'Fatura Ayarlari' },
     ],
   },
   {

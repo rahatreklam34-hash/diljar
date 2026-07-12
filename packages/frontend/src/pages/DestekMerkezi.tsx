@@ -53,13 +53,13 @@ export default function DestekMerkezi() {
     <div className="p-5">
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center"><LifeBuoy className="text-indigo-600" size={22} /></div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><LifeBuoy className="text-emerald-600" size={22} /></div>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Destek Merkezi</h1>
             <p className="text-sm text-slate-400">Sorularınız ve talepleriniz için bizimle iletişime geçin</p>
           </div>
         </div>
-        <button onClick={() => setNewOpen(true)} className="inline-flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700">
+        <button onClick={() => setNewOpen(true)} className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-emerald-700">
           <Plus size={18} /> Yeni Talep
         </button>
       </div>
@@ -67,7 +67,7 @@ export default function DestekMerkezi() {
       <div className="grid gap-3">
         {tickets.length === 0 && <div className="text-center text-slate-400 py-16 bg-white rounded-xl border border-slate-200">Henüz destek talebiniz yok.</div>}
         {tickets.map((t) => (
-          <button key={t.id} onClick={() => openTicket(t.id)} className="text-left bg-white rounded-xl border border-slate-200 p-4 hover:border-indigo-300 transition-colors">
+          <button key={t.id} onClick={() => openTicket(t.id)} className="text-left bg-white rounded-xl border border-slate-200 p-4 hover:border-emerald-300 transition-colors">
             <div className="flex items-center justify-between">
               <span className="font-medium text-slate-800">{t.subject}</span>
               <span className={`text-xs px-2 py-0.5 rounded-full ${STATUS_BADGE[t.status]}`}>{STATUS_TR[t.status]}</span>
@@ -92,7 +92,7 @@ export default function DestekMerkezi() {
               </select>
             </div>
             <textarea required placeholder="Mesajınız" rows={4} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} className="w-full px-4 py-2.5 border border-slate-200 rounded-lg" />
-            <button type="submit" className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700">Gönder</button>
+            <button type="submit" className="w-full bg-emerald-600 text-white py-2.5 rounded-lg font-medium hover:bg-emerald-700">Gönder</button>
           </form>
         </div>
       )}
@@ -108,9 +108,9 @@ export default function DestekMerkezi() {
             <div className="flex-1 overflow-y-auto space-y-3 py-2">
               {active.messages?.map((m) => (
                 <div key={m.id} className={`flex ${m.isAdmin ? 'justify-start' : 'justify-end'}`}>
-                  <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${m.isAdmin ? 'bg-slate-100 text-slate-700' : 'bg-indigo-600 text-white'}`}>
+                  <div className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${m.isAdmin ? 'bg-slate-100 text-slate-700' : 'bg-emerald-600 text-white'}`}>
                     <p>{m.content}</p>
-                    <p className={`text-[10px] mt-1 ${m.isAdmin ? 'text-slate-400' : 'text-indigo-200'}`}>{m.isAdmin ? 'Destek' : 'Siz'} • {new Date(m.createdAt).toLocaleString('tr-TR')}</p>
+                    <p className={`text-[10px] mt-1 ${m.isAdmin ? 'text-slate-400' : 'text-emerald-200'}`}>{m.isAdmin ? 'Destek' : 'Siz'} • {new Date(m.createdAt).toLocaleString('tr-TR')}</p>
                   </div>
                 </div>
               ))}
@@ -118,7 +118,7 @@ export default function DestekMerkezi() {
             {active.status !== 'CLOSED' && (
               <div className="flex gap-2 pt-3 border-t border-slate-100">
                 <input value={reply} onChange={(e) => setReply(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendReply()} placeholder="Yanıt yazın..." className="flex-1 px-4 py-2.5 border border-slate-200 rounded-lg" />
-                <button onClick={sendReply} className="bg-indigo-600 text-white px-4 rounded-lg hover:bg-indigo-700"><Send size={18} /></button>
+                <button onClick={sendReply} className="bg-emerald-600 text-white px-4 rounded-lg hover:bg-emerald-700"><Send size={18} /></button>
               </div>
             )}
           </div>

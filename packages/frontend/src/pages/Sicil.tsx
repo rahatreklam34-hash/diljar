@@ -31,8 +31,8 @@ export default function Sicil() {
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center"><Award className="text-indigo-600" size={22} /></div><div><h1 className="text-2xl font-bold text-slate-800">Personel Sicili & Kalite</h1><p className="text-sm text-slate-400">İade, yanlış beden ve şikayetlere göre kalite puanı. Kim ne hak ediyor görün.</p></div></div>
-        <button onClick={() => { setForm({ satici: sel?.satici || '', tip: 'iade', aciklama: '' }); setModal(true); }} className="inline-flex items-center gap-1.5 bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-medium hover:bg-indigo-700"><Plus size={16} /> Sicil Kaydı Ekle</button>
+        <div className="flex items-center gap-3"><div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><Award className="text-emerald-600" size={22} /></div><div><h1 className="text-2xl font-bold text-slate-800">Personel Sicili & Kalite</h1><p className="text-sm text-slate-400">İade, yanlış beden ve şikayetlere göre kalite puanı. Kim ne hak ediyor görün.</p></div></div>
+        <button onClick={() => { setForm({ satici: sel?.satici || '', tip: 'iade', aciklama: '' }); setModal(true); }} className="inline-flex items-center gap-1.5 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-medium hover:bg-emerald-700"><Plus size={16} /> Sicil Kaydı Ekle</button>
       </div>
 
       <div className="grid lg:grid-cols-[1fr_400px] gap-4 items-start">
@@ -41,7 +41,7 @@ export default function Sicil() {
             <thead className="text-slate-400 text-left text-xs uppercase border-b border-slate-100"><tr><th className="px-4 py-3">Personel/Satıcı</th><th className="px-4 py-3">Satış</th><th className="px-4 py-3">İptal/İade</th><th className="px-4 py-3">Yanlış Beden</th><th className="px-4 py-3">Şikayet</th><th className="px-4 py-3">Kalite Puanı</th></tr></thead>
             <tbody>
               {list.map((s) => (
-                <tr key={s.satici} onClick={() => setSel(s)} className={`border-b border-slate-50 cursor-pointer hover:bg-slate-50 ${sel?.satici === s.satici ? 'bg-indigo-50/50' : ''}`}>
+                <tr key={s.satici} onClick={() => setSel(s)} className={`border-b border-slate-50 cursor-pointer hover:bg-slate-50 ${sel?.satici === s.satici ? 'bg-emerald-50/50' : ''}`}>
                   <td className="px-4 py-3"><p className="font-medium text-slate-800">{s.satici}</p><p className="text-[11px] text-slate-400">{s.unvan || 'Satıcı'}</p></td>
                   <td className="px-4 py-3 text-slate-600">{s.satis}</td>
                   <td className="px-4 py-3 text-red-500">{s.iptal + s.iade}</td>
@@ -88,7 +88,7 @@ export default function Sicil() {
             <div><label className="text-xs text-slate-500">Personel/Satıcı</label>{list.length > 0 ? <select value={form.satici} onChange={(e) => setForm({ ...form, satici: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg mt-1"><option value="">Seçiniz</option>{list.map((s) => <option key={s.satici} value={s.satici}>{s.satici}</option>)}</select> : <input value={form.satici} onChange={(e) => setForm({ ...form, satici: e.target.value })} placeholder="Satıcı adı" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg mt-1" />}</div>
             <div><label className="text-xs text-slate-500">Tip</label><select value={form.tip} onChange={(e) => setForm({ ...form, tip: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg mt-1">{Object.entries(TIPLER).map(([k, v]) => <option key={k} value={k}>{v.t}</option>)}</select></div>
             <textarea value={form.aciklama} onChange={(e) => setForm({ ...form, aciklama: e.target.value })} rows={2} placeholder="Açıklama (ör. yanlış beden gönderdi, müşteri şikayet etti)" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" />
-            <button type="submit" className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium">Kaydet</button>
+            <button type="submit" className="w-full bg-emerald-600 text-white py-2.5 rounded-lg font-medium">Kaydet</button>
           </form>
         </div>
       )}

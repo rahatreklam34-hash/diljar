@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Store, Save, Plus, Trash2, ArrowUp, ArrowDown, Tag, ExternalLink, GripVertical, Star, Percent, X, Menu, ChevronRight,
-  ShoppingBag, Users, TrendingUp, Eye, Package, CreditCard, Wrench, Bell, ChevronRight as ArrowR, Megaphone, PackagePlus, FileText, Pencil, SlidersHorizontal, Truck, Palette, Search, Share2, Image as ImageIcon, BarChart3, Folder, Sparkles, LayoutGrid,
+  ShoppingBag, Users, TrendingUp, Eye, Package, CreditCard, Wrench, Bell, ChevronRight as ArrowR, Megaphone, PackagePlus, FileText, Pencil, SlidersHorizontal, Truck, Palette, Search, Share2, Image as ImageIcon, BarChart3, Folder, Sparkles, LayoutGrid, Shuffle,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
@@ -13,18 +13,56 @@ const fmt = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { maximumFra
 const fmt2 = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const VALID = (o: any) => o.durum !== 'iptal' && o.durum !== 'sepet';
 
+// ── Vitrini Karıştır: komşu ürünlerin mümkün olduğunca farklı kategori/cinsiyet
+// olmasını sağlayan yayılım (dispersion) algoritması. Yeni bir productOrder üretir.
+function shuffleFisherYates<T>(arr: T[]): T[] {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+function urunGroupKey(p: any) {
+  return `${p.kategoriId || 'x'}|${((p.cinsiyet || 'x') as string).trim()}`;
+}
+function distributeUrunler(items: any[]): any[] {
+  if (items.length <= 2) return shuffleFisherYates(items);
+  const pool = shuffleFisherYates(items);
+  const out: any[] = [];
+  out.push(pool.pop());
+  const WINDOW = 4; // son 4 komşuyla aynı kategori/cinsiyet olmamasını puanla
+  while (pool.length) {
+    const forbidden = new Set<string>();
+    for (let i = Math.max(0, out.length - WINDOW); i < out.length; i++) forbidden.add(urunGroupKey(out[i]));
+    let bestIdx = 0;
+    let bestScore = -Infinity;
+    const scanLimit = Math.min(pool.length, 128);
+    for (let i = 0; i < scanLimit; i++) {
+      const same = forbidden.has(urunGroupKey(pool[i])) ? 1 : 0;
+      const noise = Math.random() * 0.3;
+      const score = (same ? -2 : 1) + noise;
+      if (score > bestScore) { bestScore = score; bestIdx = i; }
+    }
+    out.push(pool.splice(bestIdx, 1)[0]);
+  }
+  return out;
+}
+
+
 const DEFAULT_CONFIG = {
   aciklama: '', logo: '', featuredCats: [] as string[],
   email: '', telefon: '', whatsapp: '', adres: '', calismaHafta: '', calismaPazar: '',
   instagram: '', facebook: '', youtube: '', tiktok: '', twitter: '',
-  primaryColor: '#6366f1', secondaryColor: '#0ea5e9', font: 'Inter', currency: 'TRY', dil: 'tr',
+  primaryColor: '#0F7C45', secondaryColor: '#0ea5e9', font: 'Inter', currency: 'TRY', dil: 'tr',
   seoTitle: '', metaDescription: '', keywords: '',
+  topBarText: '', kuponKodu: '', kargoText: '', topBarSag: '', guvenKargo: '', guvenKargoAlt: '',
   kargoUcret: '', kargoNot: '',
   odemeHavale: true, odemeKart: true, odemeKapida: false,
   bildirimYeniSiparis: true, bildirimStok: true, bildirimYorum: true,
   iade: '', gizlilik: '', kullanim: '',
   firmaUnvan: '', vkn: '', vergiDairesi: '', firmaAdres: '', firmaEmail: '', firmaTel: '', mersis: '',
-  metaPixel: '', tiktokPixel: '', ga4: '', googleAds: '', googleAdsLabel: '', customHead: '',
+  metaPixel: '', metaCapiToken: '', tiktokPixel: '', ga4: '', googleAds: '', googleAdsLabel: '', customHead: '',
   collections: [] as { id: string; ad: string }[],
   collectionItems: {} as Record<string, string[]>, // productId -> [collectionId]
 };
@@ -32,6 +70,7 @@ const DEFAULT_CONFIG = {
 const AYARLAR_NAV: { k: string; t: string; sub: string; Ic: any }[] = [
   { k: 'bilgi', t: 'Mağaza Bilgileri', sub: 'Mağaza adı, adres, logo ve açıklama', Ic: Store },
   { k: 'banner', t: 'Banner & Slaytlar', sub: 'Hero görsel, başlık ve slaytlar', Ic: ImageIcon },
+  { k: 'gorunum', t: 'Mağaza Görünümü / Üst Bar', sub: 'Logo metni, üst bar sloganı, kupon ve kargo metni', Ic: Megaphone },
   { k: 'menu', t: 'Üst Menü', sub: 'Mağaza üst menüsü ve kategoriler', Ic: Menu },
   { k: 'story', t: 'Hikayeler (Story)', sub: 'Ana sayfa hikaye daireleri ve bağlantıları', Ic: Sparkles },
   { k: 'widget', t: 'Vitrin Widget’ları', sub: 'Renkli tanıtım kartları ve link yönlendirme', Ic: LayoutGrid },
@@ -195,7 +234,7 @@ export default function OnlineMagaza() {
   const moveStory = (id: string, dir: -1 | 1) => setS((x: any) => { const arr = [...(x.stories || [])]; const i = arr.findIndex((it: any) => it.id === id); const j = i + dir; if (j < 0 || j >= arr.length) return x; [arr[i], arr[j]] = [arr[j], arr[i]]; return { ...x, stories: arr }; });
 
   // ── Vitrin widget yönetimi ──
-  const WIDGET_COLORS = ['#7c3aed', '#db2777', '#0ea5e9', '#f59e0b', '#10b981', '#ef4444', '#6366f1', '#0f172a'];
+  const WIDGET_COLORS = ['#22A95C', '#db2777', '#0ea5e9', '#f59e0b', '#10b981', '#ef4444', '#0F7C45', '#0f172a'];
   const addWidget = () => setS((x: any) => ({ ...x, widgets: [...(x.widgets || []), { id: 'wg' + Date.now(), title: 'Yeni Widget', subtitle: '', badge: '', image: '', color: WIDGET_COLORS[(x.widgets || []).length % WIDGET_COLORS.length], ctaLabel: 'İncele', link: { type: 'filtre', value: 'indirim' } }] }));
   const setWidget = (id: string, patch: any) => setS((x: any) => ({ ...x, widgets: (x.widgets || []).map((it: any) => it.id === id ? { ...it, ...patch } : it) }));
   const delWidget = (id: string) => setS((x: any) => ({ ...x, widgets: (x.widgets || []).filter((it: any) => it.id !== id) }));
@@ -265,6 +304,14 @@ export default function OnlineMagaza() {
     setS((x: any) => ({ ...x, productOrder: ids }));
   };
   const globalPos = (id: string) => ordered.findIndex((p) => p.id === id) + 1;
+  // Vitrini Karıştır: tüm mağaza ürünlerini kategori/cinsiyet yayılımıyla yeniden sıralar (productOrder).
+  // Sadece state'i günceller; kalıcı olması için üstteki Kaydet'e basılmalı.
+  const karistirVitrin = () => {
+    if (onlineProducts.length < 2) { toast.error('Karıştırmak için en az 2 ürün gerekli'); return; }
+    const yeniSira = distributeUrunler(onlineProducts).map((p: any) => p.id);
+    setS((x: any) => ({ ...x, productOrder: yeniSira }));
+    toast.success('Vitrin karıştırıldı — kalıcı yapmak için Kaydet\'e basın');
+  };
   // Koleksiyon (manuel başlık) yönetimi — config'e kaydedilir
   const persistCfg = (cfgPart: any) => { const merged = { ...s.config, ...cfgPart }; setS((x: any) => ({ ...x, config: merged })); api.put('/store/settings', buildBody({ config: merged })).catch(() => {}); };
   const addColl = () => { const ad = prompt('Başlık adı (ör. Öne Çıkanlar, Fiyatı Düşenler)'); if (!ad || !ad.trim()) return; persistCfg({ collections: [...(cfg.collections || []), { id: 'c' + Date.now(), ad: ad.trim() }] }); };
@@ -323,8 +370,8 @@ export default function OnlineMagaza() {
         <div className="space-y-5">
           {/* KPI */}
           <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            <Kpi label="Toplam Satış" value={fmt(stat.sales)} delta={stat.dSales} icon={TrendingUp} cls="bg-indigo-100 text-indigo-600" series={series.map((d) => d.sales)} color="#6366f1" period={period} />
-            <Kpi label="Sipariş" value={String(stat.count)} delta={stat.dCount} icon={ShoppingBag} cls="bg-violet-100 text-violet-600" series={series.map((d) => d.count)} color="#8b5cf6" period={period} />
+            <Kpi label="Toplam Satış" value={fmt(stat.sales)} delta={stat.dSales} icon={TrendingUp} cls="bg-indigo-100 text-indigo-600" series={series.map((d) => d.sales)} color="#0F7C45" period={period} />
+            <Kpi label="Sipariş" value={String(stat.count)} delta={stat.dCount} icon={ShoppingBag} cls="bg-violet-100 text-violet-600" series={series.map((d) => d.count)} color="#10B981" period={period} />
             <Kpi label="Ziyaretçi" value={String(stat.ziyaretci)} icon={Users} cls="bg-sky-100 text-sky-600" series={series.map((d) => d.count)} color="#0ea5e9" period={period} />
             <Kpi label="Dönüşüm Oranı" value={`%${stat.donusum.toFixed(2)}`} icon={Percent} cls="bg-amber-100 text-amber-600" series={series.map((d) => d.count)} color="#f59e0b" period={period} />
             <Kpi label="Ort. Sipariş Tutarı" value={fmt2(stat.avg)} delta={stat.dAvg} icon={CreditCard} cls="bg-emerald-100 text-emerald-600" series={series.map((d) => d.sales)} color="#10b981" period={period} />
@@ -362,12 +409,12 @@ export default function OnlineMagaza() {
             </Card>
             <Card title="Kanal Performansı">
               <DonutBlock center={fmt(kanalPerf.total)} centerSub="Toplam Satış" money segs={[
-                { t: 'Online Mağaza', n: kanalPerf.online, c: '#6366f1' }, { t: 'Canlı Yayın', n: kanalPerf.canli, c: '#8b5cf6' }, { t: 'Kasa Satışı', n: kanalPerf.kasa, c: '#0ea5e9' },
+                { t: 'Online Mağaza', n: kanalPerf.online, c: '#0F7C45' }, { t: 'Canlı Yayın', n: kanalPerf.canli, c: '#10B981' }, { t: 'Kasa Satışı', n: kanalPerf.kasa, c: '#0ea5e9' },
               ]} unit="" />
             </Card>
             <Card title="Cihazlara Göre Ziyaretçi">
               <DonutBlock center={(overview?.cihaz?.mobil || 0) + (overview?.cihaz?.web || 0)} centerSub="Toplam Ziyaretçi" segs={[
-                { t: 'Mobil', n: overview?.cihaz?.mobil || 0, c: '#6366f1' }, { t: 'Masaüstü', n: overview?.cihaz?.web || 0, c: '#0ea5e9' },
+                { t: 'Mobil', n: overview?.cihaz?.mobil || 0, c: '#0F7C45' }, { t: 'Masaüstü', n: overview?.cihaz?.web || 0, c: '#0ea5e9' },
               ]} unit="" />
             </Card>
           </div>
@@ -427,7 +474,7 @@ export default function OnlineMagaza() {
             <p className="text-xs text-slate-400 mb-4">Mağazanızın temel bilgilerini düzenleyin.</p>
             <div className="grid lg:grid-cols-2 gap-5">
               <div className="space-y-3">
-                <div><label className="block text-xs text-slate-500 mb-1">Mağaza Adı</label><div className="relative"><input maxLength={100} value={s.logoText} onChange={(e) => setS({ ...s, logoText: e.target.value })} placeholder="KENAN CANLI MEZAT" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><span className="absolute right-2 top-2 text-[10px] text-slate-300">{(s.logoText || '').length}/100</span></div></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Mağaza Adı (Logo Metni)</label><div className="relative"><input maxLength={100} value={s.logoText} onChange={(e) => setS({ ...s, logoText: e.target.value })} placeholder="DiLjar" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><span className="absolute right-2 top-2 text-[10px] text-slate-300">{(s.logoText || '').length}/100</span></div></div>
                 <div><label className="block text-xs text-slate-500 mb-1">Mağaza Adresi (slug)</label><div className="flex items-center gap-1 text-sm"><span className="text-slate-400 shrink-0">/m/</span><div className="relative flex-1"><input maxLength={50} value={s.slug} onChange={(e) => setS({ ...s, slug: e.target.value.replace(/[^a-z0-9-]/gi, '').toLowerCase() })} placeholder="magaza-adi" className="w-full px-3 py-2 border border-slate-200 rounded-lg" /><span className="absolute right-2 top-2.5 text-[10px] text-slate-300">{(s.slug || '').length}/50</span></div></div></div>
                 <div><label className="block text-xs text-slate-500 mb-1">Mağaza Açıklaması</label><div className="relative"><textarea maxLength={500} rows={3} value={cfg.aciklama} onChange={(e) => setCfg('aciklama', e.target.value)} placeholder="İndirimli ürünler, sezon fırsatları ve özel koleksiyonlar için mağazamızı takip edin." className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><span className="absolute right-2 bottom-2 text-[10px] text-slate-300">{(cfg.aciklama || '').length}/500</span></div></div>
                 <div><label className="block text-xs text-slate-500 mb-1">Mağaza Logosu</label><ImageDropzone images={cfg.logo ? [cfg.logo] : []} onChange={(imgs) => setCfg('logo', imgs[0] || '')} max={1} /><p className="text-[10px] text-slate-400 mt-1">Önerilen boyut: 500x500px, JPG/PNG</p></div>
@@ -444,6 +491,28 @@ export default function OnlineMagaza() {
                   <p className="text-[10px] text-slate-400 mt-1">Maksimum 8 kategori seçebilirsiniz.</p>
                 </div>
                 <div><label className="block text-xs text-slate-500 mb-1">Mağaza Durumu</label><select value={s.active ? '1' : '0'} onChange={(e) => setS({ ...s, active: e.target.value === '1' })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg"><option value="1">🟢 Aktif</option><option value="0">⏸ Bakım / Kapalı</option></select></div>
+              </div>
+            </div>
+          </div>
+          )}
+
+          {/* ── Mağaza Görünümü / Üst Bar ── */}
+          {aTab === 'gorunum' && (
+          <div className="bg-white rounded-2xl border border-slate-200 p-5 space-y-4">
+            <div><h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><Megaphone size={16} className="text-indigo-600" /> Mağaza Görünümü / Üst Bar</h3><p className="text-xs text-slate-400">Storefront üst bilgi barı, logo metni ve güven şeridi içerikleri.</p></div>
+            <div className="grid lg:grid-cols-2 gap-5">
+              <div className="space-y-3">
+                <div><label className="block text-xs text-slate-500 mb-1">Logo Metni</label><input maxLength={100} value={s.logoText} onChange={(e) => setS({ ...s, logoText: e.target.value })} placeholder="DiLjar" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[10px] text-slate-400 mt-1">Mağaza başlığında ve alt bilgide görünen metin (ör. DiLjar). "Mağaza Bilgileri" sekmesindeki "Mağaza Adı" ile aynı alandır.</p></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Üst Bar Metni (Kampanya Sloganı)</label><input maxLength={160} value={cfg.topBarText} onChange={(e) => setCfg('topBarText', e.target.value)} placeholder="İLK SİPARİŞE ÖZEL SEPETTE %20 İNDİRİM" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Kupon Kodu</label><input maxLength={40} value={cfg.kuponKodu} onChange={(e) => setCfg('kuponKodu', e.target.value)} placeholder="ör. HOSGELDIN20" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[10px] text-slate-400 mt-1">Üst barda "Kupon: ..." olarak gösterilir. Boş bırakılırsa gizlenir.</p></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Üst Bar — Sol Metin (Kargo)</label><input maxLength={120} value={cfg.kargoText} onChange={(e) => setCfg('kargoText', e.target.value)} placeholder="4.000 TL ve üzeri alışverişlerde ücretsiz kargo!" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Üst Bar — Sağ Metin (Taksit)</label><input maxLength={120} value={cfg.topBarSag} onChange={(e) => setCfg('topBarSag', e.target.value)} placeholder="Vade farksız 3 taksit fırsatı!" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[10px] text-slate-400 mt-1">Üst barın en sağında görünür. Boş bırakılırsa varsayılan metin kullanılır.</p></div>
+              </div>
+              <div className="space-y-3">
+                <p className="text-xs font-semibold text-slate-400 uppercase">Güven Şeridi (İlk Öğe)</p>
+                <div><label className="block text-xs text-slate-500 mb-1">Güven Şeridi — Kargo Başlık</label><input maxLength={60} value={cfg.guvenKargo} onChange={(e) => setCfg('guvenKargo', e.target.value)} placeholder="Ücretsiz Kargo" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Güven Şeridi — Kargo Alt Metin</label><input maxLength={80} value={cfg.guvenKargoAlt} onChange={(e) => setCfg('guvenKargoAlt', e.target.value)} placeholder="7.500 TL üzeri" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <p className="text-[10px] text-slate-400">Bu içerikler mağaza vitrininin en üstündeki bilgi barında ve güven şeridinde görüntülenir. Değişiklikleri üstteki <b>Kaydet</b> butonu ile kaydedin.</p>
               </div>
             </div>
           </div>
@@ -488,6 +557,10 @@ export default function OnlineMagaza() {
                 <label className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer text-xs ${paytr.enabled ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'border-slate-200 text-slate-500'}`}><input type="checkbox" checked={!!paytr.enabled} onChange={(e) => setPaytr({ ...paytr, enabled: e.target.checked })} /> {paytr.enabled ? 'Aktif' : 'Pasif'}</label>
               </div>
               <p className="text-[11px] text-slate-400 mb-3">PayTR Mağaza Paneli → Bilgi sayfasındaki bilgileri girin. Doldurulup "Aktif" yapıldığında müşteri ödeme adımında kart ile ödeme ekranı açılır.</p>
+              <label className={`inline-flex items-center gap-2 px-3 py-1.5 mb-3 rounded-lg border cursor-pointer text-xs ${cfg.posOncelikli ? 'bg-violet-50 border-violet-200 text-violet-700' : 'border-slate-200 text-slate-500'}`}>
+                <input type="checkbox" checked={!!cfg.posOncelikli} onChange={(e) => setCfg('posOncelikli', e.target.checked)} />
+                Öncelikli ödeme: müşteriyi doğrudan POS ekranına yönlendir (kapalıysa WhatsApp ile sipariş talebi akışı kullanılır). Ayarları kaydetmeyi unutmayın.
+              </label>
               <div className="grid sm:grid-cols-3 gap-3">
                 <div><label className="block text-xs text-slate-500 mb-1">Mağaza No (merchant_id)</label><input value={paytr.merchant_id} onChange={(e) => setPaytr({ ...paytr, merchant_id: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
                 <div><label className="block text-xs text-slate-500 mb-1">Mağaza Parolası (merchant_key)</label><input value={paytr.merchant_key} onChange={(e) => setPaytr({ ...paytr, merchant_key: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
@@ -603,7 +676,7 @@ export default function OnlineMagaza() {
               <div className="space-y-3">{s.widgets.map((w: any, i: number) => (
                 <div key={w.id} className="grid lg:grid-cols-[220px_1fr_auto] gap-3 items-start border border-slate-200 rounded-xl p-3 bg-slate-50/50">
                   {/* Canlı önizleme */}
-                  <div className="rounded-2xl p-3 text-white relative overflow-hidden min-h-[96px] flex flex-col justify-between" style={{ background: w.image ? undefined : `linear-gradient(135deg, ${w.color || '#7c3aed'}, ${w.color || '#7c3aed'}cc)` }}>
+                  <div className="rounded-2xl p-3 text-white relative overflow-hidden min-h-[96px] flex flex-col justify-between" style={{ background: w.image ? undefined : `linear-gradient(135deg, ${w.color || '#22A95C'}, ${w.color || '#22A95C'}cc)` }}>
                     {w.image && <img src={w.image} alt="" className="absolute inset-0 w-full h-full object-cover opacity-60" />}
                     <div className="relative">
                       {w.badge && <span className="inline-block text-[9px] font-bold bg-white/25 px-1.5 py-0.5 rounded-full mb-1">{w.badge}</span>}
@@ -684,8 +757,8 @@ export default function OnlineMagaza() {
               <div key={k}>
                 <label className="block text-xs text-slate-500 mb-1.5">{t}</label>
                 <div className="flex items-center gap-2 flex-wrap">
-                  {['#6366f1', '#3b82f6', '#06b6d4', '#22c55e', '#f97316', '#ef4444', '#a855f7', '#475569'].map((c) => <button key={c} onClick={() => setCfg(k, c)} className={`w-8 h-8 rounded-full border-2 ${cfg[k] === c ? 'border-slate-800 scale-110' : 'border-white shadow'}`} style={{ background: c }} />)}
-                  <input type="color" value={cfg[k] || '#6366f1'} onChange={(e) => setCfg(k, e.target.value)} className="w-8 h-8 rounded-full border-0 cursor-pointer bg-transparent" />
+                  {['#0F7C45', '#3b82f6', '#06b6d4', '#22c55e', '#f97316', '#ef4444', '#a855f7', '#475569'].map((c) => <button key={c} onClick={() => setCfg(k, c)} className={`w-8 h-8 rounded-full border-2 ${cfg[k] === c ? 'border-slate-800 scale-110' : 'border-white shadow'}`} style={{ background: c }} />)}
+                  <input type="color" value={cfg[k] || '#0F7C45'} onChange={(e) => setCfg(k, e.target.value)} className="w-8 h-8 rounded-full border-0 cursor-pointer bg-transparent" />
                 </div>
               </div>
             ))}
@@ -713,6 +786,7 @@ export default function OnlineMagaza() {
             <div><h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><BarChart3 size={16} className="text-indigo-600" /> Takip Kodları (Pixel)</h3><p className="text-xs text-slate-400">Pazarlama ve dönüşüm takibi için reklam piksellerinizi ekleyin. <b>Aynı anda birden fazla piksel</b> kullanabilirsiniz — her alana ID'leri <b>virgülle</b> ayırarak yazın. Kodlar mağaza sayfanıza otomatik yüklenir.</p></div>
             <div className="grid sm:grid-cols-2 gap-3">
               <div><label className="block text-xs text-slate-500 mb-1">Meta (Facebook) Pixel ID(ler)</label><input value={cfg.metaPixel} onChange={(e) => setCfg('metaPixel', e.target.value)} placeholder="123..., 456... (virgülle çoklu)" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Meta Conversions API (CAPI) Erişim Token'ı</label><input value={cfg.metaCapiToken} onChange={(e) => setCfg('metaCapiToken', e.target.value)} placeholder="EAAG... (sunucu taraflı Purchase için)" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /><p className="text-[10px] text-slate-400 mt-1">Bu token girilince siparişler <b>sunucu taraflı</b> (Conversions API) ile <b>kesin</b> "Purchase" olarak sayılır — tarayıcı engellese bile kaçmaz. Meta Events Manager → Ayarlar → "Dönüşüm API'si erişim jetonu oluştur" ile alınır. İlk Pixel ID kullanılır.</p></div>
               <div><label className="block text-xs text-slate-500 mb-1">TikTok Pixel ID(ler)</label><input value={cfg.tiktokPixel} onChange={(e) => setCfg('tiktokPixel', e.target.value)} placeholder="CXXX..., CYYY... (virgülle çoklu)" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
               <div><label className="block text-xs text-slate-500 mb-1">Google Analytics 4 (Measurement ID)</label><input value={cfg.ga4} onChange={(e) => setCfg('ga4', e.target.value)} placeholder="G-XXXX, G-YYYY (virgülle çoklu)" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
               <div><label className="block text-xs text-slate-500 mb-1">Google Ads Conversion ID(ler)</label><input value={cfg.googleAds} onChange={(e) => setCfg('googleAds', e.target.value)} placeholder="AW-XXXX, AW-YYYY (virgülle çoklu)" className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
@@ -799,6 +873,7 @@ export default function OnlineMagaza() {
           <div className="flex items-center gap-2 flex-wrap">
             <input value={urunQ} onChange={(e) => setUrunQ(e.target.value)} placeholder="Mağazadaki ürünlerde ara..." className="flex-1 min-w-[180px] px-3 py-2.5 text-sm border border-slate-200 rounded-xl" />
             <button onClick={() => setUFilters((o) => !o)} className={`inline-flex items-center gap-1.5 px-3 py-2.5 text-sm rounded-xl border ${(uMarka || uCinsiyet || uKategori || uGorunum !== 'tumu') ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-600'}`}><SlidersHorizontal size={15} /> Filtreler{(uMarka || uCinsiyet || uKategori || uGorunum !== 'tumu') && <span className="bg-white/25 px-1.5 rounded-full text-[11px]">{(uMarka ? 1 : 0) + (uCinsiyet ? 1 : 0) + (uKategori ? 1 : 0) + (uGorunum !== 'tumu' ? 1 : 0)}</span>}</button>
+            <button onClick={karistirVitrin} title="Ürün vitrin sırasını kategori/cinsiyet yayılımıyla yeniden karıştır (Kaydet ile kalıcı olur)" className="inline-flex items-center gap-1.5 px-3 py-2.5 text-sm rounded-xl bg-slate-900 text-white hover:bg-slate-800"><Shuffle size={15} /> Vitrini Karıştır</button>
             <button onClick={() => nav('/depo/urunlerim')} className="inline-flex items-center gap-1.5 px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50"><Package size={15} /> Tüm Ürünleri Yönet</button>
           </div>
 
@@ -926,7 +1001,7 @@ export default function OnlineMagaza() {
             </div>
             <Card title="Kanal Bazlı Satış">
               <DonutBlock center={fmt(kanalPerf.total)} centerSub="Toplam" money segs={[
-                { t: 'Online Mağaza', n: kanalPerf.online, c: '#6366f1' }, { t: 'Canlı Yayın', n: kanalPerf.canli, c: '#8b5cf6' }, { t: 'Kasa Satışı', n: kanalPerf.kasa, c: '#0ea5e9' },
+                { t: 'Online Mağaza', n: kanalPerf.online, c: '#0F7C45' }, { t: 'Canlı Yayın', n: kanalPerf.canli, c: '#10B981' }, { t: 'Kasa Satışı', n: kanalPerf.kasa, c: '#0ea5e9' },
               ]} unit="" />
             </Card>
           </div>
@@ -1040,11 +1115,11 @@ function LineChart({ data }: { data: { gun: string; sales: number }[] }) {
   const step = Math.max(1, Math.ceil(data.length / 7));
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="w-full" style={{ height: 200 }}>
-      <defs><linearGradient id="lc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#6366f1" stopOpacity="0.25" /><stop offset="100%" stopColor="#6366f1" stopOpacity="0" /></linearGradient></defs>
+      <defs><linearGradient id="lc" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#0F7C45" stopOpacity="0.25" /><stop offset="100%" stopColor="#0F7C45" stopOpacity="0" /></linearGradient></defs>
       {[0, 0.5, 1].map((g) => <line key={g} x1={pad} x2={w - pad} y1={pad + g * (h - pad * 2)} y2={pad + g * (h - pad * 2)} stroke="#f1f5f9" strokeWidth="1" />)}
       <polygon points={area} fill="url(#lc)" />
-      <polyline points={line} fill="none" stroke="#6366f1" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
-      {data.map((d, i) => i % step === 0 && <circle key={i} cx={x(i)} cy={y(d.sales)} r="3" fill="#6366f1" />)}
+      <polyline points={line} fill="none" stroke="#0F7C45" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+      {data.map((d, i) => i % step === 0 && <circle key={i} cx={x(i)} cy={y(d.sales)} r="3" fill="#0F7C45" />)}
       {data.map((d, i) => i % step === 0 && <text key={'t' + i} x={x(i)} y={h - 6} fontSize="9" fill="#94a3b8" textAnchor="middle">{d.gun}</text>)}
     </svg>
   );

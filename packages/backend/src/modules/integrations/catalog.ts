@@ -2,7 +2,7 @@
 export interface ProviderField {
   key: string;
   label: string;
-  type?: 'text' | 'password';
+  type?: 'text' | 'password' | 'bool';
   optional?: boolean;
 }
 export interface ProviderDef {
@@ -94,12 +94,24 @@ export const CARGO_PROVIDERS: ProviderDef[] = [
     provider: 'yurtici',
     label: 'Yurtiçi Kargo',
     category: 'CARGO',
-    description: 'Yurtiçi Kargo web servisi (KOPS) ile otomatik gönderi oluşturma. WS kullanıcı adı/şifre Yurtiçi’den temin edilir.',
+    description: 'Yurtiçi Kargo web servisi (KOPS) ile otomatik gönderi oluşturma. Ödeme tipine göre 4 ayrı WS kullanıcısı kullanılır (Gönderici/Alıcı × Normal/Tahsilatlı). Bilgiler Yurtiçi’den temin edilir.',
     fields: [
-      { key: 'ws_username', label: 'Web Servis Kullanıcı Adı' },
-      { key: 'ws_password', label: 'Web Servis Şifre', type: 'password' },
-      { key: 'customer_code', label: 'Müşteri Kodu', optional: true },
+      { key: 'wsUserGoN', label: 'GÖ Normal - Kullanıcı Adı' },
+      { key: 'wsPassGoN', label: 'GÖ Normal - Şifre', type: 'password' },
+      { key: 'wsUserGoT', label: 'GÖ Tahsilatlı - Kullanıcı Adı', optional: true },
+      { key: 'wsPassGoT', label: 'GÖ Tahsilatlı - Şifre', type: 'password', optional: true },
+      { key: 'wsUserAoN', label: 'AÖ Normal - Kullanıcı Adı', optional: true },
+      { key: 'wsPassAoN', label: 'AÖ Normal - Şifre', type: 'password', optional: true },
+      { key: 'wsUserAoT', label: 'AÖ Tahsilatlı - Kullanıcı Adı', optional: true },
+      { key: 'wsPassAoT', label: 'AÖ Tahsilatlı - Şifre', type: 'password', optional: true },
+      { key: 'musteriKodu', label: 'Müşteri Kodu', optional: true },
+      { key: 'cikisBirimKodu', label: 'Çıkış Birim Kodu', optional: true },
+      { key: 'cikisBirimAdi', label: 'Çıkış Birim Adı', optional: true },
+      { key: 'ws_username', label: 'Genel WS Kullanıcı (opsiyonel)', optional: true },
+      { key: 'ws_password', label: 'Genel WS Şifre (opsiyonel)', type: 'password', optional: true },
       { key: 'env', label: 'Ortam (test / prod — varsayılan prod)', optional: true },
+      { key: 'varsayilan', label: 'Varsayılan kargo firması', type: 'bool', optional: true },
+      { key: 'kapidaOdeme', label: 'Kapıda ödeme (tahsilatlı) aktif', type: 'bool', optional: true },
     ],
   },
   {
@@ -110,6 +122,8 @@ export const CARGO_PROVIDERS: ProviderDef[] = [
       { key: 'username', label: 'Kullanıcı Adı' },
       { key: 'password', label: 'Şifre', type: 'password' },
       { key: 'customer_code', label: 'Müşteri Kodu', optional: true },
+      { key: 'varsayilan', label: 'Varsayılan kargo firması', type: 'bool', optional: true },
+      { key: 'kapidaOdeme', label: 'Kapıda ödeme (tahsilatlı) aktif', type: 'bool', optional: true },
     ],
   },
   {
@@ -120,6 +134,8 @@ export const CARGO_PROVIDERS: ProviderDef[] = [
       { key: 'username', label: 'Kullanıcı Adı' },
       { key: 'password', label: 'Şifre', type: 'password' },
       { key: 'customer_code', label: 'Müşteri Kodu', optional: true },
+      { key: 'varsayilan', label: 'Varsayılan kargo firması', type: 'bool', optional: true },
+      { key: 'kapidaOdeme', label: 'Kapıda ödeme (tahsilatlı) aktif', type: 'bool', optional: true },
     ],
   },
   {
@@ -130,6 +146,8 @@ export const CARGO_PROVIDERS: ProviderDef[] = [
       { key: 'api_key', label: 'API Key' },
       { key: 'api_secret', label: 'API Secret', type: 'password' },
       { key: 'account_number', label: 'Hesap Numarası', optional: true },
+      { key: 'varsayilan', label: 'Varsayılan kargo firması', type: 'bool', optional: true },
+      { key: 'kapidaOdeme', label: 'Kapıda ödeme (tahsilatlı) aktif', type: 'bool', optional: true },
     ],
   },
 ];

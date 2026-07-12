@@ -1,8 +1,12 @@
 import { env } from '../config/env';
 import { ApiError } from './http';
+import * as fs from 'fs';
+import * as path from 'path';
+import * as crypto from 'crypto';
 
-// Seedream 4.5 (ByteDance) görsel düzenleme — fal.ai üzerinden.
-// Ürün fotoğrafını profesyonel stüdyo çekimine dönüştürür.
+let sharp: any;
+try { sharp = require('sharp'); } catch { sharp = null; }
+
 const FAL_MODEL = 'fal-ai/bytedance/seedream/v4.5/edit';
 
 const DEFAULT_PROMPT =
@@ -11,17 +15,70 @@ const DEFAULT_PROMPT =
   'Place it on a clean seamless studio background, add soft diffused professional lighting, ' +
   'remove noise and harsh shadows, sharp focus, high detail, catalog quality, realistic.';
 
+const IMG_DIR = '/var/www/finanstakip/product-images';
+const IMG_BASE_URL = 'https://diljar.com/product-images';
+const MAX_WIDTH = 1200;
+const MAX_HEIGHT = 1200;
+const WEBP_QUALITY = 80;
+
 export interface EnhanceResult {
-  image: string; // data URI (base64) veya https url
+  image: string;     // Birincil görsel (geri uyum) = images[0]
+  images: string[];  // Tüm üretilen varyantlar
 }
 
-// dataUri (base64) bir ürün görselini fal.ai Seedream 4.5 ile profesyonelleştirir.
-export async function enhanceProductImage(dataUri: string, prompt?: string): Promise<EnhanceResult> {
-  if (!env.FAL_KEY) {
-    throw new ApiError(503, 'Görsel iyileştirme için FAL_KEY tanımlı değil. Sunucu .env dosyasına FAL_KEY ekleyin.');
+// Görseli optimize et: WebP formatına çevir, max boyut sınırla
+async function optimizeImage(input: Buffer): Promise<Buffer> {
+  if (!sharp) return input; // sharp yoksa orijinali döndür
+  return sharp(input)
+    .resize(MAX_WIDTH, MAX_HEIGHT, { fit: 'inside', withoutEnlargement: true })
+    .webp({ quality: WEBP_QUALITY })
+    .toBuffer();
+}
+
+// Buffer'ı dosyaya yaz, URL döndür
+function saveToFile(buf: Buffer, ext: string = 'webp'): string {
+  fs.mkdirSync(IMG_DIR, { recursive: true });
+  const hash = crypto.createHash('md5').update(buf).digest('hex').slice(0, 12);
+  const filename = 'enh_' + Date.now().toString(36) + '_' + hash + '.' + ext;
+  fs.writeFileSync(path.join(IMG_DIR, filename), buf);
+  return IMG_BASE_URL + '/' + filename;
+}
+
+// Sonuç URL'sini indir, optimize et, kaydet; başarısızsa orijinal URL'yi döndür
+async function downloadAndStore(resultUrl: string): Promise<string> {
+  try {
+    const imgResp = await fetch(resultUrl);
+    if (!imgResp.ok) throw new Error('download failed');
+    const arrayBuf = await imgResp.arrayBuffer();
+    const rawBuf = Buffer.from(arrayBuf);
+    const optimized = await optimizeImage(rawBuf);
+    return saveToFile(optimized, 'webp');
+  } catch (e: any) {
+    console.error('Image optimize failed, using original URL:', e?.message);
+    return resultUrl;
   }
-  if (!dataUri || typeof dataUri !== 'string') {
+}
+
+export async function enhanceProductImage(
+  imageUrlOrData: string,
+  prompt?: string,
+  referenceImage?: string,
+  count: number = 1,
+): Promise<EnhanceResult> {
+  if (!env.FAL_KEY) {
+    throw new ApiError(503, 'Görsel iyileştirme için FAL_KEY tanımlı değil.');
+  }
+  if (!imageUrlOrData || typeof imageUrlOrData !== 'string') {
     throw new ApiError(422, 'Geçersiz görsel');
+  }
+
+  const numImages = Math.max(1, Math.min(Number(count) || 1, 4));
+  const imageUrls = [imageUrlOrData];
+  let finalPrompt = prompt || DEFAULT_PROMPT;
+
+  if (referenceImage && typeof referenceImage === 'string') {
+    imageUrls.push(referenceImage);
+    finalPrompt += ' Use the second image as a style/aesthetic reference for lighting, background and overall feel.';
   }
 
   let resp: Response;
@@ -33,11 +90,11 @@ export async function enhanceProductImage(dataUri: string, prompt?: string): Pro
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        prompt: prompt || DEFAULT_PROMPT,
-        image_urls: [dataUri],
-        image_size: 'auto_2K', // v4.5 'auto' kabul etmiyor; auto_2K en/boy oranını korur
-        num_images: 1,
-        sync_mode: true, // sonucu data URI olarak döndür (CORS / ekstra indirme gerekmez)
+        prompt: finalPrompt,
+        image_urls: imageUrls,
+        image_size: 'square_hd',
+        num_images: numImages,
+        sync_mode: true,
         enable_safety_checker: true,
       }),
     });
@@ -52,9 +109,14 @@ export async function enhanceProductImage(dataUri: string, prompt?: string): Pro
   }
 
   const data: any = await resp.json().catch(() => null);
-  const url = data?.images?.[0]?.url;
-  if (!url || typeof url !== 'string') {
+  const resultUrls: string[] = Array.isArray(data?.images)
+    ? data.images.map((im: any) => im?.url).filter((u: any) => u && typeof u === 'string')
+    : [];
+  if (resultUrls.length === 0) {
     throw new ApiError(502, 'Görsel servisi sonuç döndürmedi.');
   }
-  return { image: url };
+
+  // Tüm varyantları indir + optimize et + kaydet
+  const stored = await Promise.all(resultUrls.map((u) => downloadAndStore(u)));
+  return { image: stored[0], images: stored };
 }

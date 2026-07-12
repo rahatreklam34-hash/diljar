@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useQuickAction } from '../lib/quickAction';
+import { useUrlState } from '../lib/useUrlState';
 import {
   Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement,
   Title, Tooltip, Legend, Filler
@@ -30,7 +31,7 @@ const TIP_COLORS: Record<PersonelHareket['tip'], string> = {
   urun: 'bg-purple-100 text-purple-700', ssk: 'bg-red-100 text-red-700',
   yemek: 'bg-green-100 text-green-700', yol: 'bg-cyan-100 text-cyan-700',
   prim: 'bg-yellow-100 text-yellow-700', ikramiye: 'bg-pink-100 text-pink-700',
-  izin: 'bg-gray-100 text-gray-700', mesai: 'bg-indigo-100 text-indigo-700',
+  izin: 'bg-gray-100 text-gray-700', mesai: 'bg-emerald-100 text-emerald-700',
   ek_odeme: 'bg-teal-100 text-teal-700'
 };
 
@@ -86,7 +87,7 @@ const HIZLI_ISLEMLER = [
   { id: 'urun', label: 'Ürün/Avans Alımı', icon: FileText, color: 'text-purple-600' },
   { id: 'ucretli_izin', label: 'Ücretli İzin', icon: Calendar, color: 'text-green-600' },
   { id: 'ucretsiz_izin', label: 'Ücretsiz İzin', icon: Calendar, color: 'text-gray-600' },
-  { id: 'mesai', label: 'Mesai Ekle', icon: Clock, color: 'text-indigo-600' },
+  { id: 'mesai', label: 'Mesai Ekle', icon: Clock, color: 'text-emerald-600' },
   { id: 'yemek', label: 'Yemek Gideri', icon: Coffee, color: 'text-yellow-600' },
   { id: 'yol', label: 'Yol Ücreti', icon: Bus, color: 'text-cyan-600' },
   { id: 'ssk', label: 'SSK Ödemesi', icon: Shield, color: 'text-red-600' },
@@ -116,9 +117,9 @@ export default function PersonelPage() {
   const [detayPersonel, setDetayPersonel] = useState<Personel | null>(null);
 
   // Filters (list)
-  const [search, setSearch] = useState('');
-  const [deptFilter, setDeptFilter] = useState('');
-  const [page, setPage] = useState(1);
+  const [search, setSearch] = useUrlState('q', '');
+  const [deptFilter, setDeptFilter] = useUrlState('dept', '');
+  const [page, setPage] = useUrlState('page', 1);
 
   // Filters (detay)
   const [detayTipFilter, setDetayTipFilter] = useState<PersonelHareket['tip'] | 'tumu'>('tumu');
@@ -381,8 +382,8 @@ export default function PersonelPage() {
       datasets: [{
         label: 'Tutar',
         data: entries.map(([, v]) => v),
-        borderColor: ['#3b82f6','#f97316','#8b5cf6','#ef4444','#22c55e','#06b6d4','#eab308','#ec4899','#6b7280','#6366f1','#14b8a6'],
-        backgroundColor: ['#3b82f620','#f9731620','#8b5cf620','#ef444420','#22c55e20','#06b6d420','#eab30820','#ec489920','#6b728020','#6366f120','#14b8a620'],
+        borderColor: ['#3b82f6','#f97316','#10B981','#ef4444','#22c55e','#06b6d4','#eab308','#ec4899','#6b7280','#0F7C45','#14b8a6'],
+        backgroundColor: ['#3b82f620','#f9731620','#10B98120','#ef444420','#22c55e20','#06b6d420','#eab30820','#ec489920','#6b728020','#0F7C4520','#14b8a620'],
         fill: true,
         tension: 0.4,
         pointRadius: 5,
@@ -508,7 +509,7 @@ export default function PersonelPage() {
       tipBreakdown[h.tip] = (tipBreakdown[h.tip] || 0) + h.tutar;
     });
     const chartEntries = Object.entries(tipBreakdown).filter(([, v]) => v > 0);
-    const chartColors = ['#3b82f6','#f97316','#8b5cf6','#ef4444','#22c55e','#06b6d4','#eab308','#ec4899','#6b7280','#6366f1','#14b8a6'];
+    const chartColors = ['#3b82f6','#f97316','#10B981','#ef4444','#22c55e','#06b6d4','#eab308','#ec4899','#6b7280','#0F7C45','#14b8a6'];
 
     return (
       <div className="p-4 space-y-4 min-h-screen bg-gray-50">
@@ -790,7 +791,7 @@ export default function PersonelPage() {
       <div className="grid grid-cols-5 gap-3">
         {[
           { label: 'Toplam Personel', value: kpis.toplam, icon: Users, color: 'bg-blue-50 text-blue-600' },
-          { label: 'Erkek', value: kpis.erkek, icon: Users, color: 'bg-indigo-50 text-indigo-600' },
+          { label: 'Erkek', value: kpis.erkek, icon: Users, color: 'bg-emerald-50 text-emerald-600' },
           { label: 'Kadın', value: kpis.kadin, icon: Users, color: 'bg-pink-50 text-pink-600' },
           { label: 'Ort. Kıdem', value: `${Math.floor(kpis.avgKidemAy / 12)}y ${kpis.avgKidemAy % 12 | 0}a`, icon: Award, color: 'bg-orange-50 text-orange-600' },
           { label: 'Bu Ay İşe Alınan', value: kpis.buAyIseAlinan, icon: Calendar, color: 'bg-green-50 text-green-600' },
@@ -1076,13 +1077,13 @@ export default function PersonelPage() {
           </div>
           <div><label className={labelCls}>Saatlik Ücret (₺)</label><MoneyInput value={mesaiForm.saatlikUcret} onChange={v => setMesaiForm(f => ({ ...f, saatlikUcret: v }))} className={inputCls} /></div>
           {mesaiForm.saat && mesaiForm.saatlikUcret && (
-            <div className="p-2 bg-indigo-50 rounded-lg text-xs text-indigo-700">
+            <div className="p-2 bg-emerald-50 rounded-lg text-xs text-emerald-700">
               Toplam: {fmt(Number(mesaiForm.saat) * Number(mesaiForm.saatlikUcret))}
             </div>
           )}
           <div className="flex justify-end gap-2 pt-1">
             <button onClick={() => setModalMesai(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">İptal</button>
-            <button onClick={handleMesaiEkle} className="px-4 py-2 text-sm bg-indigo-600 text-white rounded-lg hover:bg-indigo-700">Ekle</button>
+            <button onClick={handleMesaiEkle} className="px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-700">Ekle</button>
           </div>
         </div>
       </Modal>

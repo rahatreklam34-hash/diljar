@@ -1,181 +1,192 @@
-import { useState, useMemo } from 'react';
-import { ClipboardList, Search, Filter, ChevronLeft, ChevronRight, Download } from 'lucide-react';
-import { useApp } from '../context/AppContext';
+import { useState, useEffect, useCallback, Fragment } from 'react';
+import { ClipboardList, Search, Filter, ChevronLeft, ChevronRight, Download, LogIn, RefreshCw, ChevronDown, ChevronUp, MapPin, User, HelpCircle, Globe, X } from 'lucide-react';
+import api, { apiErrorMessage } from '../lib/api';
+import { useUrlState } from '../lib/useUrlState';
+import toast from 'react-hot-toast';
 
-type LogTip = 'Cari' | 'GelirGider' | 'Personel' | 'KasaBanka' | 'Cek' | 'Tumu';
-type LogIslem = 'Ekleme' | 'Silme' | 'Guncelleme' | 'Odeme' | 'Tumu';
-
-interface LogEntry {
+type AuditRow = {
   id: string;
-  tarih: string;
-  saat: string;
-  islemTipi: LogTip;
-  islem: LogIslem;
-  aciklama: string;
-  tutar?: number;
-  alan?: string;
-  kullanici: string;
+  userId?: string | null;
+  userName?: string | null;
+  action: string;
+  entity: string;
+  entityId?: string | null;
+  detail?: string | null;
+  hedef?: string | null;
+  kime?: string | null;
+  neden?: string | null;
+  ip?: string | null;
+  meta?: Record<string, any> | null;
+  createdAt: string;
+};
+type StaffUser = { id: string; fullName: string; unvan?: string | null; role?: string | null };
+type Facet = { value: string; count: number };
+
+const actionBadge: Record<string, string> = {
+  giris: 'bg-sky-100 text-sky-700',
+  ekle: 'bg-green-100 text-green-700',
+  sil: 'bg-red-100 text-red-700',
+  guncelle: 'bg-blue-100 text-blue-700',
+  iptal: 'bg-amber-100 text-amber-700',
+  kargola: 'bg-violet-100 text-violet-700',
+};
+const actionLabel: Record<string, string> = {
+  giris: 'Giriş', ekle: 'Ekleme', sil: 'Silme', guncelle: 'Güncelleme', iptal: 'İptal', kargola: 'Kargolama',
+};
+const entityBadge: Record<string, string> = {
+  oturum: 'bg-slate-100 text-slate-600',
+  urun: 'bg-emerald-100 text-emerald-700',
+  musteri: 'bg-orange-100 text-orange-700',
+  siparis: 'bg-indigo-100 text-indigo-700',
+};
+const entityLabel: Record<string, string> = {
+  oturum: 'Oturum', urun: 'Ürün', musteri: 'Müşteri', siparis: 'Sipariş',
+};
+const cap = (s: string) => s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
+
+const PAGE_SIZE = 50;
+
+function fmtDate(iso: string) {
+  const d = new Date(iso);
+  return { tarih: d.toLocaleDateString('tr-TR'), saat: d.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) };
 }
 
-const islemBadge: Record<LogIslem, string> = {
-  Ekleme: 'bg-green-100 text-green-700',
-  Silme: 'bg-red-100 text-red-700',
-  Guncelleme: 'bg-blue-100 text-blue-700',
-  Odeme: 'bg-purple-100 text-purple-700',
-  Tumu: 'bg-gray-100 text-gray-600',
-};
-
-const tipBadge: Record<LogTip, string> = {
-  Cari: 'bg-orange-100 text-orange-700',
-  GelirGider: 'bg-green-100 text-green-700',
-  Personel: 'bg-blue-100 text-blue-700',
-  KasaBanka: 'bg-indigo-100 text-indigo-700',
-  Cek: 'bg-red-100 text-red-700',
-  Tumu: 'bg-gray-100 text-gray-600',
-};
-
-function fmt(n: number) { return new Intl.NumberFormat('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n); }
-
-const PAGE_SIZE = 20;
+function metaText(meta?: Record<string, any> | null): string {
+  if (!meta || typeof meta !== 'object') return '';
+  return Object.entries(meta).map(([k, v]) => {
+    if (v && typeof v === 'object') {
+      if ('onceki' in v || 'yeni' in v) return `${k}: ${v.onceki ?? '—'} → ${v.yeni ?? '—'}`;
+      return `${k}: ${JSON.stringify(v)}`;
+    }
+    return `${k}: ${v}`;
+  }).join(' · ');
+}
 
 export default function HareketLoglari() {
-  const { hareketler, cariHareketler, personelHareketler, cariHesaplar, personeller } = useApp();
+  const [rows, setRows] = useState<AuditRow[]>([]);
+  const [users, setUsers] = useState<StaffUser[]>([]);
+  const [facets, setFacets] = useState<{ actions: Facet[]; entities: Facet[] }>({ actions: [], entities: [] });
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  const [filterStart, setFilterStart] = useState('');
-  const [filterEnd, setFilterEnd] = useState('');
-  const [filterTip, setFilterTip] = useState<LogTip>('Tumu');
-  const [filterIslem, setFilterIslem] = useState<LogIslem>('Tumu');
-  const [filterSearch, setFilterSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const [filterStart, setFilterStart] = useUrlState('from', '');
+  const [filterEnd, setFilterEnd] = useUrlState('to', '');
+  const [filterEntity, setFilterEntity] = useUrlState('entity', '');
+  const [filterAction, setFilterAction] = useUrlState('action', '');
+  const [filterUser, setFilterUser] = useUrlState('user', '');
+  const [filterKime, setFilterKime] = useUrlState('kime', '');
+  const [filterSearch, setFilterSearch] = useUrlState('q', '');
+  const [page, setPage] = useUrlState('page', 1);
+  const [canli, setCanli] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
 
-  const logs = useMemo((): LogEntry[] => {
-    const list: LogEntry[] = [];
+  const params = useCallback(() => ({
+    q: filterSearch || undefined,
+    entity: filterEntity || undefined,
+    action: filterAction || undefined,
+    userId: filterUser || undefined,
+    kime: filterKime || undefined,
+    from: filterStart || undefined,
+    to: filterEnd || undefined,
+  }), [filterSearch, filterEntity, filterAction, filterUser, filterKime, filterStart, filterEnd]);
 
-    hareketler.forEach(h => {
-      list.push({
-        id: `h-${h.id}`,
-        tarih: h.tarih,
-        saat: h.saat,
-        islemTipi: 'GelirGider',
-        islem: 'Ekleme',
-        aciklama: `${h.tip === 'gelir' ? 'Gelir' : 'Gider'} kaydedildi: ${h.aciklama}`,
-        tutar: h.tutar,
-        alan: h.kategori,
-        kullanici: 'Kullanici',
-      });
-    });
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await api.get('/store/audit', { params: { page, pageSize: PAGE_SIZE, ...params() } });
+      setRows(r.data.rows || []);
+      setTotal(r.data.total || 0);
+      if (r.data.users) setUsers(r.data.users);
+      if (r.data.facets) setFacets(r.data.facets);
+    } catch (e) { toast.error(apiErrorMessage(e)); }
+    finally { setLoading(false); }
+  }, [page, params]);
 
-    cariHareketler.forEach(h => {
-      const cari = cariHesaplar.find(c => c.id === h.cariHesapId);
-      const tipMap: Record<string, string> = { borc_artis: 'Borc artti', borc_azalis: 'Borc azaldi', alacak_artis: 'Alacak artti', alacak_azalis: 'Alacak azaldi' };
-      list.push({
-        id: `ch-${h.id}`,
-        tarih: h.tarih,
-        saat: h.saat,
-        islemTipi: 'Cari',
-        islem: h.tip.includes('azalis') ? 'Odeme' : 'Ekleme',
-        aciklama: `${cari?.ad || 'Bilinmeyen'} - ${tipMap[h.tip] || h.tip}: ${h.aciklama}`,
-        tutar: h.tutar,
-        alan: 'Cari Hesap',
-        kullanici: 'Kullanici',
-      });
-    });
+  useEffect(() => { load(); }, [load]);
 
-    personelHareketler.forEach(h => {
-      const personel = personeller.find(p => p.id === h.personelId);
-      const tipMap: Record<string, string> = { maas: 'Maas odemesi', avans: 'Avans odemesi', urun: 'Urun girisi' };
-      list.push({
-        id: `ph-${h.id}`,
-        tarih: h.tarih,
-        saat: h.saat,
-        islemTipi: 'Personel',
-        islem: 'Odeme',
-        aciklama: `${personel?.ad || 'Bilinmeyen'} - ${tipMap[h.tip] || h.tip}: ${h.aciklama}`,
-        tutar: h.tutar,
-        alan: h.tip,
-        kullanici: 'Kullanici',
-      });
-    });
+  // Canlı izleme: açıkken 5 sn'de bir 1. sayfayı sessizce yeniler
+  useEffect(() => {
+    if (!canli) return;
+    if (page !== 1) setPage(1);
+    const t = setInterval(() => { load(); }, 5000);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canli, load]);
 
-    return list.sort((a, b) => {
-      const da = a.tarih + 'T' + a.saat;
-      const db = b.tarih + 'T' + b.saat;
-      return db.localeCompare(da);
-    });
-  }, [hareketler, cariHareketler, personelHareketler, cariHesaplar, personeller]);
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
-  const filtered = useMemo(() => {
-    return logs.filter(l => {
-      if (filterTip !== 'Tumu' && l.islemTipi !== filterTip) return false;
-      if (filterIslem !== 'Tumu' && l.islem !== filterIslem) return false;
-      if (filterStart && l.tarih < filterStart) return false;
-      if (filterEnd && l.tarih > filterEnd) return false;
-      if (filterSearch && !l.aciklama.toLowerCase().includes(filterSearch.toLowerCase())) return false;
-      return true;
-    });
-  }, [logs, filterTip, filterIslem, filterStart, filterEnd, filterSearch]);
+  // Dinamik filtre seçenekleri: kayıtlı facet değerleri + bilinen etiketler
+  const actionOptions = facets.actions.length ? facets.actions.map((a) => a.value) : Object.keys(actionLabel);
+  const entityOptions = facets.entities.length ? facets.entities.map((e) => e.value) : Object.keys(entityLabel);
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
-
-  function handleExport() {
-    const csv = ['Tarih,Saat,Islem Tipi,Islem,Aciklama,Tutar,Alan,Kullanici', ...filtered.map(l => `${l.tarih},${l.saat},${l.islemTipi},${l.islem},"${l.aciklama}",${l.tutar ?? ''},${l.alan ?? ''},${l.kullanici}`)].join('\n');
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `hareket-loglari-${new Date().toISOString().split('T')[0]}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  async function handleExport() {
+    try {
+      const r = await api.get('/store/audit', { params: { page: 1, pageSize: 5000, ...params() } });
+      const all: AuditRow[] = r.data.rows || [];
+      const esc = (s: any) => `"${String(s ?? '').replace(/"/g, '""')}"`;
+      const csv = ['Tarih,Saat,Kullanici,Islem,Modul,Nereye,Kime,Neden,IP,Detay,Ek', ...all.map((l) => {
+        const { tarih, saat } = fmtDate(l.createdAt);
+        return [tarih, saat, esc(l.userName || ''), actionLabel[l.action] || l.action, entityLabel[l.entity] || l.entity, esc(l.hedef || ''), esc(l.kime || ''), esc(l.neden || ''), esc(l.ip || ''), esc(l.detail || ''), esc(metaText(l.meta))].join(',');
+      })].join('\n');
+      const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `personel-loglari-${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { toast.error(apiErrorMessage(e)); }
   }
 
-  const logTipler: LogTip[] = ['Tumu', 'Cari', 'GelirGider', 'Personel', 'KasaBanka', 'Cek'];
-  const logIslemler: LogIslem[] = ['Tumu', 'Ekleme', 'Silme', 'Guncelleme', 'Odeme'];
+  const resetPage = () => setPage(1);
+  const clearFilters = () => { setFilterStart(''); setFilterEnd(''); setFilterEntity(''); setFilterAction(''); setFilterUser(''); setFilterKime(''); setFilterSearch(''); resetPage(); };
+  const filtreAktif = !!(filterStart || filterEnd || filterEntity || filterAction || filterUser || filterKime || filterSearch);
+  const toggleRow = (id: string) => setExpanded((s) => ({ ...s, [id]: !s[id] }));
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">Hareket Loglari</h1>
-          <p className="text-gray-500 text-sm">Tum islemlerin detayli kaydi</p>
+          <h1 className="text-2xl font-bold text-gray-800">Personel Hareket Logları</h1>
+          <p className="text-gray-500 text-sm">Kim, ne zaman, neyi, nereye, kime ve neden yaptı — tüm işlemleri anlık izleyin</p>
         </div>
-        <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-xl hover:bg-gray-700 text-sm font-medium transition-colors">
-          <Download size={16} />CSV Disa Aktar
-        </button>
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {[
-          { label: 'Toplam Log', val: logs.length, color: 'from-indigo-500 to-indigo-600' },
-          { label: 'Gelir/Gider', val: logs.filter(l => l.islemTipi === 'GelirGider').length, color: 'from-green-500 to-green-600' },
-          { label: 'Cari', val: logs.filter(l => l.islemTipi === 'Cari').length, color: 'from-orange-500 to-orange-600' },
-          { label: 'Personel', val: logs.filter(l => l.islemTipi === 'Personel').length, color: 'from-blue-500 to-blue-600' },
-        ].map(c => (
-          <div key={c.label} className={`bg-gradient-to-br ${c.color} text-white rounded-2xl p-4`}>
-            <div className="text-3xl font-bold">{c.val}</div>
-            <div className="text-sm opacity-80 mt-1">{c.label}</div>
-          </div>
-        ))}
+        <div className="flex gap-2">
+          <button onClick={() => setCanli((v) => !v)} className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-colors ${canli ? 'bg-red-500 text-white hover:bg-red-600' : 'bg-white border border-gray-200 text-gray-700 hover:bg-gray-50'}`}>
+            <span className={`w-2 h-2 rounded-full ${canli ? 'bg-white animate-pulse' : 'bg-red-500'}`} />{canli ? 'Canlı İzleme Açık' : 'Canlı İzle'}
+          </button>
+          <button onClick={load} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 text-sm font-medium transition-colors"><RefreshCw size={16} className={loading ? 'animate-spin' : ''} />Yenile</button>
+          <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-xl hover:bg-gray-700 text-sm font-medium transition-colors"><Download size={16} />CSV Dışa Aktar</button>
+        </div>
       </div>
 
       {/* Filters */}
       <div className="bg-white rounded-2xl border border-gray-100 p-4 shadow-sm">
         <div className="flex flex-wrap gap-3 items-center">
           <div className="flex items-center gap-2 text-gray-500"><Filter size={16} /><span className="text-sm font-medium">Filtrele:</span></div>
-          <input type="date" value={filterStart} onChange={e => { setFilterStart(e.target.value); setPage(1); }} className="border border-gray-200 rounded-xl px-3 py-2 text-sm" />
-          <input type="date" value={filterEnd} onChange={e => { setFilterEnd(e.target.value); setPage(1); }} className="border border-gray-200 rounded-xl px-3 py-2 text-sm" />
-          <select value={filterTip} onChange={e => { setFilterTip(e.target.value as LogTip); setPage(1); }} className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
-            {logTipler.map(t => <option key={t} value={t}>{t === 'Tumu' ? 'Tum Tipler' : t}</option>)}
+          <input type="date" value={filterStart} onChange={(e) => { setFilterStart(e.target.value); resetPage(); }} className="border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+          <input type="date" value={filterEnd} onChange={(e) => { setFilterEnd(e.target.value); resetPage(); }} className="border border-gray-200 rounded-xl px-3 py-2 text-sm" />
+          <select value={filterUser} onChange={(e) => { setFilterUser(e.target.value); resetPage(); }} className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+            <option value="">Tüm Personel</option>
+            {users.map((u) => <option key={u.id} value={u.id}>{u.fullName}{u.unvan ? ` (${u.unvan})` : ''}</option>)}
           </select>
-          <select value={filterIslem} onChange={e => { setFilterIslem(e.target.value as LogIslem); setPage(1); }} className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
-            {logIslemler.map(i => <option key={i} value={i}>{i === 'Tumu' ? 'Tum Islemler' : i}</option>)}
+          <select value={filterEntity} onChange={(e) => { setFilterEntity(e.target.value); resetPage(); }} className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+            <option value="">Tüm Modüller</option>
+            {entityOptions.map((e) => <option key={e} value={e}>{entityLabel[e] || cap(e)}</option>)}
           </select>
+          <select value={filterAction} onChange={(e) => { setFilterAction(e.target.value); resetPage(); }} className="border border-gray-200 rounded-xl px-3 py-2 text-sm">
+            <option value="">Tüm İşlemler</option>
+            {actionOptions.map((a) => <option key={a} value={a}>{actionLabel[a] || cap(a)}</option>)}
+          </select>
+          <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2">
+            <User size={15} className="text-gray-400" />
+            <input value={filterKime} onChange={(e) => { setFilterKime(e.target.value); resetPage(); }} placeholder="Kime (müşteri/hedef)..." className="outline-none text-sm w-40" />
+          </div>
           <div className="flex items-center gap-2 border border-gray-200 rounded-xl px-3 py-2 flex-1 min-w-48">
             <Search size={15} className="text-gray-400" />
-            <input value={filterSearch} onChange={e => { setFilterSearch(e.target.value); setPage(1); }} placeholder="Aciklama ara..." className="flex-1 outline-none text-sm" />
+            <input value={filterSearch} onChange={(e) => { setFilterSearch(e.target.value); resetPage(); }} placeholder="Personel, detay, neden, hedef ara..." className="flex-1 outline-none text-sm" />
           </div>
+          {filtreAktif && <button onClick={clearFilters} className="flex items-center gap-1 text-sm text-rose-500 hover:text-rose-600 px-2 py-2"><X size={14} /> Temizle</button>}
         </div>
       </div>
 
@@ -184,7 +195,7 @@ export default function HareketLoglari() {
         <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <ClipboardList size={18} className="text-gray-500" />
-            <span className="font-semibold text-gray-700">Log Kayitlari ({filtered.length})</span>
+            <span className="font-semibold text-gray-700">Log Kayıtları ({total})</span>
           </div>
           <span className="text-sm text-gray-400">Sayfa {page} / {totalPages}</span>
         </div>
@@ -192,48 +203,75 @@ export default function HareketLoglari() {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-gray-50">
-                <th className="px-5 py-3 font-medium text-gray-500 text-left">Tarih/Saat</th>
-                <th className="px-5 py-3 font-medium text-gray-500 text-left">Islem Tipi</th>
-                <th className="px-5 py-3 font-medium text-gray-500 text-left">Islem</th>
-                <th className="px-5 py-3 font-medium text-gray-500 text-left">Aciklama</th>
-                <th className="px-5 py-3 font-medium text-gray-500 text-right">Tutar</th>
-                <th className="px-5 py-3 font-medium text-gray-500 text-left">Degisen Alan</th>
-                <th className="px-5 py-3 font-medium text-gray-500 text-left">Kullanici</th>
+                <th className="px-4 py-3 font-medium text-gray-500 text-left w-8"></th>
+                <th className="px-4 py-3 font-medium text-gray-500 text-left">Tarih/Saat</th>
+                <th className="px-4 py-3 font-medium text-gray-500 text-left">Personel</th>
+                <th className="px-4 py-3 font-medium text-gray-500 text-left">İşlem</th>
+                <th className="px-4 py-3 font-medium text-gray-500 text-left">Modül</th>
+                <th className="px-4 py-3 font-medium text-gray-500 text-left">Nereye</th>
+                <th className="px-4 py-3 font-medium text-gray-500 text-left">Kime</th>
+                <th className="px-4 py-3 font-medium text-gray-500 text-left">Neden</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {paginated.length === 0 && (
-                <tr><td colSpan={7} className="px-5 py-12 text-center text-gray-400">Log kaydı bulunamadi</td></tr>
+              {!loading && rows.length === 0 && (
+                <tr><td colSpan={8} className="px-5 py-12 text-center text-gray-400">Log kaydı bulunamadı</td></tr>
               )}
-              {paginated.map(l => (
-                <tr key={l.id} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-5 py-3 whitespace-nowrap">
-                    <div className="text-gray-700 font-medium">{l.tarih}</div>
-                    <div className="text-xs text-gray-400">{l.saat}</div>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className={`px-2 py-1 rounded-lg text-xs font-medium ${tipBadge[l.islemTipi]}`}>{l.islemTipi}</span>
-                  </td>
-                  <td className="px-5 py-3">
-                    <span className={`px-2 py-1 rounded-lg text-xs font-medium ${islemBadge[l.islem]}`}>{l.islem}</span>
-                  </td>
-                  <td className="px-5 py-3 text-gray-700 max-w-xs truncate">{l.aciklama}</td>
-                  <td className="px-5 py-3 text-right font-semibold text-gray-800">
-                    {l.tutar !== undefined ? `${fmt(l.tutar)} ₺` : '-'}
-                  </td>
-                  <td className="px-5 py-3 text-gray-500 text-xs">{l.alan || '-'}</td>
-                  <td className="px-5 py-3 text-gray-500 text-xs">{l.kullanici}</td>
-                </tr>
-              ))}
+              {rows.map((l) => {
+                const { tarih, saat } = fmtDate(l.createdAt);
+                const isOpen = !!expanded[l.id];
+                const hasDetail = !!(l.detail || l.ip || (l.meta && Object.keys(l.meta).length));
+                return (
+                  <Fragment key={l.id}>
+                    <tr onClick={() => hasDetail && toggleRow(l.id)} className={`hover:bg-gray-50 transition-colors ${hasDetail ? 'cursor-pointer' : ''}`}>
+                      <td className="px-4 py-3 text-gray-400">{hasDetail ? (isOpen ? <ChevronUp size={15} /> : <ChevronDown size={15} />) : null}</td>
+                      <td className="px-4 py-3 whitespace-nowrap">
+                        <div className="text-gray-700 font-medium">{tarih}</div>
+                        <div className="text-xs text-gray-400">{saat}</div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {l.action === 'giris' && <LogIn size={14} className="text-sky-500" />}
+                          <span className="text-gray-700 font-medium">{l.userName || 'Sistem'}</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded-lg text-xs font-medium ${actionBadge[l.action] || 'bg-gray-100 text-gray-600'}`}>{actionLabel[l.action] || cap(l.action)}</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className={`px-2 py-1 rounded-lg text-xs font-medium ${entityBadge[l.entity] || 'bg-gray-100 text-gray-600'}`}>{entityLabel[l.entity] || cap(l.entity)}</span>
+                      </td>
+                      <td className="px-4 py-3 text-gray-700 max-w-[180px] truncate">{l.hedef || <span className="text-gray-300">—</span>}</td>
+                      <td className="px-4 py-3 text-gray-600 max-w-[160px] truncate">{l.kime || <span className="text-gray-300">—</span>}</td>
+                      <td className="px-4 py-3 text-gray-500 max-w-[220px] truncate">{l.neden || <span className="text-gray-300">—</span>}</td>
+                    </tr>
+                    {isOpen && hasDetail && (
+                      <tr className="bg-gray-50/70">
+                        <td></td>
+                        <td colSpan={7} className="px-4 py-3">
+                          <div className="grid sm:grid-cols-2 gap-2 text-xs text-gray-600">
+                            {l.detail && <div className="flex items-start gap-1.5"><ClipboardList size={13} className="text-gray-400 mt-0.5 shrink-0" /><span><b>Açıklama:</b> {l.detail}</span></div>}
+                            {l.hedef && <div className="flex items-start gap-1.5"><MapPin size={13} className="text-gray-400 mt-0.5 shrink-0" /><span><b>Nereye:</b> {l.hedef}</span></div>}
+                            {l.kime && <div className="flex items-start gap-1.5"><User size={13} className="text-gray-400 mt-0.5 shrink-0" /><span><b>Kime:</b> {l.kime}</span></div>}
+                            {l.neden && <div className="flex items-start gap-1.5"><HelpCircle size={13} className="text-gray-400 mt-0.5 shrink-0" /><span><b>Neden:</b> {l.neden}</span></div>}
+                            {l.ip && <div className="flex items-start gap-1.5"><Globe size={13} className="text-gray-400 mt-0.5 shrink-0" /><span><b>IP:</b> {l.ip}</span></div>}
+                            {l.meta && Object.keys(l.meta).length > 0 && <div className="flex items-start gap-1.5 sm:col-span-2"><ClipboardList size={13} className="text-gray-400 mt-0.5 shrink-0" /><span><b>Detaylar:</b> {metaText(l.meta)}</span></div>}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>
 
         {/* Pagination */}
         <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
-          <span className="text-sm text-gray-500">{filtered.length} kayit, {PAGE_SIZE} per sayfa</span>
+          <span className="text-sm text-gray-500">{total} kayıt, {PAGE_SIZE} / sayfa</span>
           <div className="flex gap-2 items-center">
-            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className="p-2 text-gray-500 hover:bg-gray-100 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={16} /></button>
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page === 1} className="p-2 text-gray-500 hover:bg-gray-100 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-colors"><ChevronLeft size={16} /></button>
             <div className="flex gap-1">
               {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => {
                 const pg = page <= 3 ? i + 1 : page - 2 + i;
@@ -243,7 +281,7 @@ export default function HareketLoglari() {
                 );
               })}
             </div>
-            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-2 text-gray-500 hover:bg-gray-100 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-colors"><ChevronRight size={16} /></button>
+            <button onClick={() => setPage((p) => Math.min(totalPages, p + 1))} disabled={page === totalPages} className="p-2 text-gray-500 hover:bg-gray-100 rounded-xl disabled:opacity-40 disabled:cursor-not-allowed transition-colors"><ChevronRight size={16} /></button>
           </div>
         </div>
       </div>

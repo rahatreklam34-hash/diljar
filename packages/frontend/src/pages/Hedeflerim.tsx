@@ -14,12 +14,12 @@ const KAT_COLORS: Record<string, string> = {
   Arac: 'bg-purple-50 text-purple-600 border-purple-200',
   Ev: 'bg-amber-50 text-amber-600 border-amber-200',
   Tatil: 'bg-pink-50 text-pink-600 border-pink-200',
-  Egitim: 'bg-indigo-50 text-indigo-600 border-indigo-200',
+  Egitim: 'bg-emerald-50 text-emerald-600 border-emerald-200',
   Diger: 'bg-gray-100 text-gray-600 border-gray-200',
 };
 const KAT_BAR: Record<string, string> = {
   Tasarruf: 'bg-green-500', Yatirim: 'bg-blue-500', 'Borc Odeme': 'bg-red-500',
-  Arac: 'bg-purple-500', Ev: 'bg-amber-500', Tatil: 'bg-pink-500', Egitim: 'bg-indigo-500', Diger: 'bg-gray-400',
+  Arac: 'bg-purple-500', Ev: 'bg-amber-500', Tatil: 'bg-pink-500', Egitim: 'bg-emerald-500', Diger: 'bg-gray-400',
 };
 
 const fmt = (v: number) => v.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
@@ -137,7 +137,7 @@ export default function Hedeflerim() {
           <h1 className="text-xl font-bold text-gray-800">Hedeflerim</h1>
           <p className="text-[11px] text-gray-400">Finansal hedeflerinizi belirleyin ve takip edin</p>
         </div>
-        <button onClick={openCreate} className="flex items-center gap-1.5 px-3.5 py-2 bg-[#6c63ff] text-white rounded-lg text-xs font-medium hover:bg-[#5b54e6]">
+        <button onClick={openCreate} className="flex items-center gap-1.5 px-3.5 py-2 bg-[#1F9D57] text-white rounded-lg text-xs font-medium hover:bg-[#178A49]">
           <Plus size={14} /> Yeni Hedef
         </button>
       </div>
@@ -162,7 +162,7 @@ export default function Hedeflerim() {
       {/* Active Goals Grid */}
       {aktifHedefler.length > 0 && (
         <div>
-          <h2 className="text-[12px] font-semibold text-gray-700 mb-3 flex items-center gap-1.5"><Target size={13} className="text-[#6c63ff]" /> Aktif Hedefler</h2>
+          <h2 className="text-[12px] font-semibold text-gray-700 mb-3 flex items-center gap-1.5"><Target size={13} className="text-[#1F9D57]" /> Aktif Hedefler</h2>
           <div className="grid grid-cols-3 gap-4">
             {aktifHedefler.map(h => {
               const pct = Math.min(100, Math.round((h.mevcutTutar / h.hedefTutar) * 100));
@@ -195,7 +195,7 @@ export default function Hedeflerim() {
                     <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
                     </div>
-                    <p className="text-[10px] font-bold text-[#6c63ff] mt-1">{pct}% tamamlandi</p>
+                    <p className="text-[10px] font-bold text-[#1F9D57] mt-1">{pct}% tamamlandi</p>
                   </div>
                   <div className="flex items-center gap-3 text-[9px] text-gray-500">
                     <span className="flex items-center gap-1"><ArrowRight size={9} />Kalan: <strong className="text-gray-700">₺{fmt(Math.max(0, kalan))}</strong></span>
@@ -235,7 +235,7 @@ export default function Hedeflerim() {
           <Target size={40} className="text-gray-300" />
           <p className="text-gray-500 text-sm font-medium">Henuz hedef eklenmedi</p>
           <p className="text-gray-400 text-xs">Ilk finansal hedefinizi ekleyin ve ilerlemenizi takip edin.</p>
-          <button onClick={openCreate} className="mt-2 flex items-center gap-1.5 px-4 py-2 bg-[#6c63ff] text-white rounded-lg text-xs font-medium hover:bg-[#5b54e6]"><Plus size={13} /> Hedef Ekle</button>
+          <button onClick={openCreate} className="mt-2 flex items-center gap-1.5 px-4 py-2 bg-[#1F9D57] text-white rounded-lg text-xs font-medium hover:bg-[#178A49]"><Plus size={13} /> Hedef Ekle</button>
         </div>
       )}
 
@@ -297,7 +297,7 @@ export default function Hedeflerim() {
           )}
           <div className="flex gap-2 justify-end pt-2">
             <button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button>
-            <button type="submit" className="px-5 py-2 text-sm bg-[#6c63ff] text-white rounded-lg hover:bg-[#5b54e6]">{editItem ? 'Guncelle' : 'Kaydet'}</button>
+            <button type="submit" className="px-5 py-2 text-sm bg-[#1F9D57] text-white rounded-lg hover:bg-[#178A49]">{editItem ? 'Guncelle' : 'Kaydet'}</button>
           </div>
         </form>
       </Modal>

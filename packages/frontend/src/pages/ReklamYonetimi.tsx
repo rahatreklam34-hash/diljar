@@ -5,6 +5,7 @@ import {
   CheckCircle2, ChevronRight, Image as ImageIcon, Send, Plug, Unplug, Loader2,
 } from 'lucide-react';
 import api from '../lib/api';
+import toast from 'react-hot-toast';
 
 // ───────────────────────── Tipler ─────────────────────────
 type CampaignStatus = 'Güçlü' | 'İncele' | 'Riskli';
@@ -94,8 +95,8 @@ function buildOptimization(cs: Campaign[]): OptAction[] {
 
 // ───────────────────────── UI küçük parçalar ─────────────────────────
 const card = 'bg-white rounded-2xl border border-slate-200 shadow-sm';
-const inp = 'w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100';
-const btnP = 'inline-flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-50';
+const inp = 'w-full rounded-xl border border-slate-300 bg-white px-3.5 py-2.5 text-sm text-slate-700 outline-none focus:border-emerald-400 focus:ring-2 focus:ring-emerald-100';
+const btnP = 'inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-50';
 const btnS = 'inline-flex items-center justify-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50';
 
 function Metric({ label, value, helper }: { label: string; value: string; helper?: string }) {
@@ -147,7 +148,7 @@ export default function ReklamYonetimi() {
       {/* Başlık */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-sm"><Megaphone size={22} /></span>
+          <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-600 text-white shadow-sm"><Megaphone size={22} /></span>
           <div>
             <h1 className="text-xl font-bold text-slate-800">Reklam Yönetimi</h1>
             <p className="text-xs text-slate-400">Meta Ads AI paneli — performans, optimizasyon, kreatif ve analiz tek merkezde.</p>
@@ -167,7 +168,7 @@ export default function ReklamYonetimi() {
         {MODULES.map((m) => {
           const active = tab === m.id;
           return (
-            <button key={m.id} onClick={() => setTab(m.id)} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium border transition ${active ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
+            <button key={m.id} onClick={() => setTab(m.id)} className={`inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium border transition ${active ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm' : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'}`}>
               <m.Ic size={16} /> {m.label}
             </button>
           );
@@ -227,7 +228,7 @@ function MetaConnection({ connected, account, adAccountId, onChange }: { connect
   return (
     <div className="grid lg:grid-cols-2 gap-4">
       <div className={`${card} p-5`}>
-        <div className="flex items-center gap-2 mb-1"><ShieldCheck className="text-indigo-600" size={18} /><h2 className="font-bold text-slate-800">Meta Reklam Hesabı Bağlantısı</h2></div>
+        <div className="flex items-center gap-2 mb-1"><ShieldCheck className="text-emerald-600" size={18} /><h2 className="font-bold text-slate-800">Meta Reklam Hesabı Bağlantısı</h2></div>
         <p className="text-xs text-slate-400 mb-4">Access token sunucuda güvenli şekilde saklanır; tarayıcıya geri gönderilmez. Token izinleri: <code className="text-[11px]">ads_read, ads_management</code>.</p>
         <label className="text-xs font-semibold text-slate-500">Access Token</label>
         <div className="relative mt-1 mb-3">
@@ -336,7 +337,7 @@ function Kampanyalar({ data, loading, reload, datePreset, dateFrom, dateTo }: an
     if (!confirm(`${c.campaignName} kampanyası ${next === 'PAUSED' ? 'durdurulacak' : 'aktifleştirilecek'}. Onaylıyor musunuz?`)) return;
     setActing(c.campaignId);
     try { await api.post('/ads/action', { action: 'update_campaign_status', entityId: c.campaignId, status: next }); await reload(); }
-    catch (e: any) { alert(e?.response?.data?.message || 'Aksiyon başarısız.'); }
+    catch (e: any) { toast.error(e?.response?.data?.message || 'Aksiyon başarısız.'); }
     finally { setActing(''); }
   };
 
@@ -344,14 +345,14 @@ function Kampanyalar({ data, loading, reload, datePreset, dateFrom, dateTo }: an
     const val = prompt(`${e.name} ad set için yeni GÜNLÜK bütçe (TL):`, '');
     if (!val) return;
     const kurus = String(Math.round(Number(val) * 100));
-    if (!/^\d+$/.test(kurus) || Number(kurus) <= 0) { alert('Geçerli bir tutar girin.'); return; }
+    if (!/^\d+$/.test(kurus) || Number(kurus) <= 0) { toast.error('Geçerli bir tutar girin.'); return; }
     setActing(e.id);
-    try { await api.post('/ads/action', { action: 'update_adset_budget', entityId: e.id, dailyBudget: kurus }); alert('Ad set bütçesi güncellendi.'); }
-    catch (er: any) { alert(er?.response?.data?.message || 'Bütçe güncellenemedi.'); }
+    try { await api.post('/ads/action', { action: 'update_adset_budget', entityId: e.id, dailyBudget: kurus }); toast.success('Ad set bütçesi güncellendi.'); }
+    catch (er: any) { toast.error(er?.response?.data?.message || 'Bütçe güncellenemedi.'); }
     finally { setActing(''); }
   };
 
-  if (!data) return <div className={`${card} p-8 text-center text-sm text-slate-400`}>{loading ? <span className="inline-block w-6 h-6 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin align-middle" /> : 'Önce Özet sekmesinden verileri yükleyin.'}</div>;
+  if (!data) return <div className={`${card} p-8 text-center text-sm text-slate-400`}>{loading ? <span className="inline-block w-6 h-6 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin align-middle" /> : 'Önce Özet sekmesinden verileri yükleyin.'}</div>;
 
   return (
     <div className={`${card} overflow-hidden`}>
@@ -371,7 +372,7 @@ function Kampanyalar({ data, loading, reload, datePreset, dateFrom, dateTo }: an
               <Fragment key={c.campaignId}>
                 <tr className="border-b border-slate-50 hover:bg-slate-50/60">
                   <td className="px-4 py-3">
-                    <button onClick={() => openCampaign(c)} className="flex items-center gap-2 text-left font-medium text-slate-700 hover:text-indigo-600">
+                    <button onClick={() => openCampaign(c)} className="flex items-center gap-2 text-left font-medium text-slate-700 hover:text-emerald-600">
                       <ChevronRight size={15} className={`transition ${openId === c.campaignId ? 'rotate-90' : ''}`} />{c.campaignName}
                     </button>
                   </td>
@@ -383,7 +384,7 @@ function Kampanyalar({ data, loading, reload, datePreset, dateFrom, dateTo }: an
                   <td className="px-3 py-3 text-slate-600">{c.roas > 0 ? rf(c.roas) : '-'}</td>
                   <td className="px-3 py-3"><span className={`inline-flex rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusBadge[c.status]}`}>{c.status}</span></td>
                   <td className="px-3 py-3">
-                    <button onClick={() => toggleCampaign(c)} disabled={acting === c.campaignId} title={(c.deliveryStatus || '').toUpperCase() === 'ACTIVE' ? 'Durdur' : 'Aktifleştir'} className="text-slate-400 hover:text-indigo-600">
+                    <button onClick={() => toggleCampaign(c)} disabled={acting === c.campaignId} title={(c.deliveryStatus || '').toUpperCase() === 'ACTIVE' ? 'Durdur' : 'Aktifleştir'} className="text-slate-400 hover:text-emerald-600">
                       {acting === c.campaignId ? <Loader2 className="animate-spin" size={17} /> : (c.deliveryStatus || '').toUpperCase() === 'ACTIVE' ? <PauseCircle size={18} /> : <PlayCircle size={18} />}
                     </button>
                   </td>
@@ -405,7 +406,7 @@ function Kampanyalar({ data, loading, reload, datePreset, dateFrom, dateTo }: an
                                       <span className="text-slate-500">Harcama: {cf(a.spend, currency)}</span>
                                       <span className="text-slate-500">CTR: {pf(a.ctr)}</span>
                                       <span className="text-slate-500">Sonuç: {nf(a.results)}</span>
-                                      <button onClick={() => updateBudget(a)} disabled={acting === a.id} className="ml-auto text-indigo-600 hover:underline font-semibold">{acting === a.id ? '...' : 'Bütçe Düzenle'}</button>
+                                      <button onClick={() => updateBudget(a)} disabled={acting === a.id} className="ml-auto text-emerald-600 hover:underline font-semibold">{acting === a.id ? '...' : 'Bütçe Düzenle'}</button>
                                     </div>
                                   ))}
                                 </div>
@@ -461,7 +462,7 @@ function KampanyaOlustur({ connected, onCreated }: { connected: boolean; onCreat
 
   return (
     <div className={`${card} p-5 max-w-xl`}>
-      <div className="flex items-center gap-2 mb-1"><Rocket className="text-indigo-600" size={18} /><h2 className="font-bold text-slate-800">Kampanya Oluştur</h2></div>
+      <div className="flex items-center gap-2 mb-1"><Rocket className="text-emerald-600" size={18} /><h2 className="font-bold text-slate-800">Kampanya Oluştur</h2></div>
       <p className="text-xs text-slate-400 mb-4">Meta reklam hesabında yeni bir kampanya açar. Güvenlik için varsayılan durum "Duraklatıldı"dır; yayına almadan önce ad set ve reklam ekleyin.</p>
       {!connected && <p className="text-xs text-amber-600 mb-3 flex items-center gap-1.5"><AlertCircle size={14} /> Önce Meta bağlantısı kurmalısınız.</p>}
       <label className="text-xs font-semibold text-slate-500">Kampanya Adı</label>
@@ -491,7 +492,7 @@ function Optimizasyon({ data, reload }: { data: InsightsData | null; reload: () 
     if (!confirm(`${a.campaignName} kampanyası durdurulacak. Onaylıyor musunuz?`)) return;
     setActing(a.id);
     try { await api.post('/ads/action', { action: 'update_campaign_status', entityId: a.campaignId, status: 'PAUSED' }); await reload(); }
-    catch (e: any) { alert(e?.response?.data?.message || 'Aksiyon başarısız.'); }
+    catch (e: any) { toast.error(e?.response?.data?.message || 'Aksiyon başarısız.'); }
     finally { setActing(''); }
   };
 
@@ -540,7 +541,7 @@ function Analiz({ data }: { data: InsightsData | null }) {
     <div className="space-y-3">
       <div className={`${card} p-5`}>
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2"><ClipboardList className="text-indigo-600" size={18} /><h2 className="font-bold text-slate-800">AI Destekli Analiz</h2></div>
+          <div className="flex items-center gap-2"><ClipboardList className="text-emerald-600" size={18} /><h2 className="font-bold text-slate-800">AI Destekli Analiz</h2></div>
           <button onClick={run} disabled={busy} className={btnP}>{busy ? <Loader2 className="animate-spin" size={16} /> : <ClipboardList size={16} />} AI Analizi Çalıştır</button>
         </div>
         <p className="text-xs text-slate-400 mb-3">Canlı veriler OpenAI ile yorumlanır. Anahtar tanımlı değilse yerel ön analiz gösterilir.</p>
@@ -573,7 +574,7 @@ function Kreatif({ data }: { data: InsightsData | null }) {
   return (
     <div className="grid lg:grid-cols-2 gap-4">
       <div className={`${card} p-5`}>
-        <div className="flex items-center gap-2 mb-1"><WandSparkles className="text-indigo-600" size={18} /><h2 className="font-bold text-slate-800">AI Kreatif Görsel Üret</h2></div>
+        <div className="flex items-center gap-2 mb-1"><WandSparkles className="text-emerald-600" size={18} /><h2 className="font-bold text-slate-800">AI Kreatif Görsel Üret</h2></div>
         <p className="text-xs text-slate-400 mb-4">Ürün, kitle ve formata göre reklam görseli üretir. OpenAI görsel anahtarı gerekir (Entegrasyonlar).</p>
         <label className="text-xs font-semibold text-slate-500">Ürün / Hizmet</label>
         <input value={product} onChange={(e) => setProduct(e.target.value)} placeholder="Örn. kadın spor ayakkabı" className={`${inp} mt-1 mb-3`} />
@@ -614,14 +615,14 @@ function Chat({ data }: { data: InsightsData | null }) {
 
   return (
     <div className={`${card} p-5`}>
-      <div className="flex items-center gap-2 mb-3"><MessageSquareText className="text-indigo-600" size={18} /><h2 className="font-bold text-slate-800">AI Chat</h2></div>
+      <div className="flex items-center gap-2 mb-3"><MessageSquareText className="text-emerald-600" size={18} /><h2 className="font-bold text-slate-800">AI Chat</h2></div>
       <div className="flex flex-wrap gap-2 mb-3">
         {quickPrompts.map((p) => <button key={p} onClick={() => send(p)} disabled={busy} className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50">{p}</button>)}
       </div>
       <div className="space-y-2.5 max-h-[420px] overflow-y-auto wt-scroll pr-1 mb-3">
         {msgs.map((m, i) => (
           <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-line ${m.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-slate-50 border border-slate-200 text-slate-700'}`}>{m.text}</div>
+            <div className={`max-w-[80%] rounded-2xl px-3.5 py-2.5 text-sm whitespace-pre-line ${m.role === 'user' ? 'bg-emerald-600 text-white' : 'bg-slate-50 border border-slate-200 text-slate-700'}`}>{m.text}</div>
           </div>
         ))}
         {busy && <div className="flex justify-start"><div className="rounded-2xl bg-slate-50 border border-slate-200 px-3.5 py-2.5 text-sm text-slate-400 flex items-center gap-2"><Loader2 className="animate-spin" size={14} /> Yazıyor…</div></div>}

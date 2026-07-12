@@ -5,7 +5,7 @@ import api from '../lib/api';
 const EKRANLAR = [
   { k: 'browse', t: 'Geziniyor', Ic: Eye, cls: 'bg-slate-100 text-slate-600', bar: 'bg-slate-400' },
   { k: 'category', t: 'Kategori İnceliyor', Ic: Tag, cls: 'bg-sky-100 text-sky-600', bar: 'bg-sky-500' },
-  { k: 'product', t: 'Ürün İnceliyor', Ic: Package, cls: 'bg-violet-100 text-violet-600', bar: 'bg-violet-500' },
+  { k: 'product', t: 'Ürün İnceliyor', Ic: Package, cls: 'bg-green-100 text-green-600', bar: 'bg-green-500' },
   { k: 'cart', t: 'Sepette', Ic: ShoppingCart, cls: 'bg-amber-100 text-amber-600', bar: 'bg-amber-500' },
   { k: 'checkout', t: 'Ödeme Ekranında', Ic: CreditCard, cls: 'bg-emerald-100 text-emerald-600', bar: 'bg-emerald-500' },
 ];
@@ -31,7 +31,7 @@ function feedText(e: any) {
   switch (e.type) {
     case 'view': return { msg: 'siteye girdi', Ic: Eye, c: 'text-slate-500' };
     case 'category': return { msg: `${l} kategorisine baktı`, Ic: Tag, c: 'text-sky-600' };
-    case 'product': return { msg: `${l} ürününü inceledi`, Ic: Package, c: 'text-violet-600' };
+    case 'product': return { msg: `${l} ürününü inceledi`, Ic: Package, c: 'text-green-600' };
     case 'cart_add': return { msg: `${l} ürününü sepete ekledi`, Ic: ShoppingBag, c: 'text-amber-600' };
     case 'cart_view': return { msg: 'sepetini açtı', Ic: ShoppingCart, c: 'text-amber-600' };
     case 'checkout': return { msg: 'ödeme ekranına geçti', Ic: CreditCard, c: 'text-emerald-600' };
@@ -78,7 +78,7 @@ export default function CanliAkis() {
           <div className="bg-white rounded-2xl border border-slate-200 px-4 py-2.5">
             <p className="text-[11px] text-slate-400 mb-1">Cihaz</p>
             <div className="flex items-center gap-3 text-sm">
-              <span className="inline-flex items-center gap-1 text-slate-600"><Smartphone size={14} className="text-indigo-500" /> {cihaz.mobil || 0}</span>
+              <span className="inline-flex items-center gap-1 text-slate-600"><Smartphone size={14} className="text-emerald-500" /> {cihaz.mobil || 0}</span>
               <span className="inline-flex items-center gap-1 text-slate-600"><Monitor size={14} className="text-sky-500" /> {cihaz.web || 0}</span>
             </div>
           </div>
@@ -86,7 +86,7 @@ export default function CanliAkis() {
       </div>
 
       {!loaded ? (
-        <div className="bg-white rounded-2xl border border-slate-200 p-12 flex justify-center"><span className="w-7 h-7 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div>
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 flex justify-center"><span className="w-7 h-7 border-2 border-slate-200 border-t-emerald-500 rounded-full animate-spin" /></div>
       ) : (
         <>
           {/* Ekran dağılımı */}
@@ -105,14 +105,14 @@ export default function CanliAkis() {
             <div className="space-y-5 min-w-0">
               {/* Dönüşüm hunisi (son 30 dk) */}
               <div className="bg-white rounded-2xl border border-slate-200 p-5">
-                <h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><TrendingUp size={16} className="text-indigo-600" /> Dönüşüm Hunisi <span className="text-xs text-slate-400 font-normal">(son 30 dk)</span></h3>
+                <h3 className="font-semibold text-slate-800 mb-1 flex items-center gap-2"><TrendingUp size={16} className="text-emerald-600" /> Dönüşüm Hunisi <span className="text-xs text-slate-400 font-normal">(son 30 dk)</span></h3>
                 <p className="text-xs text-slate-400 mb-3">Ziyaretçilerin alışveriş akışında hangi adımda kaç hareket oldu.</p>
                 <div className="space-y-2">
                   {HUNI.map((h) => { const v = huni[h.k] || 0; const Ic = h.Ic; return (
                     <div key={h.k} className="flex items-center gap-3">
                       <span className="w-40 shrink-0 inline-flex items-center gap-2 text-sm text-slate-600"><Ic size={15} className="text-slate-400" /> {h.t}</span>
                       <div className="flex-1 h-7 bg-slate-100 rounded-lg overflow-hidden relative">
-                        <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-500 rounded-lg flex items-center justify-end px-2" style={{ width: `${Math.max(6, (v / huniMax) * 100)}%` }}><span className="text-[11px] font-bold text-white">{v}</span></div>
+                        <div className="h-full bg-gradient-to-r from-emerald-500 to-green-500 rounded-lg flex items-center justify-end px-2" style={{ width: `${Math.max(6, (v / huniMax) * 100)}%` }}><span className="text-[11px] font-bold text-white">{v}</span></div>
                       </div>
                     </div>
                   ); })}
@@ -131,10 +131,10 @@ export default function CanliAkis() {
                   </div>
                 </div>
                 <div className="bg-white rounded-2xl border border-slate-200 p-5">
-                  <h3 className="font-semibold text-slate-800 mb-3 flex items-center gap-2"><Package size={15} className="text-violet-600" /> Ürün İnceleyenler</h3>
+                  <h3 className="font-semibold text-slate-800 mb-3 flex items-center gap-2"><Package size={15} className="text-green-600" /> Ürün İnceleyenler</h3>
                   <div className="space-y-2">
                     {(d?.urunler || []).map((c: any) => (
-                      <div key={c.ad} className="flex items-center justify-between text-sm"><span className="text-slate-600 truncate pr-2">{c.ad}</span><span className="font-bold text-violet-600 shrink-0">{c.sayi} kişi</span></div>
+                      <div key={c.ad} className="flex items-center justify-between text-sm"><span className="text-slate-600 truncate pr-2">{c.ad}</span><span className="font-bold text-green-600 shrink-0">{c.sayi} kişi</span></div>
                     ))}
                     {(!d?.urunler || d.urunler.length === 0) && <p className="text-sm text-slate-400">Şu an ürün inceleyen yok.</p>}
                   </div>

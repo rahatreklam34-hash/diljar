@@ -1,8 +1,8 @@
-import { useRef, useState, DragEvent } from 'react';
+import { useRef, useState, useEffect, DragEvent } from 'react';
 import { Upload, X, Star, Sparkles, Loader2 } from 'lucide-react';
 
 // Dosyayi canvas ile kucultup JPEG dataURL'e cevirir
-function fileToDataUrl(file: File, maxSize = 900, quality = 0.72): Promise<string> {
+function fileToDataUrl(file: File, maxSize = 2200, quality = 0.95): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
@@ -18,7 +18,8 @@ function fileToDataUrl(file: File, maxSize = 900, quality = 0.72): Promise<strin
         const ctx = canvas.getContext('2d');
         if (!ctx) return reject();
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        const webp = canvas.toDataURL('image/webp', quality);
+        resolve(webp.startsWith('data:image/webp') ? webp : canvas.toDataURL('image/jpeg', quality));
       };
       img.onerror = reject;
       img.src = reader.result as string;
@@ -29,7 +30,7 @@ function fileToDataUrl(file: File, maxSize = 900, quality = 0.72): Promise<strin
 }
 
 // dataURL'i (orn. AI'dan donen buyuk PNG) kucuk JPEG'e cevirir (depolama icin)
-function dataUrlToJpeg(dataUrl: string, maxSize = 1000, quality = 0.82): Promise<string> {
+function dataUrlToJpeg(dataUrl: string, maxSize = 2200, quality = 0.95): Promise<string> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {
@@ -43,7 +44,8 @@ function dataUrlToJpeg(dataUrl: string, maxSize = 1000, quality = 0.82): Promise
       const ctx = canvas.getContext('2d');
       if (!ctx) return reject();
       ctx.drawImage(img, 0, 0, width, height);
-      resolve(canvas.toDataURL('image/jpeg', quality));
+      const w = canvas.toDataURL('image/webp', quality);
+      resolve(w.startsWith('data:image/webp') ? w : canvas.toDataURL('image/jpeg', quality));
     };
     img.onerror = reject;
     img.src = dataUrl;
@@ -55,13 +57,34 @@ export default function ImageDropzone({ images, onChange, max = 5, onEnhance }: 
   const [drag, setDrag] = useState(false);
   const [busyIdx, setBusyIdx] = useState<number | null>(null);
 
+  const imagesRef = useRef(images); imagesRef.current = images;
+  const onChangeRef = useRef(onChange); onChangeRef.current = onChange;
+
   const addFiles = async (files: FileList | File[]) => {
     const arr = Array.from(files).filter((f) => f.type.startsWith('image/'));
-    const remaining = max - images.length;
+    const cur = imagesRef.current;
+    const remaining = max - cur.length;
+    if (remaining <= 0) return;
     const toAdd = arr.slice(0, remaining);
     const urls = await Promise.all(toAdd.map((f) => fileToDataUrl(f)));
-    onChange([...images, ...urls]);
+    onChangeRef.current([...imagesRef.current, ...urls]);
   };
+
+  // Pano (clipboard) ile gorsel yapistirma: Ctrl+V
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      const files: File[] = [];
+      for (const it of Array.from(items)) {
+        if (it.type.startsWith('image/')) { const f = it.getAsFile(); if (f) files.push(f); }
+      }
+      if (files.length) { e.preventDefault(); addFiles(files); }
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [max]);
 
   const onDrop = (e: DragEvent) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files?.length) addFiles(e.dataTransfer.files); };
   const removeAt = (i: number) => onChange(images.filter((_, idx) => idx !== i));
@@ -90,10 +113,10 @@ export default function ImageDropzone({ images, onChange, max = 5, onEnhance }: 
         onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
         onDragLeave={() => setDrag(false)}
         onDrop={onDrop}
-        className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${drag ? 'border-indigo-400 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300'}`}
+        className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${drag ? 'border-emerald-400 bg-emerald-50' : 'border-slate-200 hover:border-emerald-300'}`}
       >
         <Upload size={20} className="mx-auto text-slate-400 mb-1" />
-        <p className="text-xs text-slate-500">Görselleri sürükleyip bırakın veya tıklayın</p>
+        <p className="text-xs text-slate-500">Görselleri sürükleyip bırakın, tıklayın veya <span className="font-medium text-emerald-600">Ctrl+V</span> ile yapıştırın</p>
         <p className="text-[10px] text-slate-400">İlk görsel kapak olur · max {max} adet{onEnhance ? ' · görsel üstündeki ✦ ile profesyonel çekime dönüştür' : ''}</p>
         <input ref={inputRef} type="file" accept="image/*" multiple className="hidden" onChange={(e) => e.target.files && addFiles(e.target.files)} />
       </div>
@@ -102,7 +125,7 @@ export default function ImageDropzone({ images, onChange, max = 5, onEnhance }: 
           {images.map((src, i) => (
             <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-slate-200 group">
               <img src={src} alt="" className="w-full h-full object-cover" />
-              {i === 0 && <span className="absolute top-0 left-0 bg-indigo-600 text-white text-[8px] px-1 rounded-br">Kapak</span>}
+              {i === 0 && <span className="absolute top-0 left-0 bg-emerald-600 text-white text-[8px] px-1 rounded-br">Kapak</span>}
               {busyIdx === i && (
                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
                   <Loader2 size={18} className="text-white animate-spin" />

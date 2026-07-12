@@ -137,15 +137,15 @@ export default function BankaHareketleri() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center"><Landmark className="text-indigo-600" size={22} /></div>
+          <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><Landmark className="text-emerald-600" size={22} /></div>
           <div>
             <h1 className="text-xl font-bold text-gray-800">Banka Hareketleri</h1>
             <p className="text-[11px] text-gray-400">Banka hesap hareketlerinizi goruntuleyin. Ornek veri ile deneyebilirsiniz.</p>
           </div>
         </div>
         <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg p-1">
-          <button onClick={() => switchMode('demo')} className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md ${mode === 'demo' ? 'bg-[#6c63ff] text-white' : 'text-gray-500 hover:bg-gray-100'}`}><Database size={13} /> Ornek Veri</button>
-          <button onClick={() => switchMode('gercek')} className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md ${mode === 'gercek' ? 'bg-[#6c63ff] text-white' : 'text-gray-500 hover:bg-gray-100'}`}><Cloud size={13} /> Gercek (Is Bankasi)</button>
+          <button onClick={() => switchMode('demo')} className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md ${mode === 'demo' ? 'bg-[#1F9D57] text-white' : 'text-gray-500 hover:bg-gray-100'}`}><Database size={13} /> Ornek Veri</button>
+          <button onClick={() => switchMode('gercek')} className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] font-medium rounded-md ${mode === 'gercek' ? 'bg-[#1F9D57] text-white' : 'text-gray-500 hover:bg-gray-100'}`}><Cloud size={13} /> Gercek (Is Bankasi)</button>
         </div>
       </div>
 
@@ -161,10 +161,10 @@ export default function BankaHareketleri() {
       {/* Hesap secimi */}
       <div className="flex flex-wrap items-center gap-2">
         {mode === 'gercek' && accounts.length === 0 && (
-          <button onClick={gercekGetir} disabled={busy} className="px-3.5 py-2 text-xs font-medium bg-[#6c63ff] text-white rounded-lg hover:bg-[#5b54e6] disabled:opacity-50">{busy ? 'Getiriliyor...' : 'Hesaplari Getir'}</button>
+          <button onClick={gercekGetir} disabled={busy} className="px-3.5 py-2 text-xs font-medium bg-[#1F9D57] text-white rounded-lg hover:bg-[#178A49] disabled:opacity-50">{busy ? 'Getiriliyor...' : 'Hesaplari Getir'}</button>
         )}
         {accounts.map((a) => (
-          <button key={a.account_id} onClick={() => { setSelId(a.account_id); if (mode === 'gercek') gercekHareket(a); }} className={`text-left px-3.5 py-2.5 rounded-xl border transition-colors ${selId === a.account_id ? 'border-[#6c63ff] bg-[#6c63ff]/5' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
+          <button key={a.account_id} onClick={() => { setSelId(a.account_id); if (mode === 'gercek') gercekHareket(a); }} className={`text-left px-3.5 py-2.5 rounded-xl border transition-colors ${selId === a.account_id ? 'border-[#1F9D57] bg-[#1F9D57]/5' : 'border-gray-200 bg-white hover:border-gray-300'}`}>
             <p className="text-[12px] font-semibold text-gray-800">{a.iban}</p>
             <p className="text-[10px] text-gray-400">{a.branch_name} · Bakiye: <span className="font-medium text-gray-700">{fmt(a.account_balance)} {a.currency_code}</span></p>
           </button>
@@ -176,7 +176,7 @@ export default function BankaHareketleri() {
           {/* Ozet kartlari */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <div className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
-              <div className="flex items-center gap-2 mb-1"><Landmark size={14} className="text-indigo-500" /><span className="text-[9px] text-gray-400 font-medium">Guncel Bakiye</span></div>
+              <div className="flex items-center gap-2 mb-1"><Landmark size={14} className="text-emerald-500" /><span className="text-[9px] text-gray-400 font-medium">Guncel Bakiye</span></div>
               <p className="text-lg font-bold text-gray-800">{fmt(sel.account_balance)} TL</p>
             </div>
             <div className="bg-white rounded-xl px-4 py-3 border border-gray-100 shadow-sm">
@@ -203,7 +203,7 @@ export default function BankaHareketleri() {
             {mode === 'gercek'
               ? <button onClick={() => gercekHareket(sel)} disabled={busy} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-slate-800 text-white rounded-lg hover:bg-slate-900 disabled:opacity-50"><RefreshCw size={13} /> Hareketleri Getir</button>
               : <>
-                  <button onClick={ornekHareketEkle} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-[#6c63ff] text-white rounded-lg hover:bg-[#5b54e6]"><Plus size={14} /> Ornek Hareket Ekle</button>
+                  <button onClick={ornekHareketEkle} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium bg-[#1F9D57] text-white rounded-lg hover:bg-[#178A49]"><Plus size={14} /> Ornek Hareket Ekle</button>
                   <button onClick={sifirla} className="flex items-center gap-1.5 px-3 py-2 text-xs font-medium border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50"><RefreshCw size={13} /> Sifirla</button>
                 </>}
           </div>

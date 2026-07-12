@@ -13,6 +13,7 @@
     "@tailwindcss/vite": "^4.3.0",
     "@tanstack/react-query": "^5.100.14",
     "@types/react-grid-layout": "^2.1.0",
+    "@xyflow/react": "^12.11.0",
     "axios": "^1.16.1",
     "chart.js": "^4.5.1",
     "jspdf": "^4.2.1",

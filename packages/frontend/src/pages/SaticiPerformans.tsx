@@ -15,12 +15,12 @@ export default function SaticiPerformans() {
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center"><Users className="text-indigo-600" size={22} /></div>
+        <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><Users className="text-emerald-600" size={22} /></div>
         <div><h1 className="text-2xl font-bold text-slate-800">Satıcı Performansı</h1><p className="text-sm text-slate-400">Canlı yayın satıcılarının ciro, kârlılık ve prim analizi.</p></div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Kpi icon={Wallet} cls="bg-indigo-100 text-indigo-600" label="Toplam Ciro" value={fmt0(top.ciro)} />
+        <Kpi icon={Wallet} cls="bg-emerald-100 text-emerald-600" label="Toplam Ciro" value={fmt0(top.ciro)} />
         <Kpi icon={TrendingUp} cls="bg-green-100 text-green-600" label="Toplam Kâr" value={fmt0(top.kar)} />
         <Kpi icon={Award} cls="bg-amber-100 text-amber-600" label="Toplam Prim (%5)" value={fmt0(top.prim)} />
         <Kpi icon={Users} cls="bg-sky-100 text-sky-600" label="Satış Adedi" value={String(top.adet)} />

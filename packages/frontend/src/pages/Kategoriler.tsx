@@ -23,12 +23,12 @@ export default function Kategoriler() {
   return (
     <div>
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-10 h-10 rounded-xl bg-indigo-100 flex items-center justify-center"><Tag className="text-indigo-600" size={22} /></div>
+        <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><Tag className="text-emerald-600" size={22} /></div>
         <div><h1 className="text-xl font-bold text-slate-800">Ürün Kategorileri</h1><p className="text-sm text-slate-400">{categories.length} kategori</p></div>
       </div>
       <form onSubmit={add} className="flex gap-2 mb-5 max-w-md">
         <input value={ad} onChange={(e) => setAd(e.target.value)} placeholder="Yeni kategori adı" className="flex-1 px-3 py-2 text-sm border border-slate-200 rounded-lg" />
-        <button className="inline-flex items-center gap-1 bg-indigo-600 text-white px-4 rounded-lg text-sm hover:bg-indigo-700"><Plus size={16} /> Ekle</button>
+        <button className="inline-flex items-center gap-1 bg-emerald-600 text-white px-4 rounded-lg text-sm hover:bg-emerald-700"><Plus size={16} /> Ekle</button>
       </form>
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {categories.map((c) => (

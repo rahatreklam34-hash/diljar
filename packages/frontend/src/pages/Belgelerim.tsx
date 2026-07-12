@@ -2,6 +2,7 @@ import MoneyInput from '../components/MoneyInput';
 import { useState, useMemo, useEffect } from 'react';
 import { FolderOpen, Search, Filter, Plus, Pencil, Trash2, ChevronLeft, ChevronRight, FileText, Receipt, FileCheck, FileStack, File } from 'lucide-react';
 import { useApp } from '../context/AppContext';
+import { useUrlState } from '../lib/useUrlState';
 import Modal from '../components/Modal';
 import ConfirmDialog from '../components/ConfirmDialog';
 
@@ -72,18 +73,18 @@ export default function Belgelerim() {
   const [belgeler, setBelgeler] = useState<Belge[]>(() => loadLS('belgelerim', []));
   useEffect(() => { saveLS('belgelerim', belgeler); }, [belgeler]);
 
-  const [activeTab, setActiveTab] = useState<TabGrup>('Tumu');
+  const [activeTab, setActiveTab] = useUrlState<TabGrup>('tab', 'Tumu');
   const [modalOpen, setModalOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Belge | null>(null);
   const [form, setForm] = useState<BelgeForm>(emptyForm());
   const [confirmId, setConfirmId] = useState<string | null>(null);
 
-  const [filterStart, setFilterStart] = useState('');
-  const [filterEnd, setFilterEnd] = useState('');
-  const [filterGrup, setFilterGrup] = useState<TabGrup>('Tumu');
-  const [filterCari, setFilterCari] = useState('');
-  const [filterSearch, setFilterSearch] = useState('');
-  const [page, setPage] = useState(1);
+  const [filterStart, setFilterStart] = useUrlState('from', '');
+  const [filterEnd, setFilterEnd] = useUrlState('to', '');
+  const [filterGrup, setFilterGrup] = useUrlState<TabGrup>('grup', 'Tumu');
+  const [filterCari, setFilterCari] = useUrlState('cari', '');
+  const [filterSearch, setFilterSearch] = useUrlState('q', '');
+  const [page, setPage] = useUrlState('page', 1);
 
   const filtered = useMemo(() => {
     return belgeler.filter(b => {
@@ -150,7 +151,7 @@ export default function Belgelerim() {
     { key: 'Diger', label: 'Diger' },
   ];
 
-  const summaryColors = ['from-indigo-500 to-indigo-600', 'from-blue-500 to-blue-600', 'from-green-500 to-green-600', 'from-purple-500 to-purple-600', 'from-orange-500 to-orange-600', 'from-gray-600 to-gray-700'];
+  const summaryColors = ['from-emerald-500 to-emerald-600', 'from-blue-500 to-blue-600', 'from-green-500 to-green-600', 'from-purple-500 to-purple-600', 'from-orange-500 to-orange-600', 'from-gray-600 to-gray-700'];
 
   return (
     <div className="space-y-6">

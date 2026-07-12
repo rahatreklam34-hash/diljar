@@ -47,12 +47,16 @@ model Tenant {
   uploads       Upload[]
   integrations  IntegrationSetting[]
   productCategories ProductCategory[]
+  markalar      Marka[]
   products      Product[]
   productVariations ProductVariation[]
   salesCodes    SalesCode[]
+  importJobs    ImportJob[]
   customers     Customer[]
   discountCodes DiscountCode[]
   storeOrders   StoreOrder[]
+  bankImportRows BankImportRow[]
+  customCatalogs CustomCatalog[]
   storeSetting  StoreSetting?
   variationTemplates VariationTemplate[]
   liveStreams   LiveStream[]
@@ -83,6 +87,12 @@ model Tenant {
   emanetParalar      EmanetPara[]
   hedefler           Hedef[]
   sistemLoglari      SistemLog[]
+  sosyalHesaplar     SosyalHesap[]
+  sosyalGruplar      SosyalGrup[]
+  sosyalPersonalar   SosyalPersona[]
+  igOtoYanitKurallar IgOtoYanitKural[]
+  igOtoAyar          IgOtoAyar?
+  igMesajLoglari     IgMesajLog[]
 }
 
 model User {
@@ -143,14 +153,21 @@ model AuditLog {
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   userId    String?
+  userName  String?
   action    String
   entity    String
   entityId  String?
   detail    String?
+  hedef     String?
+  kime      String?
+  neden     String?
+  ip        String?
+  meta      Json?
   createdAt DateTime @default(now())
 
   @@index([tenantId])
   @@index([entity])
+  @@index([tenantId, createdAt])
 }
 
 model Upload {
@@ -244,6 +261,8 @@ model Hareket {
   cariHesapId String?
   kasaBankaId String?
   createdBy   String?
+  deletedAt   DateTime?
+  deletedBy   String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
@@ -445,6 +464,18 @@ model ProductCategory {
   @@index([tenantId])
 }
 
+model Marka {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad        String
+  aktif     Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, ad])
+  @@index([tenantId])
+}
+
 model VariationTemplate {
   id        String   @id @default(cuid())
   tenantId  String
@@ -464,6 +495,8 @@ model LiveStream {
   baslik    String?
   startedAt DateTime @default(now())
   endedAt   DateTime?
+  token     String?   @unique
+  activeSatici String? // Canlı yayında seçili satıcı: yorumdan otomatik alınan siparişlere yazılır
 
   // Facebook canlı yayın yorum entegrasyonu
   fbVideoId String?
@@ -509,6 +542,7 @@ model LiveOrder {
   @@index([streamId])
   @@index([streamId, commentId])
   @@index([supplierId])
+  @@index([tenantId, streamId, createdAt])
 }
 
 model BotConfig {
@@ -682,6 +716,7 @@ model Product {
   kategoriId      String?
   alisFiyat       Float    @default(0)
   satisFiyat      Float    @default(0)
+  kdv             Float    @default(10)
   eskiFiyat       Float?
   oneCikan        Boolean  @default(false)
   barkod          String?
@@ -694,13 +729,17 @@ model Product {
   aktif           Boolean  @default(true)
   onlineMagaza    Boolean  @default(false)
   canliSatis      Boolean  @default(false)
+  onSiparis       Boolean  @default(false)
   createdBy       String?
+  kaynak          String? // dis kaynak etiketi (or. "sepetw")
+  kaynakId        String? // dis kaynaktaki urun id'si (izlenebilirlik)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   variations ProductVariation[]
 
   @@index([tenantId])
+  @@index([tenantId, kaynak, kaynakId])
 }
 
 model ProductVariation {
@@ -733,16 +772,37 @@ model SalesCode {
   @@index([tenantId])
 }
 
+model ImportJob {
+  id           String   @id @default(cuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  provider     String   @default("sepetw")
+  status       String   @default("preview") // preview | committed | canceled
+  salesChannel String   @default("all")
+  totalItems   Int      @default(0)
+  counts       Json? // { new, update, warn }
+  rows         Json? // eslenmis satirlar (onizleme)
+  result       Json? // { created, updated, skipped, failed }
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tenantId, status])
+}
+
 model Customer {
   id        String   @id @default(cuid())
   tenantId  String
   tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   ad        String
   telefon   String?
+  telKey    String?
   email     String?
   instagram String?
+  igKey     String?
   cinsiyet  String?
   adres     String?
+  il        String?
+  ilce      String?
   not       String?
   bakiye    Float    @default(0)
   indirimYuzde Float @default(0)
@@ -752,8 +812,11 @@ model Customer {
   updatedAt DateTime @updatedAt
 
   orders StoreOrder[]
+  catalogRequests CatalogRequest[] @relation("CatalogRequestCustomer")
 
   @@index([tenantId])
+  @@index([tenantId, telKey])
+  @@index([tenantId, igKey])
 }
 
 model CustomerLedger {
@@ -764,6 +827,7 @@ model CustomerLedger {
   tutar      Float    @default(0)
   aciklama   String?
   refId      String?
+  kullanici  String?
   createdAt  DateTime @default(now())
 
   @@index([tenantId])
@@ -783,6 +847,8 @@ model Campaign {
   kapsam       String   @default("hepsi") // hepsi | kategori | urun
   kategoriId   String?
   productId    String?
+  silindi      DateTime?
+  bitisZamani  DateTime?
   createdAt    DateTime @default(now())
 
   @@index([tenantId])
@@ -809,6 +875,7 @@ model StoreOrder {
   customer   Customer? @relation(fields: [customerId], references: [id])
   orderNo    Int?
   orderYil   Int?
+  sipNo      String?   @unique // L ile başlayan 5 haneli benzersiz sipariş no (örn: L7K2M)
   musteriHandle String?
   token      String?   @unique
   adres      String?
@@ -821,7 +888,8 @@ model StoreOrder {
   items      Json? // [{productId, ad, adet, fiyat}]
   araToplam  Float     @default(0)
   indirim    Float     @default(0)
-  indirimKodu String?
+  indirimKodu    String?
+  manuelIndirim  Boolean  @default(false)
   kampanyalar Json?
   kargoUcreti Float    @default(0)
   toplam     Float     @default(0)
@@ -834,11 +902,39 @@ model StoreOrder {
   kargoFirmasi String?
   kargoTakip String?
   kargoDurum String?
+  kargoAsama String?  // hazirlaniyor | kabul | dagitim | teslim | teslim_edilemedi
+  kargoMaliyet Float? // Yurtiçi tarafında oluşan kargo ücreti (varsa)
+  kargoOdeme String? // alici | gonderici (kargo ücretini kim ödüyor)
+  cargoKey   String?
+  kargoTip   String?
+  kargoZamani DateTime?
   not        String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
   @@index([tenantId])
+}
+
+model BankImportRow {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tarih       String
+  saat        String?
+  tutar       Float
+  aciklama    String
+  refNo       String
+  orderId     String?
+  orderSipNo  String?
+  suggestedOrderId  String?
+  suggestedSipNo    String?
+  processedAt DateTime?
+  deletedAt   DateTime?
+  deletedBy   String?
+  createdAt   DateTime  @default(now())
+
+  @@unique([tenantId, refNo])
+  @@index([tenantId, orderId])
 }
 
 model OrderEvent {
@@ -851,6 +947,57 @@ model OrderEvent {
   createdAt DateTime @default(now())
 
   @@index([tenantId])
+  @@index([orderId])
+}
+
+model StokHareket {
+  id          String   @id @default(cuid())
+  tenantId    String
+  productId   String
+  varyasyon   String?
+  yon         String   // 'giris' | 'cikis'
+  tip         String   // 'satis' | 'iptal_iade' | 'sepet_cikar' | 'manuel' | 'olusturma' | 'ice_aktarma' | 'iade' | 'defo'
+  kanal       String?  // 'online' | 'canli' | 'kasa' | 'manuel' | 'asistan'
+  miktar      Float
+  stokSonra   Float?
+  orderId     String?
+  sipNo       String?
+  customerId  String?
+  customerAd  String?
+  kullanici   String?
+  aciklama    String?
+  kaynak      String?  // 'backfill' vb.
+  createdAt   DateTime @default(now())
+
+  @@index([tenantId, productId, createdAt])
+  @@index([tenantId, createdAt])
+  @@index([orderId])
+}
+
+model IadeKayit {
+  id           String   @id @default(cuid())
+  tenantId     String
+  talepNo      Int?
+  orderId      String?
+  sipNo        String?
+  customerId   String?
+  customerAd   String?
+  customerTel  String?
+  tip          String   // iade | degisim
+  durum        String   @default("onay_bekliyor") // onay_bekliyor | islemde | tamamlandi | reddedildi
+  islendi      Boolean  @default(false) // stok/bakiye uygulandı mı (tamamlandığında)
+  items        Json     // [{ productId, ad, varyasyon, adet, fiyat, sebep, defo, durum }]
+  degisimUrunler Json?  // değişimde verilen yeni ürünler (sadece kayıt)
+  iadeTutar    Float    @default(0)
+  yontem       String   @default("bakiye")
+  genelSebep   String?
+  redNedeni    String?
+  kullanici    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([customerId])
   @@index([orderId])
 }
 
@@ -878,6 +1025,9 @@ model StoreSetting {
   puanOrani    Float    @default(0) // 0 = kapalı; sipariş tutarının %'i kadar puan
   igTokenSaved  String? // Instagram canlı yorum entegrasyonu için kalıcı token
   igUserIdSaved String? // Instagram hesap ID (kalıcı)
+  igWebhookVerifyToken String? // Instagram webhook (oto-yanit) Meta doğrulama token'ı
+  fbTokenSaved  String? // Facebook canlı yorum entegrasyonu için kalıcı sayfa erişim token'ı
+  fbPageIdSaved String? // Facebook Sayfa ID (kalıcı) — canlı video otomatik çözülür
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 }
@@ -921,6 +1071,168 @@ model CatalogItem {
 
   @@unique([tenantId, productId])
   @@index([tenantId, updatedAt])
+}
+
+// Tedarikçi (serbest) ürünlerinden derlenen, dışarıya paylaşılabilir özel katalog
+model FreeCatalog {
+  id         String   @id @default(cuid())
+  tenantId   String
+  ad         String
+  token      String   @unique
+  whatsapp   String?
+  aktif      Boolean  @default(true)
+  productIds Json     @default("[]") // sıralı freeProduct id listesi
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([tenantId])
+}
+
+// ─── Özel Katalog Sistemi ────────────────────────────────────────────────────
+
+model CustomCatalog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad          String
+  slug        String   @unique
+  aktif       Boolean  @default(true)
+  whatsapp    String?
+  productIds  Json     @default("[]")
+  kampanyalar Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  coupons     CatalogCoupon[]
+
+  @@index([tenantId])
+  views     CatalogView[]
+}
+
+model CatalogView {
+  id          String   @id @default(cuid())
+  tenantId    String
+  catalogId   String
+  catalog     CustomCatalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  ip          String?
+  ua          String?
+  createdAt   DateTime @default(now())
+
+  @@index([catalogId, createdAt])
+  @@index([tenantId])
+}
+
+model CatalogCoupon {
+  id          String    @id @default(cuid())
+  tenantId    String
+  catalogId   String
+  catalog     CustomCatalog @relation(fields: [catalogId], references: [id], onDelete: Cascade)
+  code        String
+  tip         String    @default("yuzde") // yuzde | tutar
+  deger       Float     @default(0)
+  maxKullanim Int?
+  kullanim    Int       @default(0)
+  baslangic   DateTime?
+  bitis       DateTime?
+  aktif       Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+
+  @@unique([catalogId, code])
+  @@index([tenantId, catalogId])
+}
+
+model CatalogRequest {
+  id            String   @id @default(cuid())
+  tenantId      String
+  catalogId     String
+  talepNo       String   @unique
+  items         Json
+  toplam        Float    @default(0)
+  indirim       Float    @default(0)
+  kuponKodu     String?
+  musteri       String?
+  telefon       String?
+  durum         String   @default("rezervde") // rezervde | odeme_bekliyor | tamamlandi | iptal
+  wpIletildi    Boolean  @default(false) // WhatsApp üzerinden iletildi mi
+  wpMesajId     String?  // Tetikleyen WhatsApp mesaj ID
+  dekontAlindi  Boolean  @default(false) // Dekont/medya alındı mı
+  dekontZamani  DateTime? // Dekont alınma zamanı
+  kartOdeme     Boolean  @default(false) // K.kartı ödeme istendi → sayaç durdu
+  customerId    String?  // Eşleşen müşteri ID
+  customer      Customer? @relation("CatalogRequestCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  orderId       String?  // Oluşturulan StoreOrder ID (WP iletildiğinde oluşur)
+  sepetToken    String?  // StoreOrder token (public sepet linki için)
+  sepetSipNo    String?  // StoreOrder sipNo
+  rezervBitis   DateTime? // Rezerv süresi bitiş zamanı
+  sonHatirlatma DateTime? // Son ödeme hatırlatma zamanı
+  hatirlatmaSayisi Int   @default(0) // Kaç kez hatırlatma gönderildi
+  tahsilat      Float    @default(0) // Yapılan ödeme tutarı
+  gelirKaydedilen Float  @default(0) // Gelir/gider'e kaydedilen tutar
+  odemeYontemi  String?   // Nakit | Havale | Kredi Kartı vs
+  odemeNotu     String?   // Ödeme ile ilgili not
+  tahsilatLinki String?   // K.kartı tahsilat linki (sepet detayında kalıcı tutulur)
+  odemeTarihi   DateTime? // Ödeme onay tarihi
+  iptalZamani   DateTime? // İptal edildiği zaman
+  iptalSebebi   String?   // manual | timeout | odeme_gelmedi
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt @default(now())
+
+  @@index([tenantId])
+  @@index([catalogId])
+  @@index([durum])
+  @@index([rezervBitis])
+}
+
+model CatalogSetting {
+  id                String  @id @default(cuid())
+  tenantId          String  @unique
+  rezervSureDk      Int     @default(30) // Dakika cinsinden rezerv süresi
+  otomatikIptal     Boolean @default(true) // Süre dolunca otomatik iptal
+  bildirimAktif     Boolean @default(true) // WhatsApp bildirimleri aktif
+  hatirlatmaDk      String  @default("10,20") // Virgülle ayrılmış dakika cinsinden hatırlatma zamanları
+  siparisOnayMesaji String?  // Sipariş onay mesajı şablonu ({talepNo}, {musteri}, {toplam}, {urunler}, {kalanDk})
+  dekontHatirlatmaDk String @default("5") // Dekont hatırlatma süresi (dakika, virgülle ayrılmış)
+  dekontIsteMesaji  String?  // Dekont hatırlatma mesajı şablonu
+  kartOdemeMesaji   String?  // Kredi kartı yanıt mesajı
+  dekontAlindiMesaji String? // Dekont/medya alındığında gönderilen mesaj
+  iptalMesaji       String?  // Sipariş iptal mesajı
+  odemeOnayMesaji   String?  // Ödeme onaylandığında gönderilen mesaj
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt @default(now())
+
+  @@index([tenantId])
+}
+
+model EnhanceJob {
+  id             String   @id @default(cuid())
+  tenantId       String
+  catalogId      String?
+  productId      String
+  prompt         String?
+  referenceImage String?
+  oldImage       String
+  newImage       String?
+  newImages      String[] @default([])
+  selectedImages String[] @default([])
+  coverImage     String?
+  status         String   @default("pending") // pending | processing | done | approved | rejected
+  error          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([tenantId, catalogId])
+  @@index([tenantId, status])
+}
+
+model EnhancePromptPreset {
+  id        String   @id @default(cuid())
+  tenantId  String
+  baslik    String
+  prompt    String
+  kullanim  Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId])
 }
 
 // ─── Serbest Satış Alt Sistemi ───────────────────────────────────────────────
@@ -978,6 +1290,8 @@ model FreeProduct {
   ad          String
   salesCode   String?
   cinsiyet    String?
+  marka       String?
+  kategoriId  String?
   aciklama    String?
   images      Json     @default("[]")
   variations  Json     @default("[]") // [{deger:string, stok:number}]
@@ -1016,4 +1330,383 @@ model FreeOrder {
 
   @@index([tenantId, streamId])
   @@index([tenantId, durum])
+}
+
+// ─── WhatsApp Paneli ──────────────────────────────────────────────────────────
+
+// Bağlı WhatsApp hattı (Baileys QR oturumu)
+model WhatsappLine {
+  id             String    @id @default(cuid())
+  tenantId       String
+  label          String // panelde görünen ad (ör. "Hat 1")
+  phone          String? // bağlandıktan sonra tespit edilen numara
+  jid            String? // baileys jid
+  status         String    @default("disconnected") // disconnected | connecting | qr | connected | logout
+  channel        String    @default("qr") // qr (Baileys) | api (resmî Meta Cloud API)
+  // --- Cloud API alanları (channel='api') ---
+  wabaId         String? // WhatsApp Business Account ID
+  phoneNumberId  String? // Cloud API Phone Number ID
+  accessToken    String? // kalıcı erişim token (yanıtlarda maskelenir)
+  apiVerified    Boolean   @default(false) // /me testi başarılı mı
+  active         Boolean   @default(true) // açılışta otomatik bağlanmaya çalış
+  gunlukLimit    Int       @default(0) // 0 = ayarlardaki varsayılan limit
+  gonderimAralikSn Int     @default(0) // 0 = ayarlardaki global aralık
+  sentDate       String? // "YYYY-MM-DD" — günlük sayaç tarihi
+  sentToday      Int       @default(0)
+  newChatDate    String? // "YYYY-MM-DD" — günlük YENİ SOHBET sayacı tarihi
+  newChatToday   Int       @default(0) // bugün bu hattan başlatılan yeni sohbet (24sn'de mesajı olmayan müşteri) sayısı
+  lastSentAt     DateTime?
+  lastConnectedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([tenantId])
+}
+
+// Müşteri ↔ hat eşlemesi + sohbet özeti (sticky routing: bir müşteri tek hatta sabitlenir)
+model WhatsappConversation {
+  id            String   @id @default(cuid())
+  tenantId      String
+  lineId        String // bu müşteriyle ilk iletişime geçen / atanan hat
+  customerPhone String // normalize edilmiş (90XXXXXXXXXX)
+  customerName  String?
+  customerId    String?
+  lastMessageAt DateTime @default(now())
+  lastPreview   String?
+  lastDirection String? // in | out
+  unread        Int      @default(0)
+  closed        Boolean  @default(false) // sohbet kapatıldı mı (açık sohbet filtresi için)
+  closedAt      DateTime?
+  tags          String[] @default([]) // sohbet durum etiketleri (filtreleme için)
+  note          String? // sohbetin üstüne tutturulan (pinned) müşteri notu
+  windowExpiresAt DateTime? // Cloud API 24s müşteri hizmet penceresi bitişi (free-form için)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@unique([tenantId, customerPhone])
+  @@index([tenantId, lastMessageAt])
+  @@index([tenantId, closed, lastMessageAt])
+  @@index([lineId])
+}
+
+model WhatsappMessage {
+  id             String   @id @default(cuid())
+  tenantId       String
+  conversationId String
+  lineId         String
+  customerPhone  String
+  direction      String // in | out
+  body           String
+  mediaType      String? // image | document | audio | video
+  mediaUrl       String?
+  mediaMime      String? // gelen/giden medya MIME türü
+  fileName       String? // belge adı
+  waMediaId      String? // Cloud API gelen medya id (indirme için)
+  templateName   String? // giden şablon mesajı ise şablon adı
+  waMessageId    String?
+  status         String   @default("sent") // queued | sent | delivered | read | failed
+  error          String?
+  reaction       String? // bu mesaja konmuş emoji tepkisi (bizim ya da müşterinin)
+  deleted        Boolean  @default(false) // herkesten silindi / panelden gizlendi
+  replyToWaId    String? // alıntılanan (yanıtlanan) mesajın WhatsApp id'si
+  replyToText    String? // alıntı önizleme metni
+  sentByName     String? // giden mesajı gönderen panel kullanıcısının adı
+  createdAt      DateTime @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([tenantId, createdAt])
+}
+
+// Giden kuyruğu (throttle + günlük limit + sticky/dengeli dağıtım worker'ı bunu işler)
+model WhatsappOutbox {
+  id            String    @id @default(cuid())
+  tenantId      String
+  lineId        String? // null = worker dengeli/sticky seçsin
+  customerPhone String
+  body          String
+  kind          String    @default("manual") // order | manual | auto | status | payment | bulk | template
+  channel       String? // null/'api' = resmî Cloud API (varsayılan), 'qr' = kullanıcı panelden açıkça QR seçti
+  status        String    @default("pending") // pending | sent | failed | skipped
+  attempts      Int       @default(0)
+  scheduledAt   DateTime  @default(now())
+  sentAt        DateTime?
+  error         String?
+  orderId       String?
+  // --- Cloud API / medya / kampanya ---
+  templateId    String? // onaylı şablonla gönderilecekse
+  templateVars  Json? // şablon değişken değerleri (sıralı dizi)
+  mediaType     String? // image | document | audio | video
+  mediaUrl      String? // gönderilecek medya (public URL)
+  fileName      String?
+  replyToWaId   String? // alıntılı (yanıt) gönderimde hedef WhatsApp mesaj id'si
+  replyToText   String? // alıntı önizleme metni
+  bulkJobId     String? // toplu mesaj kaydıysa
+  sentByName    String? // mesajı kuyruğa ekleyen panel kullanıcısının adı
+  createdAt     DateTime  @default(now())
+
+  @@index([tenantId, status, scheduledAt])
+  @@index([bulkJobId])
+}
+
+model WhatsappSettings {
+  id                 String   @id @default(cuid())
+  tenantId           String   @unique
+  globalAralikSn     Int      @default(8) // hat başına ardışık gönderim min aralığı (sn)
+  jitterSn           Int      @default(5) // 0..jitter rastgele ek gecikme
+  lineDefaultLimit   Int      @default(200) // hat başına günlük varsayılan limit
+  calismaSaatAktif   Boolean  @default(false)
+  calismaBasla       String   @default("09:00")
+  calismaBitis       String   @default("22:00")
+  otoYanitAktif      Boolean  @default(false)
+  otoYanitMetin      String?
+  siparisBildirimAktif Boolean @default(true)
+  siparisSablon      String   @default("Merhaba {ad}, {no} numaralı siparişiniz alındı. Toplam: {tutar} TL. Teşekkürler!")
+  iptalAktif         Boolean  @default(true)
+  iptalSablon        String   @default("Merhaba {ad}, {no} numaralı siparişiniz iptal edilmiştir. Bilginize.")
+  stokAktif          Boolean  @default(true)
+  stokSablon         String   @default("Merhaba {ad}, talep ettiğiniz {urun} ürününde stok yetersizliği oluştu. En kısa sürede sizi bilgilendireceğiz.")
+  riskliAktif        Boolean  @default(false)
+  riskliSablon       String   @default("Merhaba {ad}, siparişinizle ilgili teyit için sizinle iletişime geçeceğiz.")
+  odemeAktif         Boolean  @default(true)
+  odemeSablon        String   @default("Merhaba {ad}, {no} numaralı siparişinizin ödemesini şu linkten tamamlayabilirsiniz: {link}")
+  // Ödeme onaylandı bildirimi (tahsilat tamamlandığında)
+  odemeOnayAktif     Boolean  @default(true)
+  odemeOnaySablon    String   @default("Merhaba {ad}, {tutar} tutarındaki ödemeniz başarıyla onaylanmıştır. Ödemeniz sistemimize işlenmiştir. Teşekkür eder, iyi alışverişler dileriz.")
+  // Kargo hazırlık bildirimi (sepet hazırlanıyor durumuna alındığında)
+  hazirlikAktif      Boolean  @default(true)
+  hazirlikSablon     String   @default("Merhaba {ad}, Siparişiniz için gerekli kontroller tamamlanmıştır. Sepetiniz kargo hazırlık sürecine alınmıştır.")
+  // --- Cloud API / webhook ---
+  webhookVerifyToken String? // Meta webhook doğrulama token'ı (panel üretir)
+  metaAppId          String? // Meta App ID (opsiyonel)
+  metaAppSecret      String? // imza doğrulaması için (opsiyonel)
+  apiFallbackBaileys Boolean  @default(true) // şablon onayı yokken QR hattından gönder
+  // --- AI oto-yanıt ---
+  aiAutoReplyAktif   Boolean  @default(false)
+  aiPrompt           String? // AI'ya verilecek sistem talimatı / işletme bilgisi
+  aiSadecePencereIci Boolean  @default(true) // yalnızca 24s pencere içinde otomatik yanıt ver
+  hazirCevaplar      Json? // [{ id, baslik, metin, kategori, dil, kisayol, aktif, kullanim, sonKullanim }] hazır metin (quick reply)
+  hazirKategoriler   Json? // ["Genel","Ödeme",...] hazır metin kategorileri
+  sablonEslesme      Json? // { order, status, stok, iptal, riskli, payment } durum → onaylı şablon adı
+  sabitSablonlar     Json? // ["tplId1","tplId2"] sohbet kutusuna sabitlenen onaylı şablon id'leri
+  odemeHatirlatmaAktif    Boolean  @default(false) // ödeme yapmayanlara zamanlı toplu hatırlatma
+  odemeHatirlatmaSaatleri Json? // ["10:00","15:00"] gün içi gönderim saatleri (HH:MM)
+  ozelOtomasyonlar   Json? // [{ id, ad, tetikleyici, mesaj, aktif }] kullanıcı tanımlı otomasyonlar
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+// Cloud API mesaj şablonları (Meta onayı gerektirir)
+model WhatsappTemplate {
+  id           String   @id @default(cuid())
+  tenantId     String
+  name         String // Meta şablon adı (küçük harf + _), tenant içinde benzersiz
+  language     String   @default("tr")
+  category     String   @default("UTILITY") // UTILITY | MARKETING | AUTHENTICATION
+  headerType   String? // none | text | image | document
+  headerText   String?
+  bodyText     String // {{1}}, {{2}} ... değişkenli gövde
+  footerText   String?
+  buttonsJson  Json? // opsiyonel buton tanımları
+  sampleJson   Json? // onay için örnek değişken değerleri
+  varMap       Json? // {{n}} -> alan eşlemesi (ad/no/tutar/link/urun ...)
+  status       String   @default("draft") // draft | pending | approved | rejected | disabled
+  metaId       String? // Meta tarafındaki şablon id
+  rejectReason String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantId, name, language])
+  @@index([tenantId, status])
+}
+
+// Toplu mesaj kampanyaları (onaylı şablonla)
+model WhatsappBulkJob {
+  id           String   @id @default(cuid())
+  tenantId     String
+  templateId   String
+  filterJson   Json? // hedef müşteri segment filtresi
+  total        Int      @default(0)
+  sent         Int      @default(0)
+  failed       Int      @default(0)
+  status       String   @default("queued") // queued | running | done | canceled
+  createdBy     String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([tenantId, status])
+}
+
+// Görsel workflow tanımı (sürükle-bırak akış editörü)
+model WhatsappWorkflow {
+  id            String   @id @default(cuid())
+  tenantId      String
+  ad            String
+  triggerKind   String // order | status | payment_received | (yakında: cart_abandon, membership, ...)
+  triggerFilter Json? // örn. { durum: "tamamlandi" } status tetikleyicisini daraltır
+  graph         Json // { nodes:[{id,type,subtype,config,x,y}], edges:[{id,from,to,branch?}] }
+  aktif         Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([tenantId, triggerKind, aktif])
+}
+
+// Bir müşteri için çalışan workflow örneği (akıştaki konumu + bekleme durumu)
+model WhatsappWorkflowRun {
+  id            String    @id @default(cuid())
+  tenantId      String
+  workflowId    String
+  customerPhone String
+  orderId       String?
+  currentNodeId String?
+  status        String    @default("running") // running | waiting | done | failed | canceled
+  wakeAt        DateTime? // delay düğümünde uyanma zamanı
+  steps         Int       @default(0) // sonsuz döngü koruması
+  context       Json? // { ad, no, tutar, link, urun, ... } değişken ikamesi
+  converted     Boolean   @default(false) // dönüşüm-aksiyonuyla bitti (tamamlandı vb.)
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([tenantId, status])
+  @@index([status, wakeAt])
+  @@index([workflowId])
+}
+
+// BirFatura entegrasyon ayarlari (token -> tenant cozumlemesi)
+model BirFaturaAyar {
+  id          String   @id @default(cuid())
+  tenantId    String   @unique
+  token       String   @unique
+  aktif       Boolean  @default(true)
+  indirimModu String   @default("DiscountAlanindan")
+  kdvOrani    Float    @default(18)
+  // Kategori bazlı varsayılan KDV: { "<kategoriId>": 10, ... }
+  kategoriKdv Json?
+  // Hangi sipariş durumlarında fatura kesilebilir (BirFatura'ya aktarılır)
+  faturaDurumlari String[] @default(["kargoda"])
+  // Fatura ayarları
+  otomatikKesim     Boolean @default(false) // sipariş durum değişince otomatik aktar
+  eFaturaTipi       String  @default("eArsiv") // eArsiv | eFatura
+  faturaOnEki       String? // fatura seri/ön ek
+  faturaAciklama    String? // fatura açıklama şablonu
+  // Görünürlük & bildirim
+  sepetteGoster     Boolean @default(true)  // sipariş/sepet detayında fatura bilgisi görünsün mü
+  bildirimKesilince Boolean @default(true)  // fatura kesildiğinde bildirim
+  bildirimBekleyen  Boolean @default(false) // bekleyen faturalar için hatırlatma
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([token])
+}
+
+// BirFatura tarafindan kesilen fatura kayitlari (faturalanmis siparis isaretleyici)
+model BirFaturaFatura {
+  id          String   @id @default(cuid())
+  tenantId    String
+  orderId     String
+  sipNo       String?
+  invoiceLink String?
+  invoiceNo   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tenantId, orderId])
+  @@index([tenantId])
+}
+
+// ───────── Etkileşim Ağı (sosyal medya hesap yönetim paneli) ─────────
+// NOT: Bu modeller YALNIZCA veri/yönetim amaçlıdır. Gerçek otomasyon (canlı yayında
+// otomatik yorum, proxy üzerinden oturum açma vb.) UYGULANMAZ; ToS ihlali ve kapsam dışıdır.
+// proxy/persona/durum alanları sadece kayıt/yönetim için metin/enum alanlarıdır.
+model SosyalHesap {
+  id           String    @id @default(cuid())
+  tenantId     String
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  platform     String    @default("instagram")
+  kullaniciAd  String
+  profilFoto   String?
+  durum        String    @default("aktif") // aktif | pasif | kullanilamaz
+  proxy        String?
+  proxyDurum   String?   @default("yok") // yok | aktif | pasif | hatali | test
+  grupId       String?
+  persona      String?
+  etiketler    String? // virgülle ayrılmış veya JSON
+  sonBaglanti  DateTime?
+  sonIslem     String?
+  cevrimici    Boolean   @default(false)
+  notlar       String?
+  createdAt    DateTime  @default(now())
+
+  @@index([tenantId])
+}
+
+model SosyalGrup {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad        String
+  aciklama  String?
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, ad])
+  @@index([tenantId])
+}
+
+model SosyalPersona {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad        String
+  aciklama  String?
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, ad])
+  @@index([tenantId])
+}
+
+// ───────── Instagram Otomatik Yanit / Karsilama (sanal asistan) ─────────
+// Resmi Meta Graph API (webhook + Send API) ile kendi Instagram Business hesabina
+// gelen DM ve yorumlara otomatik yanit. Chrome/DOM otomasyonu YOK.
+model IgOtoYanitKural {
+  id              String   @id @default(cuid())
+  tenantId        String
+  tenant          Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tip             String   @default("dm") // dm | yorum
+  anahtarKelimeler String? // virgul ile ayrilmis; bos = tum mesajlar / karsilama
+  yanitMetni      String
+  aktif           Boolean  @default(true)
+  oncelik         Int      @default(0)
+  createdAt       DateTime @default(now())
+
+  @@index([tenantId])
+}
+
+model IgOtoAyar {
+  id                   String   @id @default(cuid())
+  tenantId             String   @unique
+  tenant               Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  aktif                Boolean  @default(false)
+  karsilamaAktif       Boolean  @default(true)
+  karsilamaMetni       String?
+  calismaSaatDisiAktif Boolean  @default(false)
+  calismaSaatDisiMetni String?
+  calismaBasSaat       String? // "09:00"
+  calismaBitSaat       String? // "18:00"
+  updatedAt            DateTime @updatedAt
+}
+
+model IgMesajLog {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  yon       String // in | out
+  kanal     String   @default("dm") // dm | yorum
+  gonderen  String?
+  metin     String?
+  kuralId   String?
+  createdAt DateTime @default(now())
+
+  @@index([tenantId])
 }

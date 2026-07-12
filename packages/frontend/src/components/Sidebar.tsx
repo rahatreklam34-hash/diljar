@@ -1,18 +1,20 @@
 import { useState, useEffect } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import {
-  Menu, X, Plus, LogOut, ChevronRight, ChevronUp, Pencil, Check, Search, Sparkles, Sun, Moon,
+  Menu, X, Plus, LogOut, ChevronRight, ChevronUp, Pencil, Check, Search, Sparkles, Sun, Moon, UserCircle,
   LayoutDashboard, Wallet, Package, ShoppingCart, ClipboardList, Users, Megaphone, UsersRound, Headphones,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { navGroups, allMenuItems, MenuItem, IconType } from '../lib/menu';
+import api from '../lib/api';
+import ProfileModal from './ProfileModal';
 
 const DEFAULT_SHORTCUTS = ['/canli-yayin', '/kasa-satis', '/siparisler', '/depo/urunlerim', '/musterilerim'];
 
 // Her grup icin temsili ikon (kapali grup kartinda) ve renk
 const GROUP_ICONS: IconType[] = [LayoutDashboard, Wallet, Package, ShoppingCart, ClipboardList, Users, Megaphone, UsersRound, Headphones];
-const GROUP_COLORS = ['text-violet-500', 'text-violet-500', 'text-sky-500', 'text-fuchsia-500', 'text-orange-500', 'text-emerald-500', 'text-amber-500', 'text-pink-500', 'text-cyan-500'];
-const GROUP_GLOW = ['bg-violet-500/10', 'bg-violet-500/10', 'bg-sky-500/10', 'bg-fuchsia-500/10', 'bg-orange-500/10', 'bg-emerald-500/10', 'bg-amber-500/10', 'bg-pink-500/10', 'bg-cyan-500/10'];
+const GROUP_COLORS = ['text-emerald-600', 'text-emerald-600', 'text-teal-600', 'text-green-600', 'text-amber-600', 'text-emerald-500', 'text-lime-600', 'text-sky-600', 'text-teal-600'];
+const GROUP_GLOW = ['bg-emerald-500/10', 'bg-emerald-500/10', 'bg-teal-500/10', 'bg-green-500/10', 'bg-amber-500/10', 'bg-emerald-500/10', 'bg-lime-500/10', 'bg-sky-500/10', 'bg-teal-500/10'];
 
 type Theme = 'dark' | 'light';
 
@@ -20,6 +22,7 @@ export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -27,6 +30,21 @@ export default function Sidebar() {
   const initial = (user?.fullName || 'K').charAt(0).toUpperCase();
 
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem('wtech_theme') as Theme) || 'light');
+
+  // WhatsApp okunmamış mesaj sayısı (sidebar canlı badge) — 15 sn'de bir güncellenir
+  const [waUnread, setWaUnread] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const load = () => { api.get('/whatsapp/unread-count').then((r) => { if (alive) setWaUnread(Number(r.data?.conversations) || 0); }).catch(() => {}); };
+    load();
+    const iv = setInterval(load, 15000);
+    const onFocus = () => load();
+    window.addEventListener('focus', onFocus);
+    return () => { alive = false; clearInterval(iv); window.removeEventListener('focus', onFocus); };
+  }, []);
+  const waBadge = (val: number, cls = '') => (val > 0 ? (
+    <span className={`min-w-[18px] h-[18px] px-1 rounded-full bg-rose-500 text-white text-[10px] font-bold flex items-center justify-center shrink-0 ${cls}`}>{val > 99 ? '99+' : val}</span>
+  ) : null);
   useEffect(() => {
     const tp = user?.prefs?.theme;
     if ((tp === 'light' || tp === 'dark') && tp !== theme) { setTheme(tp); localStorage.setItem('wtech_theme', tp); }
@@ -95,51 +113,53 @@ export default function Sidebar() {
     card: 'bg-white/[0.04] border-white/10 hover:bg-white/[0.07]',
     cardText: 'text-slate-200',
     groupTitle: 'text-white',
-    groupBar: 'bg-gradient-to-b from-violet-400 to-indigo-500',
+    groupBar: 'bg-gradient-to-b from-emerald-400 to-green-600',
     rozet: 'bg-white/[0.06]',
     itemText: 'text-slate-300',
     itemHover: 'hover:bg-white/[0.06]',
     chevron: 'text-slate-500',
     section: 'bg-white/[0.02] border-white/[0.06]',
-    userCard: 'bg-gradient-to-r from-[#6d28d9] to-[#4338ca] text-white',
-    // SECILI (notr)
-    activeItem: 'bg-white/[0.10] text-white font-semibold border-l-[3px] border-white/50',
-    activeRozet: 'bg-white/15',
-    activeIcon: 'text-white',
-    activeChevron: 'text-white/70',
-    accent: 'text-violet-300',
+    userCard: 'bg-gradient-to-r from-[#0E7C45] to-[#0B5E35] text-white',
+    // SECILI (yesil vurgulu)
+    activeItem: 'bg-emerald-500/15 text-emerald-100 font-semibold border-l-[3px] border-emerald-400',
+    activeRozet: 'bg-emerald-500/25',
+    activeIcon: 'text-emerald-300',
+    activeChevron: 'text-emerald-300/70',
+    accent: 'text-emerald-300',
   } : {
-    aside: 'bg-gradient-to-b from-white to-slate-50 border-slate-200',
-    headerBg: 'bg-slate-50 border-slate-200',
-    brand: 'text-slate-800',
-    iconBtn: 'text-slate-400 hover:text-slate-700 hover:bg-slate-100',
-    card: 'bg-white border-slate-100 hover:bg-slate-50 shadow-sm',
-    cardText: 'text-slate-700',
-    groupTitle: 'text-slate-800',
-    groupBar: 'bg-gradient-to-b from-indigo-400 to-violet-500',
-    rozet: 'bg-slate-50',
-    itemText: 'text-slate-500',
-    itemHover: 'hover:bg-slate-50',
-    chevron: 'text-slate-400',
-    section: 'bg-slate-50/60 border-slate-100',
-    userCard: 'bg-gradient-to-r from-[#7c3aed] to-[#6366f1] text-white',
-    // SECILI (notr)
-    activeItem: 'bg-slate-100 text-slate-900 font-bold border-l-[3px] border-slate-400',
-    activeRozet: 'bg-white shadow-sm',
-    activeIcon: 'text-slate-600',
-    activeChevron: 'text-slate-500',
-    accent: 'text-indigo-600',
+    // Acik temada da sol menu gorseldeki gibi koyu lacivert kalir
+    aside: 'bg-[#0b1120] border-[#1b2236]',
+    headerBg: 'bg-white/[0.03] border-[#1b2236]',
+    brand: 'text-white',
+    iconBtn: 'text-slate-400 hover:text-white hover:bg-white/10',
+    card: 'bg-white/[0.04] border-white/10 hover:bg-white/[0.08]',
+    cardText: 'text-slate-200',
+    groupTitle: 'text-slate-100',
+    groupBar: 'bg-gradient-to-b from-emerald-400 to-green-600',
+    rozet: 'bg-white/[0.06]',
+    itemText: 'text-slate-300',
+    itemHover: 'hover:bg-white/[0.06]',
+    chevron: 'text-slate-500',
+    section: 'bg-white/[0.02] border-white/[0.06]',
+    userCard: 'bg-gradient-to-r from-[#0E7C45] to-[#0B5E35] text-white',
+    // SECILI (yesil vurgulu)
+    activeItem: 'bg-emerald-500/15 text-emerald-100 font-semibold border-l-[3px] border-emerald-400',
+    activeRozet: 'bg-emerald-500/25',
+    activeIcon: 'text-emerald-300',
+    activeChevron: 'text-emerald-300/70',
+    accent: 'text-emerald-300',
   };
 
   const renderItem = (item: MenuItem, gi: number) => (
-    <NavLink key={item.to} to={item.to} onClick={() => setMobileOpen(false)} className={({ isActive }) => `group flex items-center gap-2.5 px-2.5 py-2 my-0.5 rounded-lg text-[13px] transition-all duration-200 ${isActive ? t.activeItem : `${t.itemText} ${t.itemHover}`}`}>
+    <NavLink key={item.to} to={item.to} end={item.to === '/whatsapp'} onClick={() => setMobileOpen(false)} title={isIconOnly ? item.label : undefined} className={({ isActive }) => `group flex items-center gap-2.5 ${isIconOnly ? 'justify-center px-0' : 'pl-3 pr-2'} py-[7px] rounded-md text-[13px] transition-colors ${isActive ? t.activeItem : `${t.itemText} ${t.itemHover}`}`}>
       {({ isActive }) => (
         <>
-          <span className={`flex items-center justify-center w-6 h-6 rounded-md shrink-0 transition-colors ${isActive ? t.activeRozet : `${GROUP_GLOW[gi]} group-hover:scale-110`}`}>
-            <item.icon size={13} className={isActive ? t.activeIcon : GROUP_COLORS[gi]} strokeWidth={2} />
+          <span className="relative shrink-0">
+            <item.icon size={16} className={isActive ? t.activeIcon : GROUP_COLORS[gi]} strokeWidth={2} />
+            {isIconOnly && item.to === '/whatsapp' && waUnread > 0 && <span className="absolute -top-1.5 -right-1.5 w-2.5 h-2.5 rounded-full bg-rose-500 ring-2 ring-white" />}
           </span>
           {!isIconOnly && <span className="truncate flex-1">{item.label}</span>}
-          {!isIconOnly && <ChevronRight size={13} className={`shrink-0 transition-transform ${isActive ? `${t.activeChevron} translate-x-0.5` : `${t.chevron} opacity-0 group-hover:opacity-100`}`} />}
+          {!isIconOnly && item.to === '/whatsapp' && waBadge(waUnread)}
         </>
       )}
     </NavLink>
@@ -154,7 +174,7 @@ export default function Sidebar() {
         {/* Header */}
         <div className={`m-2 rounded-2xl border ${t.headerBg} sticky top-2 z-10 backdrop-blur ${isIconOnly ? 'flex flex-col items-center gap-1.5 px-2 py-2.5' : 'flex items-center justify-between px-3 py-3'}`}>
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 bg-gradient-to-br from-[#7c3aed] to-[#6366f1] rounded-xl flex items-center justify-center font-extrabold text-white shrink-0 shadow-lg shadow-violet-600/40">W</div>
+            <div className="w-9 h-9 bg-gradient-to-br from-[#22A95C] to-[#0F7C45] rounded-xl flex items-center justify-center font-extrabold text-white shrink-0 shadow-lg shadow-emerald-600/40">W</div>
             {(!collapsed || mobileOpen) && <span className={`text-lg font-extrabold ${t.brand}`}>WTech</span>}
           </div>
           <div className={`flex items-center gap-1 ${isIconOnly ? 'flex-col' : ''}`}>
@@ -164,42 +184,29 @@ export default function Sidebar() {
           </div>
         </div>
 
-        {/* Navigation */}
-        <nav className="wt-scroll flex-1 px-2 pb-2 overflow-y-auto space-y-1.5" onClick={() => mobileOpen && setMobileOpen(false)}>
+        {/* Navigation — klasik kompakt liste */}
+        <nav className="wt-scroll flex-1 px-2 pb-2 overflow-y-auto" onClick={() => mobileOpen && setMobileOpen(false)}>
           {navGroups.map((group, gi) => {
             const key = group.title || '_';
             const visibleItems = group.items.filter((it) => canAccess(it.to));
             if (visibleItems.length === 0) return null;
 
-            if (!group.title) return <div key={gi}>{renderItem(visibleItems[0], gi)}</div>;
+            // Başlıksız grup (Dashboard gibi) → doğrudan öğe
+            if (!group.title) return <div key={gi} className="mb-0.5">{visibleItems.map((it) => renderItem(it, gi))}</div>;
 
-            const open = isIconOnly ? true : openGroup === key;
-            const GroupIcon = GROUP_ICONS[gi] || Wallet;
+            // İkon-only modda başlık gizli, sadece ikonlar
+            if (isIconOnly) return <div key={gi} className="mb-1 space-y-0.5">{visibleItems.map((it) => renderItem(it, gi))}</div>;
 
-            if (!open && !isIconOnly) {
-              return (
-                <button key={gi} onClick={() => toggleGroup(key)} className={`relative w-full flex items-center gap-3 px-2.5 py-2.5 rounded-2xl border overflow-hidden transition-all ${t.card}`}>
-                  <span className={`absolute right-0 top-0 bottom-0 w-24 ${GROUP_GLOW[gi]} blur-2xl rounded-full pointer-events-none`} />
-                  <span className={`relative flex items-center justify-center w-9 h-9 rounded-xl shrink-0 ${GROUP_GLOW[gi]}`}><GroupIcon size={18} className={GROUP_COLORS[gi]} /></span>
-                  <span className={`relative flex-1 text-left text-[12px] font-bold uppercase tracking-wide ${t.cardText}`}>{group.title}</span>
-                  <ChevronRight size={16} className={`relative ${t.chevron}`} />
-                </button>
-              );
-            }
-
+            const open = openGroup === key;
+            const groupUnread = group.title === 'WhatsApp' ? waUnread : 0;
             return (
-              <div key={gi}>
-                {!isIconOnly && (
-                  <button onClick={() => toggleGroup(key)} className={`relative w-full flex items-center gap-3 px-2.5 py-2.5 mb-1.5 rounded-2xl border overflow-hidden transition-all ${t.card}`}>
-                    <span className={`absolute right-0 top-0 bottom-0 w-24 ${GROUP_GLOW[gi]} blur-2xl rounded-full pointer-events-none`} />
-                    <span className={`relative flex items-center justify-center w-9 h-9 rounded-xl shrink-0 ${GROUP_GLOW[gi]}`}><GroupIcon size={18} className={GROUP_COLORS[gi]} /></span>
-                    <span className={`relative flex-1 text-left text-[12px] font-bold uppercase tracking-wide ${t.cardText}`}>{group.title}</span>
-                    <ChevronUp size={16} className={`relative shrink-0 ${t.chevron}`} />
-                  </button>
-                )}
-                <div className={`ml-3 rounded-xl border ${t.section} p-1`}>
-                  {visibleItems.map((item) => renderItem(item, gi))}
-                </div>
+              <div key={gi} className="mb-0.5">
+                <button onClick={() => toggleGroup(key)} className={`w-full flex items-center gap-2 px-3 pt-3 pb-1 text-left transition-colors ${dark ? 'text-slate-400 hover:text-slate-200' : 'text-slate-400 hover:text-slate-600'}`}>
+                  <span className="flex-1 text-[10px] font-bold uppercase tracking-wider truncate">{group.title}</span>
+                  {waBadge(groupUnread)}
+                  <ChevronRight size={13} className={`shrink-0 transition-transform duration-200 ${open ? 'rotate-90' : ''} ${t.chevron}`} />
+                </button>
+                {open && <div className="space-y-0.5">{visibleItems.map((item) => renderItem(item, gi))}</div>}
               </div>
             );
           })}
@@ -219,7 +226,7 @@ export default function Sidebar() {
                   <span className="text-[8px] leading-none text-center w-full truncate">{it.label.split(' ')[0]}</span>
                 </button>
               ))}
-              <button onClick={() => setEditOpen(true)} title="Kisayol ekle" className={`flex items-center justify-center p-2 rounded-xl border border-dashed ${dark ? 'border-white/20 text-slate-400 hover:text-white hover:border-white/40' : 'border-slate-300 text-slate-400 hover:text-indigo-600 hover:border-indigo-400'} transition-colors`}><Plus size={18} /></button>
+              <button onClick={() => setEditOpen(true)} title="Kisayol ekle" className={`flex items-center justify-center p-2 rounded-xl border border-dashed ${dark ? 'border-white/20 text-slate-400 hover:text-white hover:border-white/40' : 'border-slate-300 text-slate-400 hover:text-emerald-600 hover:border-emerald-400'} transition-colors`}><Plus size={18} /></button>
             </div>
           </div>
         )}
@@ -236,7 +243,10 @@ export default function Sidebar() {
               </div>
             )}
             {(!collapsed || mobileOpen) && (
-              <button onClick={() => logout()} title="Cikis Yap" className="relative p-2 text-white/80 hover:text-white hover:bg-white/15 rounded-lg shrink-0 transition-colors"><LogOut size={18} /></button>
+              <div className="flex items-center gap-1 shrink-0">
+                <button onClick={() => setProfileOpen(true)} title="Profilim" className="relative p-2 text-white/80 hover:text-white hover:bg-white/15 rounded-lg transition-colors"><UserCircle size={18} /></button>
+                <button onClick={() => logout()} title="Cikis Yap" className="relative p-2 text-white/80 hover:text-white hover:bg-white/15 rounded-lg transition-colors"><LogOut size={18} /></button>
+              </div>
             )}
           </div>
         </div>
@@ -245,6 +255,7 @@ export default function Sidebar() {
       {editOpen && (
         <ShortcutEditor dark={dark} allItems={allMenuItems.filter((it) => canAccess(it.to))} current={rawShortcuts} onToggle={toggleShortcut} onClose={() => setEditOpen(false)} />
       )}
+      {profileOpen && <ProfileModal onClose={() => setProfileOpen(false)} />}
     </>
   );
 }
@@ -253,7 +264,7 @@ function ShortcutEditor({ dark, allItems, current, onToggle, onClose }: { dark: 
   const [q, setQ] = useState('');
   const norm = (s: string) => s.toLowerCase().replace(/ı/g, 'i').replace(/ş/g, 's').replace(/ç/g, 'c').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/ğ/g, 'g');
   const list = q.trim() ? allItems.filter((it) => norm(it.label).includes(norm(q))) : allItems;
-  const accent = dark ? 'text-violet-500' : 'text-indigo-600';
+  const accent = dark ? 'text-emerald-400' : 'text-emerald-600';
   return (
     <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={onClose}>
       <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>

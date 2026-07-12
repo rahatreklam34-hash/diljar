@@ -83,8 +83,8 @@ export default function Dashboard() {
   const borcGruplari = [
     { label: 'Cari Borclarim', value: cariBorc, color: '#ef4444' },
     { label: 'Cek Borclarim', value: cekBorc, color: '#f59e0b' },
-    { label: 'K.Karti Borclarim', value: kkBorc, color: '#8b5cf6' },
-    { label: 'Kredi Borclarim', value: krediBorc, color: '#6366f1' },
+    { label: 'K.Karti Borclarim', value: kkBorc, color: '#10B981' },
+    { label: 'Kredi Borclarim', value: krediBorc, color: '#0F7C45' },
     { label: 'Emanet Borclarim', value: emanetBorc, color: '#06b6d4' },
   ].filter(x => x.value > 0);
 
@@ -159,7 +159,7 @@ export default function Dashboard() {
     { label: 'Kasa & Banka', to: '/kasa-banka', icon: Landmark, color: 'bg-amber-50 text-amber-600', desc: `${fmt(likitToplam)} TL` },
     { label: 'Gelir / Gider', to: '/gelir-gider', icon: BarChart3, color: 'bg-emerald-50 text-emerald-600', desc: `Net ${fmt(netKar)} TL` },
     { label: 'Cekler', to: '/cekler', icon: FileText, color: 'bg-rose-50 text-rose-600', desc: `${fmt(cekBorc + cekAlacak)} TL` },
-    { label: 'Duzenli Odemeler', to: '/duzenli-odemeler', icon: Calendar, color: 'bg-indigo-50 text-indigo-600', desc: `${duzenliOdemeler.filter(o => o.durum === 'aktif').length} aktif` },
+    { label: 'Duzenli Odemeler', to: '/duzenli-odemeler', icon: Calendar, color: 'bg-emerald-50 text-emerald-600', desc: `${duzenliOdemeler.filter(o => o.durum === 'aktif').length} aktif` },
     { label: 'Finansal Durum', to: '/finansal-durum', icon: Activity, color: 'bg-cyan-50 text-cyan-600', desc: `Net ${fmt(netVarlik)} TL` },
     { label: 'Hedeflerim', to: '/hedeflerim', icon: Target, color: 'bg-purple-50 text-purple-600', desc: 'Incele' },
     { label: 'Banka Hareketleri', to: '/banka-hareketleri', icon: Receipt, color: 'bg-orange-50 text-orange-600', desc: `${hareketler.length} kayit` },
@@ -174,8 +174,8 @@ export default function Dashboard() {
           <p className="text-[11px] text-gray-400 mt-0.5">{new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric', weekday: 'long' })}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <button onClick={() => canAccess('/depo/urunlerim') && navigate('/depo/urunlerim')} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg hover:border-[#6c63ff]/40 transition-colors" title="Depodaki toplam stok">
-            <div className="w-8 h-8 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0"><Package size={16} className="text-indigo-600" /></div>
+          <button onClick={() => canAccess('/depo/urunlerim') && navigate('/depo/urunlerim')} className="flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg hover:border-[#1F9D57]/40 transition-colors" title="Depodaki toplam stok">
+            <div className="w-8 h-8 rounded-lg bg-emerald-50 flex items-center justify-center shrink-0"><Package size={16} className="text-emerald-600" /></div>
             <div className="text-left leading-tight">
               <p className="text-[9px] text-gray-400 font-medium">Depodaki Urun</p>
               <p className="text-sm font-bold text-gray-800">{depoStok.adet.toLocaleString('tr-TR')} adet</p>
@@ -184,7 +184,7 @@ export default function Dashboard() {
           </button>
           <div className="flex items-center gap-1 bg-white border border-gray-200 rounded-lg px-1 py-1">
             {[{ key: 'gunluk', label: 'Gun' }, { key: 'haftalik', label: 'Hafta' }, { key: 'aylik', label: 'Ay' }, { key: '6aylik', label: '6 Ay' }, { key: 'yillik', label: 'Yil' }, { key: 'tumu', label: 'Tumu' }].map(p => (
-              <button key={p.key} onClick={() => setPeriyotAndDates(p.key)} className={`px-2.5 py-1 text-[10px] rounded-md font-medium transition-all ${periyot === p.key ? 'bg-[#6c63ff] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{p.label}</button>
+              <button key={p.key} onClick={() => setPeriyotAndDates(p.key)} className={`px-2.5 py-1 text-[10px] rounded-md font-medium transition-all ${periyot === p.key ? 'bg-[#1F9D57] text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{p.label}</button>
             ))}
           </div>
           <div className="flex items-center gap-1 px-2 py-1 bg-white border border-gray-200 rounded-lg">
@@ -192,7 +192,7 @@ export default function Dashboard() {
             <span className="text-[9px] text-gray-400">-</span>
             <input type="date" value={dateTo} onChange={e => { setDateTo(e.target.value); setPeriyot('ozel'); }} className="text-[10px] outline-none bg-transparent w-[90px]" />
           </div>
-          <button onClick={() => setYeniIslemOpen(true)} className="flex items-center gap-1.5 px-3.5 py-2 bg-[#6c63ff] text-white rounded-lg text-xs font-medium hover:bg-[#5b54e6]"><Plus size={14} /> Yeni Islem</button>
+          <button onClick={() => setYeniIslemOpen(true)} className="flex items-center gap-1.5 px-3.5 py-2 bg-[#1F9D57] text-white rounded-lg text-xs font-medium hover:bg-[#178A49]"><Plus size={14} /> Yeni Islem</button>
         </div>
       </div>
 
@@ -201,9 +201,9 @@ export default function Dashboard() {
         {financeCards.map(c => {
           const Icon = c.icon;
           return (
-            <button key={c.label} onClick={() => navigate(c.to)} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 text-left hover:border-[#6c63ff]/30 hover:shadow-md transition-all group">
+            <button key={c.label} onClick={() => navigate(c.to)} className="bg-white rounded-xl border border-gray-100 shadow-sm p-3 text-left hover:border-[#1F9D57]/30 hover:shadow-md transition-all group">
               <div className={`w-9 h-9 rounded-lg ${c.color.split(' ')[0]} flex items-center justify-center mb-2`}><Icon size={16} className={c.color.split(' ')[1]} /></div>
-              <p className="text-[11px] font-semibold text-gray-800 group-hover:text-[#6c63ff]">{c.label}</p>
+              <p className="text-[11px] font-semibold text-gray-800 group-hover:text-[#1F9D57]">{c.label}</p>
               <p className="text-[9px] text-gray-400 mt-0.5">{c.desc}</p>
             </button>
           );
@@ -214,7 +214,7 @@ export default function Dashboard() {
       <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-[13px] font-bold text-gray-800 flex items-center gap-1.5"><Wallet size={15} className="text-amber-500" /> Kasa Durumu <span className="text-[9px] text-gray-400 font-normal">(secili donem)</span></h3>
-          {canAccess('/kasa-banka') && <button onClick={() => navigate('/kasa-banka')} className="text-[10px] text-[#6c63ff] font-medium hover:underline flex items-center gap-0.5">Detay <ArrowRight size={11} /></button>}
+          {canAccess('/kasa-banka') && <button onClick={() => navigate('/kasa-banka')} className="text-[10px] text-[#1F9D57] font-medium hover:underline flex items-center gap-0.5">Detay <ArrowRight size={11} /></button>}
         </div>
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
           <div className="rounded-xl bg-green-50 border border-green-100 p-3">
@@ -313,7 +313,7 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[12px] font-semibold text-gray-700">Yaklasan Odemeler</h3>
-            <div className="flex gap-0.5 bg-gray-100 rounded-lg p-0.5">{[{ k: 'bugun', l: 'Bugun' }, { k: 'hafta', l: 'Hafta' }, { k: 'ay', l: 'Ay' }, { k: '3ay', l: '3 Ay' }, { k: '6ay', l: '6 Ay' }, { k: 'yil', l: 'Yil' }, { k: 'tum', l: 'Tum' }].map(p => (<button key={p.k} onClick={() => setOdemeHorizon(p.k)} className={`px-2 py-0.5 text-[9px] font-medium rounded-md ${odemeHorizon === p.k ? 'bg-white shadow-sm text-[#6c63ff]' : 'text-gray-500 hover:bg-white'}`}>{p.l}</button>))}</div>
+            <div className="flex gap-0.5 bg-gray-100 rounded-lg p-0.5">{[{ k: 'bugun', l: 'Bugun' }, { k: 'hafta', l: 'Hafta' }, { k: 'ay', l: 'Ay' }, { k: '3ay', l: '3 Ay' }, { k: '6ay', l: '6 Ay' }, { k: 'yil', l: 'Yil' }, { k: 'tum', l: 'Tum' }].map(p => (<button key={p.k} onClick={() => setOdemeHorizon(p.k)} className={`px-2 py-0.5 text-[9px] font-medium rounded-md ${odemeHorizon === p.k ? 'bg-white shadow-sm text-[#1F9D57]' : 'text-gray-500 hover:bg-white'}`}>{p.l}</button>))}</div>
           </div>
           <div className="space-y-2">
             {yaklasanCekler.map(c => (<div key={c.id} className="flex items-center justify-between text-[9px] bg-red-50 rounded-lg px-2 py-1.5"><div><p className="font-medium text-gray-700">{c.kisiAd}</p><p className="text-gray-400">{c.vadeTarihi}</p></div><span className="font-bold text-red-600">{fmt(c.tutar)} TL</span></div>))}
@@ -325,7 +325,7 @@ export default function Dashboard() {
 
         {/* Son Islemler */}
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-          <div className="flex items-center justify-between mb-3"><h3 className="text-[12px] font-semibold text-gray-700">Son Islemler</h3><button onClick={() => navigate('/gelir-gider')} className="text-[9px] text-[#6c63ff] font-medium hover:underline flex items-center gap-0.5">Tumunu Gor <ArrowRight size={10} /></button></div>
+          <div className="flex items-center justify-between mb-3"><h3 className="text-[12px] font-semibold text-gray-700">Son Islemler</h3><button onClick={() => navigate('/gelir-gider')} className="text-[9px] text-[#1F9D57] font-medium hover:underline flex items-center gap-0.5">Tumunu Gor <ArrowRight size={10} /></button></div>
           <div className="space-y-2">
             {hareketler.length ? hareketler.slice(0, 8).map(h => (
               <div key={h.id} className="flex items-center justify-between">
@@ -340,12 +340,12 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-[12px] font-semibold text-gray-700 flex items-center gap-1.5"><Zap size={14} className="text-amber-500" /> Hizli Erisim</h3>
-            <button onClick={() => window.dispatchEvent(new Event('open-shortcut-editor'))} className="text-[11px] text-[#6c63ff] font-medium hover:underline flex items-center gap-0.5"><Pencil size={12} /> Duzenle</button>
+            <button onClick={() => window.dispatchEvent(new Event('open-shortcut-editor'))} className="text-[11px] text-[#1F9D57] font-medium hover:underline flex items-center gap-0.5"><Pencil size={12} /> Duzenle</button>
           </div>
           <div className="grid grid-cols-3 gap-2">
             {dashShortcuts.map(it => { const Icon = it.icon; return (
-              <button key={it.to} onClick={() => navigate(it.to)} className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl border border-gray-100 hover:border-[#6c63ff]/40 hover:bg-[#6c63ff]/5 transition-colors">
-                <div className="w-8 h-8 rounded-lg bg-[#6c63ff]/10 flex items-center justify-center"><Icon size={16} className="text-[#6c63ff]" /></div>
+              <button key={it.to} onClick={() => navigate(it.to)} className="flex flex-col items-center gap-1.5 p-2.5 rounded-xl border border-gray-100 hover:border-[#1F9D57]/40 hover:bg-[#1F9D57]/5 transition-colors">
+                <div className="w-8 h-8 rounded-lg bg-[#1F9D57]/10 flex items-center justify-center"><Icon size={16} className="text-[#1F9D57]" /></div>
                 <span className="text-[9px] text-gray-600 text-center leading-tight">{it.label}</span>
               </button>
             ); })}
@@ -366,7 +366,7 @@ export default function Dashboard() {
           </div>
           <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Tutar</label><MoneyInput value={islemForm.tutar} onChange={v => setIslemForm({ ...islemForm, tutar: v })} required className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none" /></div>
           <div><label className="block text-[10px] font-medium text-gray-600 mb-1">Aciklama</label><input required value={islemForm.aciklama} onChange={e => setIslemForm({ ...islemForm, aciklama: e.target.value })} className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none" /></div>
-          <div className="flex gap-2 justify-end"><button type="button" onClick={() => setYeniIslemOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button><button type="submit" className="px-5 py-2 text-sm bg-[#6c63ff] text-white rounded-lg">Kaydet</button></div>
+          <div className="flex gap-2 justify-end"><button type="button" onClick={() => setYeniIslemOpen(false)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg">Iptal</button><button type="submit" className="px-5 py-2 text-sm bg-[#1F9D57] text-white rounded-lg">Kaydet</button></div>
         </form>
       </Modal>
     </div>

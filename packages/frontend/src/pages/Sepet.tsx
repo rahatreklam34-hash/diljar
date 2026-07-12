@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
-import { Menu, ShoppingBag, Search, Clock, Trash2, Plus, Minus, MapPin, Phone, User, Flame, Truck, CreditCard, CheckCircle2, Pencil, X, MessageCircle, Barcode, Send, Zap, ImagePlus, Home, Sparkles, Gift, HelpCircle, Radio, LogOut, Crown, Star, ChevronRight, Package, Timer, Filter, Building2, Copy } from 'lucide-react';
+import { Menu, ShoppingBag, Search, Clock, Trash2, Plus, Minus, MapPin, Phone, User, Flame, Truck, CreditCard, CheckCircle2, Pencil, X, MessageCircle, Barcode, Send, Zap, ImagePlus, Home, Sparkles, Gift, HelpCircle, Radio, LogOut, Crown, Star, ChevronRight, Package, Timer, Filter, Building2, Copy, AlertCircle } from 'lucide-react';
 import toast, { Toaster } from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
 import { IL_ILCE } from '../lib/turkiye';
@@ -24,6 +24,14 @@ export default function Sepet() {
   const [bildirildi, setBildirildi] = useState(false);
   const [paytrUrl, setPaytrUrl] = useState('');
   const [payBusy, setPayBusy] = useState(false);
+  // iyzico kart formu
+  const [kartOpen, setKartOpen] = useState(false);
+  const [kartForm, setKartForm] = useState({ holderName: '', number: '', expMonth: '', expYear: '', cvc: '' });
+  const [taksitler, setTaksitler] = useState<any[]>([]);
+  const [selTaksit, setSelTaksit] = useState(1);
+  const [taksitBusy, setTaksitBusy] = useState(false);
+  const [iyzHtml, setIyzHtml] = useState('');
+  const iyzFrameRef = useRef<HTMLIFrameElement>(null);
   const [lightbox, setLightbox] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [oneriBeden, setOneriBeden] = useState<Record<string, string>>({});
@@ -74,6 +82,14 @@ export default function Sepet() {
   const [sipData, setSipData] = useState<any>({ siparisler: [], ozet: {} });
   const [sipTab, setSipTab] = useState('tumu');
   const [kargoOrder, setKargoOrder] = useState<any>(null);
+  const [kargoLive, setKargoLive] = useState<any>(null);
+  const [kargoLiveBusy, setKargoLiveBusy] = useState(false);
+  const openKargo = async (o: any) => {
+    setKargoOrder(o); setKargoLive(null); setKargoLiveBusy(true);
+    try { const r = await api.get(`/public/sepet/${token}/kargo/${o.id}`); setKargoLive(r.data); }
+    catch { setKargoLive(null); }
+    finally { setKargoLiveBusy(false); }
+  };
   const [destekOpen, setDestekOpen] = useState(false);
   const [destekList, setDestekList] = useState<any[]>([]);
   const [destekForm, setDestekForm] = useState({ kategori: '', konu: '', detay: '' });
@@ -137,10 +153,10 @@ export default function Sepet() {
         <p className="text-xs font-semibold text-slate-800 leading-tight line-clamp-2">{u.ad}</p>
         <p className="text-[10px] text-slate-400 mt-0.5">{[u.kategoriAd, u.marka].filter(Boolean).join(' · ') || '-'}</p>
         <div className="flex items-center gap-1.5 mt-1"><p className="text-sm font-bold text-slate-900">{fmt(u.fiyat)}</p>{u.eskiFiyat > u.fiyat && <p className="text-[10px] text-slate-400 line-through">{fmt(u.eskiFiyat)}</p>}</div>
-        <span className="inline-flex items-center gap-1 text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mt-1"><Star size={9} className="fill-indigo-600" /> %{u.vipPuan} VIP</span>
-        {(u.bedenler || []).length > 0 && u.stok > 0 && <div className="flex flex-wrap gap-1 mt-1.5">{u.bedenler.map((b: string) => <button key={b} onClick={() => setOneriBeden((s) => ({ ...s, [u.id]: b }))} className={`text-[10px] px-1.5 py-0.5 rounded border ${oneriBeden[u.id] === b ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 text-slate-500'}`}>{b}</button>)}</div>}
-        {u.stok > 0 ? <button onClick={() => addProduct(u, oneriBeden[u.id])} className="w-full mt-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg py-2 hover:bg-indigo-700 flex items-center justify-center gap-1"><Plus size={13} /> Sepete Ekle</button>
-          : <button onClick={() => toast('Stok gelince haber verilecek 🔔')} className="w-full mt-2 text-xs font-semibold text-indigo-600 border border-indigo-200 rounded-lg py-2">Stok Gelince Haber Ver</button>}
+        <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded mt-1" style={{ color: '#C9A227', background: 'rgba(201,162,39,0.1)' }}><Star size={9} style={{ fill: '#C9A227' }} /> %{u.vipPuan} VIP</span>
+        {(u.bedenler || []).length > 0 && u.stok > 0 && <div className="flex flex-wrap gap-1 mt-1.5">{u.bedenler.map((b: string) => <button key={b} onClick={() => setOneriBeden((s) => ({ ...s, [u.id]: b }))} className={`text-[10px] px-1.5 py-0.5 rounded border ${oneriBeden[u.id] === b ? 'bg-[#0a0a0a] text-white border-[#0a0a0a]' : 'border-slate-200 text-slate-500'}`}>{b}</button>)}</div>}
+        {u.stok > 0 ? <button onClick={() => addProduct(u, oneriBeden[u.id])} className="w-full mt-2 text-xs font-semibold text-white bg-[#0a0a0a] hover:bg-[#C9A227] transition-colors rounded-lg py-2 flex items-center justify-center gap-1"><Plus size={13} /> Sepete Ekle</button>
+          : <button onClick={() => toast('Stok gelince haber verilecek 🔔')} className="w-full mt-2 text-xs font-semibold text-[#0a0a0a] border border-[#0a0a0a] rounded-lg py-2 hover:bg-[#0a0a0a] hover:text-white transition-colors">Stok Gelince Haber Ver</button>}
       </div>
     </div>
   );
@@ -153,15 +169,50 @@ export default function Sepet() {
     catch { toast.error('Kopyalanamadı'); }
   };
   const onOdemeBildirClick = () => { setOdemeOnay(true); };
-  // Kredi kartı ile öde (PayTR iframe)
-  const kartlaOde = async () => {
+  // Kredi kartı ile öde (iyzico 3D Secure)
+  const kartlaOde = () => {
     if (items.length === 0) { toast.error('Sepetiniz boş'); return; }
+    setKartOpen(true);
+    setKartForm({ holderName: '', number: '', expMonth: '', expYear: '', cvc: '' });
+    setTaksitler([]); setSelTaksit(1); setIyzHtml('');
+  };
+  // BIN (ilk 6 hane) ile taksit sorgulama
+  const queryTaksit = async (cardNum: string) => {
+    const clean = cardNum.replace(/\s/g, '');
+    if (clean.length < 6) { setTaksitler([]); return; }
+    setTaksitBusy(true);
+    try {
+      const r = await api.post(`/public/sepet/${token}/iyzico-installment`, { binNumber: clean.slice(0, 6) });
+      if (r.data?.ok && r.data.details?.length > 0) {
+        const d = r.data.details[0];
+        setTaksitler(d.installments || []);
+      } else { setTaksitler([]); }
+    } catch { setTaksitler([]); }
+    finally { setTaksitBusy(false); }
+  };
+  // Kart numarası formatlama (4'er grup)
+  const formatCardNumber = (v: string) => {
+    const digits = v.replace(/\D/g, '').slice(0, 16);
+    return digits.replace(/(.{4})/g, '$1 ').trim();
+  };
+  // iyzico 3D Secure ödeme başlat
+  const submitIyzico = async () => {
+    if (!kartForm.holderName || !kartForm.number || !kartForm.expMonth || !kartForm.expYear || !kartForm.cvc) {
+      toast.error('Lütfen tüm kart bilgilerini doldurun'); return;
+    }
     setPayBusy(true);
     try {
-      const r = await api.post(`/public/sepet/${token}/paytr`);
-      if (r.data?.ok && r.data?.iframeUrl) { setPaytrUrl(r.data.iframeUrl); return; }
-      if (r.data?.configured === false) { toast('Kredi kartı ödemesi henüz aktif değil. Ödemenizi bildirerek devam edebilirsiniz.', { icon: 'ℹ️' }); return; }
-      toast.error(r.data?.error || 'Ödeme başlatılamadı. Lütfen tekrar deneyin.');
+      const r = await api.post(`/public/sepet/${token}/iyzico-init`, {
+        card: { holderName: kartForm.holderName, number: kartForm.number.replace(/\s/g, ''), expMonth: kartForm.expMonth, expYear: kartForm.expYear, cvc: kartForm.cvc },
+        installment: selTaksit,
+      });
+      if (r.data?.ok && r.data.htmlContent) {
+        setIyzHtml(r.data.htmlContent);
+      } else if (r.data?.configured === false) {
+        toast('Kredi kartı ödemesi henüz aktif değil. Ödemenizi bildirerek devam edebilirsiniz.', { icon: 'ℹ️' });
+      } else {
+        toast.error(r.data?.error || 'Ödeme başlatılamadı. Lütfen tekrar deneyin.');
+      }
     } catch (e) { toast.error(apiErrorMessage(e)); }
     finally { setPayBusy(false); }
   };
@@ -230,38 +281,75 @@ export default function Sepet() {
   };
 
   if (err) return <div className="min-h-screen flex items-center justify-center text-slate-500 p-6 text-center bg-slate-100">{err}</div>;
-  if (!data) return <div className="min-h-screen flex items-center justify-center bg-slate-100"><span className="w-8 h-8 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div>;
+  if (!data) return <div className="min-h-screen flex items-center justify-center bg-[#f5f5f5]"><span className="w-8 h-8 border-2 border-slate-200 border-t-[#0a0a0a] rounded-full animate-spin" /></div>;
+
+  // İptal edilmiş sepet — içerik açılmaz, yalnızca iptal bilgisi gösterilir
+  if (data.durum === 'iptal') return (
+    <div className="min-h-screen bg-slate-100 sm:bg-gradient-to-br sm:from-rose-100 sm:via-slate-100 sm:to-rose-50 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-3xl shadow-xl ring-1 ring-slate-200/70 p-7 text-center">
+        <div className="mx-auto w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mb-4">
+          <AlertCircle size={34} className="text-red-500" />
+        </div>
+        <h1 className="text-xl font-extrabold text-slate-900 mb-1">Bu Sepet İptal Edildi</h1>
+        <p className="text-sm text-slate-500 leading-relaxed mb-4">
+          {data.sipNo ? <>#{data.sipNo} numaralı siparişiniz iptal edilmiştir. </> : null}
+          Bu sepet üzerinden ödeme yapılamaz ve sipariş oluşturulamaz.
+        </p>
+        <div className="rounded-2xl bg-red-50 border border-red-100 text-red-700 text-[13px] font-medium px-4 py-3 mb-5">
+          Bir hata olduğunu düşünüyorsanız lütfen bizimle iletişime geçin.
+        </div>
+        {data.magaza && <p className="text-xs text-slate-400 tracking-widest font-bold">{String(data.magaza).toUpperCase()}</p>}
+      </div>
+    </div>
+  );
 
   const STEPS = [{ t: 'Sepetim', i: ShoppingBag }, { t: 'Teslimat', i: Truck }, { t: 'Ödeme', i: CreditCard }, { t: 'Onay', i: CheckCircle2 }, { t: 'Kargo', i: Truck }];
   const curStep = data.durum === 'sepet' ? 0 : bildirildi || data.durum !== 'yeni' ? 2 : 1;
 
   return (
-    <div className="min-h-screen bg-slate-100 sm:bg-gradient-to-br sm:from-indigo-100 sm:via-slate-100 sm:to-violet-100">
+    <div className="min-h-screen bg-[#f5f5f5] text-[#111]">
       <Toaster position="top-center" />
-      <div className="mx-auto w-full max-w-md lg:max-w-6xl bg-slate-50 min-h-screen shadow-sm sm:shadow-2xl sm:ring-1 sm:ring-slate-200/70 relative">
-        {/* Header (sticky) */}
-        <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-slate-100 px-4 py-3 flex items-center justify-between">
-          <button onClick={() => setMenu(true)} className="p-1.5 rounded-lg hover:bg-slate-100"><Menu size={20} className="text-slate-700" /></button>
-          <p className="text-lg font-extrabold tracking-widest text-slate-900">{data.magaza?.toUpperCase()}</p>
-          <button onClick={() => document.getElementById('sepetim')?.scrollIntoView({ behavior: 'smooth' })} className="relative p-1.5 rounded-lg hover:bg-slate-100"><ShoppingBag size={20} className="text-slate-700" />{adet > 0 && <span className="absolute top-0 right-0 w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] flex items-center justify-center">{adet}</span>}</button>
+      {/* Üst duyuru barı (PublicStore stili) */}
+      <div className="bg-[#0a0a0a] text-white text-[11px] sm:text-xs">
+        <div className="mx-auto w-full max-w-md lg:max-w-6xl px-4 h-9 sm:h-10 flex items-center gap-4 overflow-x-auto scrollbar-hide whitespace-nowrap">
+          <span className="flex items-center gap-1.5 shrink-0"><Truck size={13} style={{ color: '#C9A227' }} /> Kapıda ödeme ve güvenli teslimat</span>
+          <span className="hidden md:inline text-white/25">|</span>
+          <span className="hidden md:flex items-center gap-1.5 shrink-0"><CreditCard size={13} style={{ color: '#C9A227' }} /> Vade farksız taksit fırsatı</span>
+          <span className="ml-auto flex items-center gap-1.5 shrink-0 font-semibold" style={{ color: '#C9A227' }}>256-bit SSL Güvenli Ödeme</span>
+        </div>
+      </div>
+      <div className="mx-auto w-full max-w-md lg:max-w-6xl bg-[#f5f5f5] min-h-screen relative">
+        {/* Header (sticky) — PublicStore stili */}
+        <header className="sticky top-0 z-30 bg-white border-b border-slate-200 px-4 py-3.5 flex items-center justify-between">
+          <button onClick={() => setMenu(true)} className="text-[#111] hover:text-[#C9A227] transition-colors shrink-0"><Menu size={24} /></button>
+          <p style={{ fontFamily: 'Georgia, "Times New Roman", serif' }} className="font-bold text-2xl sm:text-3xl tracking-tight text-[#0a0a0a]">{data.magaza || 'DiLjar'}</p>
+          <button onClick={() => document.getElementById('sepetim')?.scrollIntoView({ behavior: 'smooth' })} className="relative flex flex-col items-center gap-0.5 text-[#111] hover:text-[#C9A227] transition-colors shrink-0"><div className="relative"><ShoppingBag size={22} />{adet > 0 && <span className="absolute -top-2 -right-2.5 text-white text-[10px] min-w-4 h-4 px-1 rounded-full flex items-center justify-center font-bold" style={{ background: '#C9A227' }}>{adet}</span>}</div><span className="hidden sm:block text-[11px] font-medium">Sepetim</span></button>
         </header>
 
         <div className="p-4 space-y-3">
-          {/* Hızlı ödeme avantajı — ince, üstte, dikkat çekici */}
-          <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white px-3.5 py-2.5 flex items-center gap-3">
-            <Zap size={18} className="text-amber-300 shrink-0" />
+          {/* Hızlı ödeme avantajı — siyah zemin, altın vurgu */}
+          <div className="rounded-2xl bg-[#0a0a0a] text-white px-4 py-3 flex items-center gap-3">
+            <Zap size={18} className="shrink-0" style={{ color: '#C9A227' }} />
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold leading-tight">Hızlı Ödeme Avantajı</p>
               {puanOrani > 0
-                ? <p className="text-[10px] text-white/75 leading-tight">Hemen öde, <b className="text-amber-300">%{puanOrani} VIP puan</b> kazan • {puan} puan</p>
-                : <p className="text-[10px] text-white/75 leading-tight">Hemen ödeyerek siparişini hızlıca tamamla</p>}
+                ? <p className="text-[10px] text-white/70 leading-tight">Hemen öde, <b style={{ color: '#C9A227' }}>%{puanOrani} VIP puan</b> kazan • {puan} puan</p>
+                : <p className="text-[10px] text-white/70 leading-tight">Hemen ödeyerek siparişini hızlıca tamamla</p>}
             </div>
             {kalan && !kalan.bitti ? (
-              <div className="flex items-center gap-1 font-bold text-sm tabular-nums bg-black/20 rounded-lg px-2 py-1 shrink-0">
-                <Clock size={13} className="text-amber-300" />{String(kalan.s).padStart(2, '0')}:{String(kalan.dk).padStart(2, '0')}:{String(kalan.sn).padStart(2, '0')}
+              <div className="flex items-center gap-1 font-bold text-sm tabular-nums bg-white/10 rounded-lg px-2 py-1 shrink-0" style={{ color: '#C9A227' }}>
+                <Clock size={13} />{String(kalan.s).padStart(2, '0')}:{String(kalan.dk).padStart(2, '0')}:{String(kalan.sn).padStart(2, '0')}
               </div>
-            ) : <span className="text-[10px] text-amber-300 shrink-0">Süre doldu</span>}
+            ) : <span className="text-[10px] shrink-0" style={{ color: '#C9A227' }}>Süre doldu</span>}
           </div>
+
+          {/* Dekont uyarısı — ödeme avantajı altında */}
+          {data.sipNo && (
+            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-2xl px-3.5 py-2.5">
+              <AlertCircle size={16} className="text-amber-500 shrink-0" />
+              <p className="text-[12px] text-amber-800 leading-snug flex-1">Havale/EFT ödemelerinde dekont açıklamanıza <strong className="text-amber-900">sipariş numaranızı ({data.sipNo})</strong> muhakkak yazın — ödemeniz hızlıca işlensin.</p>
+            </div>
+          )}
 
           {/* WEB: iki kolonlu duzen (mobilde tek kolon, sira korunur) */}
           <div className="space-y-3 lg:space-y-0 lg:grid lg:grid-cols-3 lg:gap-5 lg:items-start">
@@ -269,7 +357,7 @@ export default function Sepet() {
           {/* Arama + canlı sonuç */}
           <div className="relative" id="arama">
             <Search size={16} className="absolute left-3.5 top-3 text-slate-400" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ürün adı, satış kodu veya kategori ile ara..." className="w-full pl-10 pr-3 py-2.5 text-base bg-white border border-slate-200 rounded-2xl outline-none focus:ring-2 focus:ring-indigo-200" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ürün adı, satış kodu veya kategori ile ara..." className="w-full pl-10 pr-3 py-2.5 text-base bg-white border border-slate-300 rounded-full outline-none focus:border-[#0a0a0a] transition-colors" />
             {results.length > 0 && (
               <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl overflow-hidden max-h-80 overflow-y-auto">
                 {results.map((p) => (
@@ -278,9 +366,9 @@ export default function Sepet() {
                     <div className="flex-1 min-w-0">
                       <p className="text-xs font-medium text-slate-800 truncate">{p.ad}</p>
                       <p className="text-[10px] text-slate-400">{p.salesCode ? 'Kod: ' + p.salesCode + ' · ' : ''}{fmt(p.fiyat)} · {p.stok > 0 ? p.stok + ' adet' : 'Stok yok'}</p>
-                      {(p.bedenler || []).length > 0 && <div className="flex flex-wrap gap-1 mt-1">{p.bedenler.map((b: string) => <button key={b} onClick={() => setOneriBeden((s) => ({ ...s, [p.id]: b }))} className={`text-[9px] px-1.5 py-0.5 rounded border ${oneriBeden[p.id] === b ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 text-slate-500'}`}>{b}</button>)}</div>}
+                      {(p.bedenler || []).length > 0 && <div className="flex flex-wrap gap-1 mt-1">{p.bedenler.map((b: string) => <button key={b} onClick={() => setOneriBeden((s) => ({ ...s, [p.id]: b }))} className={`text-[9px] px-1.5 py-0.5 rounded border ${oneriBeden[p.id] === b ? 'bg-[#0a0a0a] text-white border-[#0a0a0a]' : 'border-slate-200 text-slate-500'}`}>{b}</button>)}</div>}
                     </div>
-                    <button disabled={p.stok <= 0} onClick={() => addProduct(p, oneriBeden[p.id])} className="shrink-0 w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center disabled:opacity-40"><Plus size={16} /></button>
+                    <button disabled={p.stok <= 0} onClick={() => addProduct(p, oneriBeden[p.id])} className="shrink-0 w-8 h-8 rounded-lg bg-[#0a0a0a] hover:bg-[#C9A227] text-white flex items-center justify-center disabled:opacity-40 transition-colors"><Plus size={16} /></button>
                   </div>
                 ))}
               </div>
@@ -292,40 +380,58 @@ export default function Sepet() {
             {STEPS.map((s, i) => (
               <div key={s.t} className="flex items-center flex-1 last:flex-none">
                 <div className="flex flex-col items-center gap-1">
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${i <= curStep ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-400'}`}><s.i size={14} /></div>
-                  <span className={`text-[9px] ${i === curStep ? 'text-indigo-600 font-semibold' : 'text-slate-400'}`}>{s.t}</span>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center ${i <= curStep ? 'bg-[#0a0a0a] text-white' : 'bg-white border border-slate-200 text-slate-400'}`}><s.i size={14} /></div>
+                  <span className={`text-[9px] ${i === curStep ? 'font-semibold text-[#0a0a0a]' : 'text-slate-400'}`}>{s.t}</span>
                 </div>
-                {i < STEPS.length - 1 && <div className={`flex-1 h-0.5 mx-1 mb-4 ${i < curStep ? 'bg-indigo-600' : 'bg-slate-200'}`} />}
+                {i < STEPS.length - 1 && <div className={`flex-1 h-0.5 mx-1 mb-4 ${i < curStep ? 'bg-[#0a0a0a]' : 'bg-slate-200'}`} />}
               </div>
             ))}
           </div>
 
           {/* Sepetim */}
           <div id="sepetim">
-            <div className="flex items-center justify-between mb-2"><h3 className="font-bold text-slate-800">Sepetim ({items.length})</h3><button onClick={() => setEdit(!edit)} className="text-sm text-indigo-600 font-medium flex items-center gap-1"><Pencil size={13} /> {edit ? 'Bitti' : 'Düzenle'}</button></div>
-            <div className="bg-white rounded-2xl border border-slate-100 divide-y divide-slate-100">
-              {items.length === 0 && <p className="text-center text-slate-400 py-8 text-sm">Sepetiniz boş.</p>}
+            <div className="flex items-center justify-between mb-2"><h3 className="font-bold text-[#111]">Sepetim ({items.length})</h3>{!data?.wpIletildi && data?.durum !== 'hazirlaniyor' && data?.durum !== 'kargolandi' && data?.durum !== 'tamamlandi' && <button onClick={() => setEdit(!edit)} className="text-sm font-semibold flex items-center gap-1 hover:opacity-70 transition-opacity" style={{ color: '#C9A227' }}><Pencil size={13} /> {edit ? 'Bitti' : 'Düzenle'}</button>}</div>
+            <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
+              {items.length === 0 && (
+                <div className="text-center py-14 px-6">
+                  <div className="mx-auto w-20 h-20 rounded-full bg-slate-100 flex items-center justify-center mb-4"><ShoppingBag size={38} className="text-slate-300" /></div>
+                  <p className="text-lg font-bold text-[#111]">Sepetiniz boş</p>
+                  <p className="text-sm text-slate-400 mt-1 mb-5">Beğendiğiniz ürünleri sepete ekleyerek alışverişe başlayın.</p>
+                  <button onClick={() => window.open('/', '_blank')} className="inline-flex items-center gap-2 bg-[#0a0a0a] hover:bg-[#C9A227] text-white font-bold px-6 py-3 rounded-xl transition-colors"><Home size={16} /> Mağazaya Dön</button>
+                </div>
+              )}
               {items.map((it, i) => (
                 <div key={i} className="flex items-center gap-3 p-3">
-                  <div className="w-14 h-14 rounded-xl bg-slate-100 overflow-hidden shrink-0 cursor-zoom-in" onClick={() => it.img && setLightbox(it.img)}>{it.img ? <img src={it.img} className="w-full h-full object-cover" /> : null}</div>
+                  <div className="w-16 h-16 rounded-xl bg-slate-100 overflow-hidden shrink-0 cursor-zoom-in" onClick={() => it.img && setLightbox(it.img)}>{it.img ? <img src={it.img} className="w-full h-full object-cover" /> : null}</div>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-slate-800 text-sm leading-tight">{String(it.ad).replace(/\s*\([^)]*\)\s*$/, '')}</p>
+                    <p className="font-semibold text-[#111] text-sm leading-tight">{String(it.ad).replace(/\s*\([^)]*\)\s*$/, '')}</p>
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                       {(it.varyasyon || it.beden) && <span className="text-[11px] px-1.5 py-0.5 bg-slate-100 rounded text-slate-600">{it.varyasyon || it.beden}</span>}
                       {it.salesCode && <span className="text-[10px] text-slate-400">Kod: {it.salesCode}</span>}
                       {it.barkod && <span className="text-[10px] text-slate-400 inline-flex items-center gap-0.5"><Barcode size={10} /> {it.barkod}</span>}
                     </div>
                     {edit ? (
-                      <div className="flex items-center gap-2 mt-1.5">
-                        <button onClick={() => itemAction(i, { delta: -1 })} className="w-6 h-6 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500"><Minus size={12} /></button>
-                        <span className="text-sm font-medium w-5 text-center">{it.adet}</span>
-                        <button onClick={() => itemAction(i, { delta: 1 })} className="w-6 h-6 rounded-lg border border-slate-200 flex items-center justify-center text-slate-500"><Plus size={12} /></button>
+                      <div className="flex items-center gap-2 mt-2">
+                        <button onClick={() => itemAction(i, { delta: -1 })} className="w-7 h-7 rounded-lg border border-slate-300 flex items-center justify-center text-[#111] hover:border-[#0a0a0a] transition-colors"><Minus size={13} /></button>
+                        <span className="text-sm font-bold w-6 text-center tabular-nums">{it.adet}</span>
+                        <button onClick={() => itemAction(i, { delta: 1 })} className="w-7 h-7 rounded-lg border border-slate-300 flex items-center justify-center text-[#111] hover:border-[#0a0a0a] transition-colors"><Plus size={13} /></button>
                       </div>
-                    ) : <p className="text-xs text-indigo-600 mt-1">{it.adet} Adet × {fmt(it.fiyat)}</p>}
+                    ) : (it.birimIndirimli != null ? (
+                      <p className="text-xs mt-1">
+                        <span className="text-slate-400 line-through mr-1">{it.adet} Adet × {fmt(it.birimNormal)}</span>
+                        <span className="text-emerald-600 font-semibold">→ {fmt(it.birimIndirimli)}</span>
+                      </p>
+                    ) : <p className="text-xs text-slate-500 mt-1">{it.adet} Adet × <span className="font-semibold text-[#111]">{fmt(it.fiyat)}</span></p>)}
                   </div>
                   <div className="text-right shrink-0">
-                    <p className="font-bold text-slate-800">{fmt((it.fiyat || 0) * (it.adet || 1))}</p>
-                    {edit && <button onClick={() => itemAction(i, { remove: true })} className="mt-1 text-red-400 hover:text-red-600"><Trash2 size={16} /></button>}
+                    {it.satirIndirimli != null ? (
+                      <>
+                        <p className="text-[11px] text-slate-400 line-through">{fmt((it.fiyat || 0) * (it.adet || 1))}</p>
+                        <p className="font-bold text-emerald-600">{fmt(it.satirIndirimli)}</p>
+                        <span className="inline-block text-[9px] font-semibold text-emerald-600 bg-emerald-50 rounded px-1 py-0.5 mt-0.5">Kampanya</span>
+                      </>
+                    ) : <p className="font-bold text-[#111]">{fmt((it.fiyat || 0) * (it.adet || 1))}</p>}
+                    {edit && <button onClick={() => itemAction(i, { remove: true })} className="mt-1.5 text-slate-300 hover:text-red-500 transition-colors"><Trash2 size={17} /></button>}
                   </div>
                 </div>
               ))}
@@ -339,11 +445,11 @@ export default function Sepet() {
               <div className="flex gap-3 overflow-x-auto pb-2 -mx-4 px-4">
                 {(data.oneriler || []).map((p: any) => (
                   <div key={p.id} className="w-40 shrink-0 bg-white border border-slate-100 rounded-2xl p-2.5">
-                    <div className="relative"><span className="absolute top-1 left-1 text-[8px] bg-indigo-600 text-white px-1.5 py-0.5 rounded-full font-bold z-10">Yayına Özel</span><div className="w-full aspect-square rounded-xl bg-slate-100 overflow-hidden cursor-zoom-in" onClick={() => p.img && setLightbox(p.img)}>{p.img ? <img src={p.img} className="w-full h-full object-cover" /> : null}</div></div>
+                    <div className="relative"><span className="absolute top-1 left-1 text-[8px] text-white px-1.5 py-0.5 rounded-full font-bold z-10" style={{ background: '#C9A227' }}>Yayına Özel</span><div className="w-full aspect-square rounded-xl bg-slate-100 overflow-hidden cursor-zoom-in" onClick={() => p.img && setLightbox(p.img)}>{p.img ? <img src={p.img} className="w-full h-full object-cover" /> : null}</div></div>
                     <p className="text-xs font-medium text-slate-700 truncate mt-2">{p.ad}</p>
-                    <div className="flex items-center gap-1.5"><p className="text-sm font-bold text-slate-900">{fmt(p.fiyat)}</p>{p.eskiFiyat > p.fiyat && <p className="text-[10px] text-slate-400 line-through">{fmt(p.eskiFiyat)}</p>}</div>
-                    {(p.bedenler || []).length > 0 && <div className="flex flex-wrap gap-1 mt-1.5">{p.bedenler.map((b: string) => <button key={b} onClick={() => setOneriBeden((s) => ({ ...s, [p.id]: b }))} className={`text-[10px] px-1.5 py-0.5 rounded border ${oneriBeden[p.id] === b ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 text-slate-500'}`}>{b}</button>)}</div>}
-                    <button onClick={() => addProduct(p, oneriBeden[p.id])} className="w-full mt-2 text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg py-1.5 hover:bg-indigo-50 flex items-center justify-center gap-1"><Plus size={12} /> Sepete Ekle</button>
+                    <div className="flex items-center gap-1.5"><p className="text-sm font-bold text-[#111]">{fmt(p.fiyat)}</p>{p.eskiFiyat > p.fiyat && <p className="text-[10px] text-slate-400 line-through">{fmt(p.eskiFiyat)}</p>}</div>
+                    {(p.bedenler || []).length > 0 && <div className="flex flex-wrap gap-1 mt-1.5">{p.bedenler.map((b: string) => <button key={b} onClick={() => setOneriBeden((s) => ({ ...s, [p.id]: b }))} className={`text-[10px] px-1.5 py-0.5 rounded border ${oneriBeden[p.id] === b ? 'bg-[#0a0a0a] text-white border-[#0a0a0a]' : 'border-slate-200 text-slate-500'}`}>{b}</button>)}</div>}
+                    <button onClick={() => addProduct(p, oneriBeden[p.id])} className="w-full mt-2 text-xs font-semibold text-white bg-[#0a0a0a] hover:bg-[#C9A227] rounded-lg py-1.5 flex items-center justify-center gap-1 transition-colors"><Plus size={12} /> Sepete Ekle</button>
                   </div>
                 ))}
               </div>
@@ -355,8 +461,8 @@ export default function Sepet() {
           <div className="space-y-3 lg:sticky lg:top-4">
           {/* Teslimat Bilgileri */}
           <div>
-            <div className="flex items-center justify-between mb-2"><h3 className="font-bold text-slate-800 text-sm">Teslimat Bilgileri</h3><button onClick={() => setTeslimat(true)} className="text-sm text-indigo-600 font-medium flex items-center gap-1"><Pencil size={13} /> Düzenle</button></div>
-            <div className="bg-white rounded-2xl border border-slate-100 p-3.5 space-y-2 text-sm">
+            <div className="flex items-center justify-between mb-2"><h3 className="font-bold text-[#111] text-sm">Teslimat Bilgileri</h3><button onClick={() => setTeslimat(true)} className="text-sm font-semibold flex items-center gap-1 hover:opacity-70 transition-opacity" style={{ color: '#C9A227' }}><Pencil size={13} /> Düzenle</button></div>
+            <div className="bg-white rounded-2xl border border-slate-200 p-3.5 space-y-2 text-sm">
               <div className="flex items-center gap-2 text-slate-700"><User size={15} className="text-slate-400" /> {data.musteri || 'İsim belirtilmedi'}</div>
               <div className="flex items-center gap-2 text-slate-700"><Phone size={15} className="text-slate-400" /> {data.telefon || 'Telefon belirtilmedi'}</div>
               <div className="flex items-start gap-2 text-slate-700"><MapPin size={15} className="text-slate-400 mt-0.5 shrink-0" /> <span>{data.adres || 'Teslimat adresi belirtilmedi'}{(data.ilce || data.il) ? <span className="block text-[12px] text-slate-500 mt-0.5">{[data.ilce, data.il].filter(Boolean).join(' / ')}</span> : null}</span></div>
@@ -366,64 +472,170 @@ export default function Sepet() {
           {/* Banka Bilgileri (Havale/EFT) */}
           {(data.banka?.iban || data.banka?.ad || data.banka?.not) && (
           <div id="banka">
-            <h3 className="font-bold text-slate-800 text-sm mb-2 flex items-center gap-1.5"><Building2 size={15} className="text-indigo-600" /> Banka Bilgileri</h3>
-            <div className="bg-white rounded-2xl border border-slate-100 p-3.5 space-y-2 text-sm">
+            <h3 className="font-bold text-[#111] text-sm mb-2 flex items-center gap-1.5"><Building2 size={15} style={{ color: '#C9A227' }} /> Banka Bilgileri</h3>
+            <div className="bg-white rounded-2xl border border-slate-200 p-3.5 space-y-2 text-sm">
               {data.banka?.ad && <div className="flex justify-between gap-2"><span className="text-slate-500">Banka</span><span className="text-slate-800 font-medium text-right">{data.banka.ad}</span></div>}
               {data.banka?.hesapSahibi && <div className="flex justify-between gap-2"><span className="text-slate-500">Hesap Sahibi</span><span className="text-slate-800 font-medium text-right">{data.banka.hesapSahibi}</span></div>}
               {data.banka?.iban && (
                 <div className="flex items-center justify-between gap-2 bg-slate-50 rounded-xl px-3 py-2">
                   <span className="font-mono text-[13px] text-slate-800 break-all">{data.banka.iban}</span>
-                  <button onClick={copyIban} className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600 border border-indigo-200 rounded-lg px-2 py-1 hover:bg-indigo-50"><Copy size={13} /> Kopyala</button>
+                  <button onClick={copyIban} className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-white bg-[#0a0a0a] hover:bg-[#C9A227] rounded-lg px-2.5 py-1.5 transition-colors"><Copy size={13} /> Kopyala</button>
+                </div>
+              )}
+              {data.sipNo && (
+                <div className="flex items-center justify-between gap-2 bg-amber-50 rounded-xl px-3 py-2">
+                  <div><p className="text-[10px] text-amber-600 font-semibold uppercase">Sipariş Numaranız</p><p className="font-mono font-bold text-amber-800 text-base tracking-widest">{data.sipNo}</p></div>
+                  <button onClick={async () => { try { await navigator.clipboard.writeText(data.sipNo); toast.success('Sipariş no kopyalandı'); } catch { toast.error('Kopyalanamadı'); } }} className="shrink-0 inline-flex items-center gap-1 text-xs font-semibold text-amber-700 border border-amber-200 rounded-lg px-2 py-1 hover:bg-amber-100"><Copy size={13} /> Kopyala</button>
                 </div>
               )}
               {data.banka?.not && <p className="text-[12px] text-slate-500 whitespace-pre-wrap pt-1 border-t border-slate-100">{data.banka.not}</p>}
+              {/* Dekont uyarısı */}
+              <div className="flex items-start gap-2 bg-rose-50 rounded-xl px-3 py-2 mt-1">
+                <AlertCircle size={15} className="text-rose-500 shrink-0 mt-0.5" />
+                <p className="text-[12px] text-rose-700 leading-snug">Ödemenizi hızlı işleyebilmemiz için dekont açıklamanıza <strong>sipariş numaranızı ({data.sipNo || 'sipariş no'})</strong> muhakkak yazın.</p>
+              </div>
             </div>
           </div>
           )}
 
           {/* Sipariş Özeti */}
           <div id="ozet">
-            <h3 className="font-bold text-slate-800 text-sm mb-2">Sipariş Özeti</h3>
-            <div className="bg-white rounded-2xl border border-slate-100 p-3.5 space-y-1.5 text-sm">
-              <div className="flex justify-between text-slate-500"><span>Ara Toplam</span><span className="text-slate-700">{fmt(data.araToplam)}</span></div>
-              {data.indirim > 0 && <div className="flex justify-between text-green-600"><span>İndirim{data.indirimKodu ? ` (${data.indirimKodu})` : ''}</span><span>-{fmt(data.indirim)}</span></div>}
-              <div className="flex justify-between text-slate-500"><span className="flex items-center gap-1"><Truck size={13} className="text-slate-400" /> Kargo</span>{data.kargoEtiket === 'ucretsiz' ? <span className="text-green-600 font-semibold">Ücretsiz</span> : <span className="text-amber-600 font-semibold">Alıcı Ödemeli</span>}</div>
-              <div className="flex justify-between font-extrabold text-slate-900 text-base pt-2 border-t border-slate-100 mt-1"><span>TOPLAM</span><span>{fmt(data.toplam)}</span></div>
+            <h3 className="font-bold text-[#111] text-sm mb-2">Sipariş Özeti</h3>
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2 text-sm">
+              <div className="flex justify-between text-slate-500"><span>Ara Toplam</span><span className="text-slate-800 font-medium">{fmt(data.araToplam)}</span></div>
+              {data.indirim > 0 && <div className="flex justify-between text-emerald-600"><span>İndirim{data.indirimKodu ? ` (${data.indirimKodu})` : ''}</span><span>-{fmt(data.indirim)}</span></div>}
+              <div className="flex justify-between text-slate-500"><span className="flex items-center gap-1"><Truck size={13} className="text-slate-400" /> Kargo</span>{data.kargoEtiket === 'ucretsiz' ? <span className="text-emerald-600 font-semibold">Ücretsiz</span> : <span className="text-amber-600 font-semibold">Alıcı Ödemeli</span>}</div>
+              <div className="flex justify-between font-extrabold text-[#0a0a0a] text-lg pt-2.5 border-t border-slate-200 mt-1"><span>GENEL TOPLAM</span><span style={{ color: '#C9A227' }}>{fmt(data.toplam)}</span></div>
+              {(data.tahsilat || 0) > 0 && <div className="flex justify-between text-emerald-600"><span>Tahsil Edilen</span><span>-{fmt(data.tahsilat)}</span></div>}
+              <div className="flex justify-between font-extrabold text-base pt-1.5 border-t border-slate-100"><span className={data.toplam - (data.tahsilat || 0) <= 0 ? 'text-emerald-700' : 'text-rose-600'}>Kalan Bakiye</span><span className={data.toplam - (data.tahsilat || 0) <= 0 ? 'text-emerald-700' : 'text-rose-600'}>{fmt(Math.max(0, data.toplam - (data.tahsilat || 0)))}</span></div>
             </div>
           </div>
           </div>
           </div>
         </div>
 
-        {/* Alt sabit bar (sticky) */}
-        <div className="sticky bottom-0 z-30 bg-white border-t border-slate-100 px-4 py-3 flex items-center gap-2.5">
-          <div className="shrink-0"><p className="text-[10px] text-slate-400">Toplam</p><p className="text-base font-extrabold text-slate-900">{fmt(data.toplam)}</p></div>
-          {odemeAktif ? (
+        {/* Alt sabit bar (sticky) — ödemeye geç */}
+        <div className="sticky bottom-0 z-30 bg-white border-t border-slate-200 px-4 py-3 flex items-center gap-2.5">
+          <div className="shrink-0"><p className="text-[10px] text-slate-400 uppercase tracking-wide">Toplam</p><p className="text-lg font-extrabold text-[#0a0a0a]">{fmt(data.toplam)}</p></div>
+          {data.odendi ? (
+            <div className="flex-1 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-2xl py-2.5 font-bold flex flex-col items-center leading-tight">
+              <span className="text-sm inline-flex items-center gap-1.5"><CheckCircle2 size={16} /> ÖDEME ALINDI</span>
+              <span className="text-[10px] font-medium text-emerald-600/80">{data.odemeYontemi ? `${data.odemeYontemi} · ` : ''}Bu sepet ödenmiştir, teşekkürler</span>
+            </div>
+          ) : odemeAktif ? (
             <>
-              <button onClick={() => window.open(data.odemeLinki, 'odeme', 'width=480,height=720')} className="flex-1 bg-green-600 text-white rounded-2xl py-2.5 font-bold hover:bg-green-700 flex flex-col items-center leading-tight">
-                <span className="text-sm inline-flex items-center gap-1.5"><CreditCard size={16} /> SEPETİ ÖDE</span>
-                <span className="text-[10px] font-medium text-white/80">{odemeKalan ? `Ödeme için kalan süre: ${odemeKalan}` : 'Güvenli ödeme'}</span>
+              <button onClick={() => window.open(data.odemeLinki, 'odeme', 'width=480,height=720')} className="flex-1 bg-[#0a0a0a] hover:bg-[#C9A227] text-white rounded-2xl py-3 font-bold flex flex-col items-center leading-tight transition-colors">
+                <span className="text-sm inline-flex items-center gap-1.5"><CreditCard size={16} /> ÖDEMEYE GEÇ</span>
+                <span className="text-[10px] font-medium text-white/70">{odemeKalan ? `Ödeme için kalan süre: ${odemeKalan}` : 'Güvenli ödeme'}</span>
               </button>
-              <button onClick={onOdemeBildirClick} disabled={items.length === 0} className="shrink-0 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-2xl px-3 py-2.5 font-semibold hover:bg-indigo-100 disabled:opacity-50 flex flex-col items-center leading-tight">
+              <button onClick={onOdemeBildirClick} disabled={items.length === 0} className="shrink-0 border border-[#0a0a0a] text-[#0a0a0a] rounded-2xl px-3 py-2.5 font-semibold hover:bg-[#0a0a0a] hover:text-white disabled:opacity-50 flex flex-col items-center leading-tight transition-colors">
                 <span className="text-[12px]">{bildirildi ? 'Bildirildi ✓' : 'Havale/EFT'}</span>
-                <span className="text-[9px] font-medium text-indigo-400">Ödemeni Bildir</span>
+                <span className="text-[9px] font-medium opacity-60">Ödemeni Bildir</span>
               </button>
             </>
           ) : (
             <>
-              <button onClick={kartlaOde} disabled={items.length === 0 || payBusy} className="flex-1 bg-green-600 text-white rounded-2xl py-2.5 font-bold hover:bg-green-700 disabled:opacity-50 flex flex-col items-center leading-tight">
-                <span className="text-sm inline-flex items-center gap-1.5"><CreditCard size={16} /> {payBusy ? 'Yönlendiriliyor...' : 'Kredi Kartı ile Öde'}</span>
-                <span className="text-[10px] font-medium text-white/80">256-bit SSL · Güvenli Ödeme</span>
+              <button onClick={kartlaOde} disabled={items.length === 0 || payBusy} className="flex-1 bg-[#0a0a0a] hover:bg-[#C9A227] text-white rounded-2xl py-3 font-bold disabled:opacity-50 flex flex-col items-center leading-tight transition-colors">
+                <span className="text-sm inline-flex items-center gap-1.5"><CreditCard size={16} /> {payBusy ? 'Yönlendiriliyor...' : 'ÖDEMEYE GEÇ'}</span>
+                <span className="text-[10px] font-medium text-white/70">256-bit SSL · Güvenli Ödeme</span>
               </button>
-              <button onClick={onOdemeBildirClick} disabled={items.length === 0} className="shrink-0 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-2xl px-3 py-2.5 font-semibold hover:bg-indigo-100 disabled:opacity-50 flex flex-col items-center leading-tight">
+              <button onClick={onOdemeBildirClick} disabled={items.length === 0} className="shrink-0 border border-[#0a0a0a] text-[#0a0a0a] rounded-2xl px-3 py-2.5 font-semibold hover:bg-[#0a0a0a] hover:text-white disabled:opacity-50 flex flex-col items-center leading-tight transition-colors">
                 <span className="text-[12px]">{bildirildi ? 'Bildirildi ✓' : 'Havale/EFT'}</span>
-                <span className="text-[9px] font-medium text-indigo-400">Ödemeni Bildir</span>
+                <span className="text-[9px] font-medium opacity-60">Ödemeni Bildir</span>
               </button>
             </>
           )}
         </div>
 
-        {/* PayTR güvenli ödeme (kredi kartı) iframe */}
+        {/* iyzico Kredi Kartı Ödeme Formu */}
+        {kartOpen && !iyzHtml && (
+          <div className="fixed inset-0 z-[200] bg-black/60 flex items-end sm:items-center justify-center sm:p-4" onClick={() => setKartOpen(false)}>
+            <div onClick={(e) => e.stopPropagation()} className="w-full sm:max-w-md bg-white rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl max-h-[92vh]">
+              <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+                <span className="font-semibold text-slate-800 inline-flex items-center gap-1.5"><CreditCard size={16} /> Kredi Kartı ile Öde</span>
+                <button onClick={() => setKartOpen(false)} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} className="text-slate-400" /></button>
+              </div>
+              <div className="flex-1 overflow-y-auto p-5 space-y-4">
+                <div className="bg-green-50 border border-green-200 rounded-2xl p-3 flex items-center gap-2">
+                  <div className="text-green-600 font-bold text-lg">{fmt(data?.toplam - (data?.tahsilat || 0))}</div>
+                  <div className="text-xs text-green-700">ödenecek tutar</div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500 mb-1 block">Kart Üzerindeki İsim</label>
+                  <input value={kartForm.holderName} onChange={(e) => setKartForm({ ...kartForm, holderName: e.target.value.toUpperCase() })} placeholder="AD SOYAD" className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-200 focus:outline-none" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-slate-500 mb-1 block">Kart Numarası</label>
+                  <input value={kartForm.number} onChange={(e) => { const v = formatCardNumber(e.target.value); setKartForm({ ...kartForm, number: v }); if (v.replace(/\s/g, '').length >= 6) queryTaksit(v); }} placeholder="0000 0000 0000 0000" maxLength={19} className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm font-mono tracking-wider focus:ring-2 focus:ring-green-200 focus:outline-none" />
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="text-xs font-medium text-slate-500 mb-1 block">Son Kullanma</label>
+                    <div className="flex gap-2">
+                      <select value={kartForm.expMonth} onChange={(e) => setKartForm({ ...kartForm, expMonth: e.target.value })} className="flex-1 px-3 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-200 focus:outline-none">
+                        <option value="">Ay</option>
+                        {Array.from({ length: 12 }, (_, i) => <option key={i} value={String(i + 1).padStart(2, '0')}>{String(i + 1).padStart(2, '0')}</option>)}
+                      </select>
+                      <select value={kartForm.expYear} onChange={(e) => setKartForm({ ...kartForm, expYear: e.target.value })} className="flex-1 px-3 py-3 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-green-200 focus:outline-none">
+                        <option value="">Yıl</option>
+                        {Array.from({ length: 10 }, (_, i) => { const y = new Date().getFullYear() + i; return <option key={y} value={String(y)}>{y}</option>; })}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="w-24">
+                    <label className="text-xs font-medium text-slate-500 mb-1 block">CVV</label>
+                    <input value={kartForm.cvc} onChange={(e) => setKartForm({ ...kartForm, cvc: e.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="***" maxLength={4} type="password" className="w-full px-4 py-3 border border-slate-200 rounded-xl text-sm text-center focus:ring-2 focus:ring-green-200 focus:outline-none" />
+                  </div>
+                </div>
+
+                {/* Taksit seçenekleri */}
+                {taksitBusy && <p className="text-xs text-slate-400 text-center py-2">Taksit seçenekleri sorgulanıyor...</p>}
+                {taksitler.length > 0 && (
+                  <div>
+                    <label className="text-xs font-medium text-slate-500 mb-2 block">Taksit Seçenekleri</label>
+                    <div className="space-y-1.5">
+                      {taksitler.map((t: any) => (
+                        <label key={t.count} className={`flex items-center gap-3 p-3 rounded-xl border cursor-pointer transition ${selTaksit === t.count ? 'border-green-500 bg-green-50' : 'border-slate-200 hover:border-green-200'}`}>
+                          <input type="radio" name="taksit" checked={selTaksit === t.count} onChange={() => setSelTaksit(t.count)} className="accent-green-600" />
+                          <div className="flex-1 text-sm">
+                            {t.count === 1 ? <span className="font-medium text-slate-700">Tek Çekim</span> : <span className="font-medium text-slate-700">{t.count} Taksit</span>}
+                            {t.count > 1 && <span className="text-slate-400 text-xs ml-2">({fmt(t.perInstallment)} x {t.count})</span>}
+                          </div>
+                          <span className="font-bold text-sm text-slate-800">{fmt(t.totalPrice)}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-2 text-[10px] text-slate-400 bg-slate-50 rounded-xl p-2.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                  <span>256-bit SSL · 3D Secure · Kart bilgileriniz kesinlikle saklanmaz</span>
+                </div>
+              </div>
+              <div className="p-4 border-t border-slate-100">
+                <button disabled={payBusy || !kartForm.number || !kartForm.cvc} onClick={submitIyzico} className="w-full bg-green-600 text-white py-3.5 rounded-2xl font-bold hover:bg-green-700 disabled:opacity-50 flex items-center justify-center gap-2">
+                  {payBusy ? <><span className="animate-spin">⏳</span> 3D Secure Doğrulanıyor...</> : <><CreditCard size={18} /> Güvenli Öde — {fmt(data?.toplam - (data?.tahsilat || 0))}</>}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* iyzico 3D Secure iframe */}
+        {iyzHtml && (
+          <div className="fixed inset-0 z-[200] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4">
+            <div className="w-full h-full sm:max-w-md sm:h-[92vh] bg-white sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+                <span className="font-semibold text-slate-800 inline-flex items-center gap-1.5"><CreditCard size={16} /> 3D Secure Doğrulama</span>
+                <button onClick={() => { setIyzHtml(''); setKartOpen(false); load(); }} className="p-1 hover:bg-slate-100 rounded-lg"><X size={20} className="text-slate-400" /></button>
+              </div>
+              <iframe ref={iyzFrameRef} srcDoc={iyzHtml} className="flex-1 w-full" title="3D Secure Doğrulama" />
+            </div>
+          </div>
+        )}
+
+        {/* PayTR güvenli ödeme (eski, fallback) */}
         {paytrUrl && (
           <div className="fixed inset-0 z-[200] bg-black/60 flex items-stretch sm:items-center justify-center sm:p-4">
             <div className="w-full h-full sm:max-w-md sm:h-[92vh] bg-white sm:rounded-3xl overflow-hidden flex flex-col shadow-2xl">
@@ -436,9 +648,31 @@ export default function Sepet() {
           </div>
         )}
         {!chatOpen && (
-          <button onClick={openChat} className="fixed z-40 bottom-24 right-4 sm:right-[calc(50%-13rem+0.5rem)] flex items-center gap-2 pl-3 pr-4 py-3 rounded-full bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-2xl hover:scale-105 transition-transform">
-            <span className="absolute inset-0 rounded-full bg-indigo-500/50 animate-ping -z-10" />
-            <span className="relative"><MessageCircle size={22} /><span className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full bg-amber-400 border-2 border-white" /></span>
+          <button
+            onClick={openChat}
+            onPointerDown={(e) => {
+              const btn = e.currentTarget;
+              const rect = btn.getBoundingClientRect();
+              const oY = e.clientY - rect.top;
+              let moved = false;
+              const onMove = (ev: PointerEvent) => {
+                moved = true;
+                const ny = Math.max(40, Math.min(window.innerHeight - 60, ev.clientY - oY));
+                btn.style.bottom = 'auto';
+                btn.style.top = ny + 'px';
+              };
+              const onUp = () => {
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+                if (moved) { e.preventDefault(); e.stopPropagation(); }
+              };
+              document.addEventListener('pointermove', onMove);
+              document.addEventListener('pointerup', onUp);
+            }}
+            className="fixed z-40 bottom-36 right-4 sm:right-[calc(50%-13rem+0.5rem)] flex items-center gap-2 pl-3 pr-4 py-3 rounded-full bg-[#0a0a0a] text-white shadow-2xl hover:bg-[#C9A227] transition-colors cursor-grab active:cursor-grabbing touch-none"
+          >
+            <span className="absolute inset-0 rounded-full bg-[#C9A227]/40 animate-ping -z-10" />
+            <span className="relative"><MessageCircle size={22} /><span className="absolute -top-1.5 -right-1.5 w-3 h-3 rounded-full border-2 border-white" style={{ background: '#C9A227' }} /></span>
             <span className="text-sm font-semibold">Asistan</span>
           </button>
         )}
@@ -468,7 +702,7 @@ export default function Sepet() {
                 </select>
               </div>
             </div>
-            <button onClick={saveTeslimat} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700">Kaydet</button>
+            <button onClick={saveTeslimat} className="w-full bg-[#0a0a0a] hover:bg-[#C9A227] text-white py-3 rounded-2xl font-bold transition-colors">Kaydet</button>
           </div>
         </div>
       )}
@@ -477,14 +711,14 @@ export default function Sepet() {
       {odemeOnay && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/50 p-5" onClick={() => setOdemeOnay(false)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-white rounded-3xl p-6 text-center space-y-4">
-            <div className="w-14 h-14 rounded-full bg-indigo-50 flex items-center justify-center mx-auto"><CreditCard size={26} className="text-indigo-600" /></div>
+            <div className="w-14 h-14 rounded-full bg-[#0a0a0a] flex items-center justify-center mx-auto"><CreditCard size={26} style={{ color: '#C9A227' }} /></div>
             <div>
               <h3 className="font-bold text-slate-800 text-lg">Ödemenizi yaptınız mı?</h3>
               <p className="text-sm text-slate-500 mt-1">Havale/EFT ödemenizi tamamladıysanız bildirin. Henüz ödemediyseniz banka bilgilerini görüntüleyin.</p>
             </div>
             <div className="flex gap-2.5">
-              <button onClick={() => { setOdemeOnay(false); setTimeout(() => document.getElementById('banka')?.scrollIntoView({ behavior: 'smooth' }), 60); }} className="flex-1 bg-white border border-slate-200 text-slate-600 rounded-2xl py-3 font-semibold hover:bg-slate-50">Hayır</button>
-              <button onClick={odemeBildir} className="flex-1 bg-indigo-600 text-white rounded-2xl py-3 font-bold hover:bg-indigo-700">Evet, Ödedim</button>
+              <button onClick={() => { setOdemeOnay(false); setTimeout(() => document.getElementById('banka')?.scrollIntoView({ behavior: 'smooth' }), 60); }} className="flex-1 bg-white border border-slate-300 text-slate-600 rounded-2xl py-3 font-semibold hover:bg-slate-50">Hayır</button>
+              <button onClick={odemeBildir} className="flex-1 bg-[#0a0a0a] hover:bg-[#C9A227] text-white rounded-2xl py-3 font-bold transition-colors">Evet, Ödedim</button>
             </div>
           </div>
         </div>
@@ -496,9 +730,9 @@ export default function Sepet() {
         const goTo = (id: string) => { setMenu(false); setTimeout(() => id === 'top' ? window.scrollTo({ top: 0, behavior: 'smooth' }) : document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' }), 60); };
         const MItem = ({ icon: Ic, label, onClick, badge }: any) => (
           <button onClick={onClick} className="w-full flex items-center gap-3 px-2 py-3 hover:bg-slate-50 rounded-xl text-left">
-            <Ic size={20} className="text-indigo-600 shrink-0" />
+            <Ic size={20} className="shrink-0" style={{ color: '#C9A227' }} />
             <span className="flex-1 text-[15px] font-semibold text-slate-700 tracking-wide">{label}</span>
-            {badge && <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded">{badge}</span>}
+            {badge && <span className="text-[10px] font-bold text-white px-1.5 py-0.5 rounded" style={{ background: '#C9A227' }}>{badge}</span>}
             <ChevronRight size={18} className="text-slate-300" />
           </button>
         );
@@ -506,24 +740,24 @@ export default function Sepet() {
           <div className="fixed inset-0 z-[110] bg-black/40 flex" onClick={() => setMenu(false)}>
             <div onClick={(e) => e.stopPropagation()} className="w-[86%] max-w-sm bg-white h-full flex flex-col overflow-hidden">
               {/* Header */}
-              <div className="bg-gradient-to-br from-indigo-600 to-violet-700 text-white p-5 pt-7 relative">
-                <button onClick={() => setMenu(false)} className="absolute top-4 right-4 text-white/70 hover:text-white"><X size={22} /></button>
+              <div className="bg-[#0a0a0a] text-white p-5 pt-7 relative">
+                <button onClick={() => setMenu(false)} className="absolute top-4 right-4 text-white/60 hover:text-white"><X size={22} /></button>
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-16 h-16 rounded-full bg-white/20 flex items-center justify-center"><User size={32} /></div>
+                  <div className="w-16 h-16 rounded-full bg-white/10 flex items-center justify-center"><User size={32} /></div>
                   <div>
-                    <p className="text-sm text-white/70">Merhaba,</p>
+                    <p className="text-sm text-white/60">Merhaba,</p>
                     <p className="text-xl font-bold leading-tight">{data.musteri || 'Değerli Müşterimiz'}</p>
-                    <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold bg-white/15 px-2 py-0.5 rounded-md"><Crown size={12} className="text-amber-300" /> VIP ÜYE</span>
+                    <span className="inline-flex items-center gap-1 mt-1 text-[11px] font-bold bg-white/10 px-2 py-0.5 rounded-md"><Crown size={12} style={{ color: '#C9A227' }} /> VIP ÜYE</span>
                   </div>
                 </div>
-                <div className="bg-black/20 rounded-2xl p-3 flex items-center divide-x divide-white/10">
+                <div className="bg-white/5 rounded-2xl p-3 flex items-center divide-x divide-white/10">
                   <div className="flex items-center gap-2 pr-3 flex-1">
-                    <div className="w-9 h-9 rounded-full bg-amber-400 flex items-center justify-center"><Star size={18} className="text-white fill-white" /></div>
-                    <div><p className="text-[10px] text-white/60 leading-none">VIP Puanınız</p><p className="text-lg font-extrabold leading-tight">{puan} <span className="text-xs font-medium">Puan</span></p></div>
+                    <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: '#C9A227' }}><Star size={18} className="text-white fill-white" /></div>
+                    <div><p className="text-[10px] text-white/50 leading-none">VIP Puanınız</p><p className="text-lg font-extrabold leading-tight">{puan} <span className="text-xs font-medium">Puan</span></p></div>
                   </div>
                   <button onClick={goStore} className="flex items-center gap-2 pl-3 flex-1 text-left">
-                    <div><p className="text-[11px] font-bold flex items-center gap-1 leading-none"><span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> CANLI YAYINDA</p><p className="text-[10px] text-white/60 mt-1">Yayına göz at</p></div>
-                    <ChevronRight size={16} className="ml-auto text-white/60" />
+                    <div><p className="text-[11px] font-bold flex items-center gap-1 leading-none"><span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" /> CANLI YAYINDA</p><p className="text-[10px] text-white/50 mt-1">Yayına göz at</p></div>
+                    <ChevronRight size={16} className="ml-auto text-white/50" />
                   </button>
                 </div>
               </div>
@@ -547,10 +781,10 @@ export default function Sepet() {
                 <MItem icon={MapPin} label="Adreslerim" onClick={() => { setMenu(false); setTeslimat(true); }} />
                 <MItem icon={Timer} label="Yedek Listem" onClick={() => goTo('firsatlar')} />
                 <MItem icon={HelpCircle} label="Çok Sorulanlar" onClick={() => { setMenu(false); openChat(); }} />
-                <button onClick={goStore} className="w-full mt-3 rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-600 text-white p-4 flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-full bg-white/15 flex items-center justify-center"><Radio size={22} /></div>
-                  <div className="flex-1 text-left"><p className="font-bold text-sm">CANLI YAYINA DÖN</p><p className="text-[11px] text-white/70">Yayına geri dönerek fırsatları kaçırmayın!</p></div>
-                  <ChevronRight size={18} className="text-white/70" />
+                <button onClick={goStore} className="w-full mt-3 rounded-2xl bg-[#0a0a0a] hover:bg-[#C9A227] transition-colors text-white p-4 flex items-center gap-3">
+                  <div className="w-11 h-11 rounded-full bg-white/10 flex items-center justify-center"><Radio size={22} /></div>
+                  <div className="flex-1 text-left"><p className="font-bold text-sm">CANLI YAYINA DÖN</p><p className="text-[11px] text-white/60">Yayına geri dönerek fırsatları kaçırmayın!</p></div>
+                  <ChevronRight size={18} className="text-white/60" />
                 </button>
                 <button onClick={() => setMenu(false)} className="w-full flex items-center gap-3 px-2 py-4 mt-2 text-slate-500 hover:bg-slate-50 rounded-xl"><LogOut size={18} /> <span className="text-sm font-medium">Kapat</span></button>
               </div>
@@ -565,29 +799,29 @@ export default function Sepet() {
           {/* Header */}
           <div className="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-3">
             <button onClick={() => setYayinOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-100"><ChevronRight size={20} className="rotate-180 text-slate-700" /></button>
-            <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><Clock size={16} className="text-indigo-600" /> Yayın Özeti</p><p className="text-[11px] text-slate-400">Canlı yayında çıkan ürünleri inceleyin</p></div>
-            <button onClick={() => { setYayinOpen(false); document.getElementById('sepetim')?.scrollIntoView(); }} className="relative p-1.5 rounded-lg hover:bg-slate-100"><ShoppingBag size={20} className="text-slate-700" />{adet > 0 && <span className="absolute top-0 right-0 w-4 h-4 rounded-full bg-indigo-600 text-white text-[9px] flex items-center justify-center">{adet}</span>}</button>
+            <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><Clock size={16} className="text-[#0a0a0a]" /> Yayın Özeti</p><p className="text-[11px] text-slate-400">Canlı yayında çıkan ürünleri inceleyin</p></div>
+            <button onClick={() => { setYayinOpen(false); document.getElementById('sepetim')?.scrollIntoView(); }} className="relative p-1.5 rounded-lg hover:bg-slate-100"><ShoppingBag size={20} className="text-slate-700" />{adet > 0 && <span className="absolute top-0 right-0 w-4 h-4 rounded-full bg-[#0a0a0a] text-white text-[9px] flex items-center justify-center">{adet}</span>}</button>
           </div>
 
           <div className="max-w-md lg:max-w-4xl mx-auto p-4 space-y-3">
             {/* Banner */}
-            <div className="rounded-2xl bg-indigo-50 border border-indigo-100 p-3 flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center"><Radio size={20} /></div>
+            <div className="rounded-2xl bg-slate-100 border border-slate-200 p-3 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-[#0a0a0a] text-white flex items-center justify-center"><Radio size={20} /></div>
               <div className="flex-1"><p className="text-sm font-semibold text-slate-800">Canlı yayınları kaçırdıysanız</p><p className="text-[11px] text-slate-500">Yayında çıkan tüm ürünlere buradan ulaşabilirsiniz.</p></div>
-              <button onClick={() => window.open('/', '_blank')} className="text-xs font-medium text-white bg-indigo-600 px-3 py-2 rounded-lg shrink-0">Canlı Yayına Dön</button>
+              <button onClick={() => window.open('/', '_blank')} className="text-xs font-medium text-white bg-[#0a0a0a] px-3 py-2 rounded-lg shrink-0">Canlı Yayına Dön</button>
             </div>
 
             {/* Dönem sekmeleri */}
             <div className="grid grid-cols-4 gap-2">
               {[['bugun', 'Bugünkü'], ['dun', 'Dünkü'], ['hafta', 'Bu Hafta'], ['tum', 'Tümü']].map(([k, t]) => (
-                <button key={k} onClick={() => setYPeriod(k)} className={`py-2 rounded-xl text-xs font-medium ${yPeriod === k ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{t}</button>
+                <button key={k} onClick={() => setYPeriod(k)} className={`py-2 rounded-xl text-xs font-medium ${yPeriod === k ? 'bg-[#0a0a0a] text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{t}</button>
               ))}
             </div>
 
             {/* Arama + Filtrele */}
             <div className="flex gap-2">
               <div className="relative flex-1"><Search size={16} className="absolute left-3.5 top-3 text-slate-400" /><input value={yQ} onChange={(e) => setYQ(e.target.value)} placeholder="Ürün, kod veya marka ara..." className="w-full pl-10 pr-3 py-2.5 text-base bg-white border border-slate-200 rounded-2xl outline-none" /></div>
-              <button onClick={() => setYFilterOpen(!yFilterOpen)} className={`px-3 rounded-2xl border text-sm font-medium flex items-center gap-1.5 ${yFilterOpen || yFilter.cinsiyet || yFilter.kategoriId || yFilter.marka || yFilter.stok !== 'all' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white border-slate-200 text-slate-600'}`}><Filter size={15} /> Filtrele</button>
+              <button onClick={() => setYFilterOpen(!yFilterOpen)} className={`px-3 rounded-2xl border text-sm font-medium flex items-center gap-1.5 ${yFilterOpen || yFilter.cinsiyet || yFilter.kategoriId || yFilter.marka || yFilter.stok !== 'all' ? 'bg-[#0a0a0a] text-white border-[#0a0a0a]' : 'bg-white border-slate-200 text-slate-600'}`}><Filter size={15} /> Filtrele</button>
             </div>
 
             {/* Filtre paneli */}
@@ -599,7 +833,7 @@ export default function Sepet() {
                   <select value={yFilter.marka} onChange={(e) => setYFilter({ ...yFilter, marka: e.target.value })} className="px-2 py-2 text-sm border border-slate-200 rounded-lg"><option value="">Marka (Tümü)</option>{(yayin.markalar || []).map((m: string) => <option key={m} value={m}>{m}</option>)}</select>
                   <select value={yFilter.stok} onChange={(e) => setYFilter({ ...yFilter, stok: e.target.value })} className="px-2 py-2 text-sm border border-slate-200 rounded-lg"><option value="all">Stok (Tümü)</option><option value="var">Stokta var</option><option value="yok">Stok yok</option></select>
                 </div>
-                <button onClick={() => setYFilter({ cinsiyet: '', kategoriId: '', marka: '', stok: 'all' })} className="text-xs text-indigo-600">Filtreleri temizle</button>
+                <button onClick={() => setYFilter({ cinsiyet: '', kategoriId: '', marka: '', stok: 'all' })} className="text-xs text-[#0a0a0a]">Filtreleri temizle</button>
               </div>
             )}
 
@@ -607,8 +841,8 @@ export default function Sepet() {
             <div className="flex items-center gap-2">
               <select value={ySort} onChange={(e) => setYSort(e.target.value)} className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white"><option value="yeni">En Yeni</option><option value="fiyat_artan">Fiyat (artan)</option><option value="fiyat_azalan">Fiyat (azalan)</option></select>
               <div className="ml-auto flex items-center gap-1">
-                <button onClick={() => setYView('grid')} className={`w-9 h-9 rounded-lg flex items-center justify-center ${yView === 'grid' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-400'}`}>▦</button>
-                <button onClick={() => setYView('list')} className={`w-9 h-9 rounded-lg flex items-center justify-center ${yView === 'list' ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-400'}`}>≡</button>
+                <button onClick={() => setYView('grid')} className={`w-9 h-9 rounded-lg flex items-center justify-center ${yView === 'grid' ? 'bg-[#0a0a0a] text-white' : 'bg-white border border-slate-200 text-slate-400'}`}>▦</button>
+                <button onClick={() => setYView('list')} className={`w-9 h-9 rounded-lg flex items-center justify-center ${yView === 'list' ? 'bg-[#0a0a0a] text-white' : 'bg-white border border-slate-200 text-slate-400'}`}>≡</button>
               </div>
             </div>
 
@@ -628,13 +862,13 @@ export default function Sepet() {
                       <p className="text-sm font-semibold text-slate-800 leading-tight line-clamp-2">{u.ad}</p>
                       <p className="text-[11px] text-slate-400 mt-0.5">{[u.beden, u.kategoriAd, u.marka].filter(Boolean).join(' · ') || '-'}</p>
                       <div className="flex items-center gap-1.5 mt-1"><p className="text-sm font-bold text-slate-900">{fmt(u.fiyat)}</p>{u.eskiFiyat > u.fiyat && <p className="text-[10px] text-slate-400 line-through">{fmt(u.eskiFiyat)}</p>}</div>
-                      <span className="inline-flex items-center gap-1 text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mt-1"><Star size={9} className="fill-indigo-600" /> %{u.vipPuan} VIP Puan</span>
+                      <span className="inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded mt-1" style={{ color: '#C9A227', background: 'rgba(201,162,39,0.1)' }}><Star size={9} style={{ fill: '#C9A227' }} /> %{u.vipPuan} VIP Puan</span>
                       <p className={`text-[10px] mt-1 flex items-center gap-1 ${u.stok > 0 ? 'text-green-600' : 'text-red-500'}`}><span className={`w-1.5 h-1.5 rounded-full ${u.stok > 0 ? 'bg-green-500' : 'bg-red-500'}`} /> {u.stok > 0 ? 'Stokta var' : 'Stok yok'}</p>
-                      {(u.bedenler || []).length > 0 && u.stok > 0 && <div className="flex flex-wrap gap-1 mt-1.5">{u.bedenler.map((b: string) => <button key={b} onClick={() => setOneriBeden((s) => ({ ...s, [u.id]: b }))} className={`text-[10px] px-1.5 py-0.5 rounded border ${oneriBeden[u.id] === b ? 'bg-indigo-600 text-white border-indigo-600' : 'border-slate-200 text-slate-500'}`}>{b}</button>)}</div>}
+                      {(u.bedenler || []).length > 0 && u.stok > 0 && <div className="flex flex-wrap gap-1 mt-1.5">{u.bedenler.map((b: string) => <button key={b} onClick={() => setOneriBeden((s) => ({ ...s, [u.id]: b }))} className={`text-[10px] px-1.5 py-0.5 rounded border ${oneriBeden[u.id] === b ? 'bg-[#0a0a0a] text-white border-[#0a0a0a]' : 'border-slate-200 text-slate-500'}`}>{b}</button>)}</div>}
                       {u.stok > 0 ? (
-                        <button onClick={() => addProduct(u, oneriBeden[u.id])} className="w-full mt-2 text-xs font-semibold text-white bg-indigo-600 rounded-lg py-2 hover:bg-indigo-700 flex items-center justify-center gap-1"><Plus size={13} /> Sepete Ekle</button>
+                        <button onClick={() => addProduct(u, oneriBeden[u.id])} className="w-full mt-2 text-xs font-semibold text-white bg-[#0a0a0a] hover:bg-[#C9A227] transition-colors rounded-lg py-2 flex items-center justify-center gap-1"><Plus size={13} /> Sepete Ekle</button>
                       ) : (
-                        <button onClick={() => toast('Stok gelince haber verilecek 🔔')} className="w-full mt-2 text-xs font-semibold text-indigo-600 border border-indigo-200 rounded-lg py-2 hover:bg-indigo-50">Yedek Listeye Katıl</button>
+                        <button onClick={() => toast('Stok gelince haber verilecek 🔔')} className="w-full mt-2 text-xs font-semibold text-[#0a0a0a] border border-slate-300 rounded-lg py-2 hover:bg-slate-50">Yedek Listeye Katıl</button>
                       )}
                     </div>
                   </div>
@@ -650,11 +884,11 @@ export default function Sepet() {
         <div className="fixed inset-0 z-[116] bg-slate-50 overflow-y-auto">
           <div className="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-3">
             <button onClick={() => setKatalogOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-100"><ChevronRight size={20} className="rotate-180 text-slate-700" /></button>
-            <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><ShoppingBag size={16} className="text-indigo-600" /> Kataloglar</p><p className="text-[11px] text-slate-400">Tüm ürün koleksiyonlarını keşfet</p></div>
+            <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><ShoppingBag size={16} className="text-[#0a0a0a]" /> Kataloglar</p><p className="text-[11px] text-slate-400">Tüm ürün koleksiyonlarını keşfet</p></div>
             <div className="w-8" />
           </div>
           <div className="max-w-md lg:max-w-4xl mx-auto p-4 space-y-5">
-            {!katalog ? <div className="flex justify-center py-10"><span className="w-7 h-7 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" /></div> : (
+            {!katalog ? <div className="flex justify-center py-10"><span className="w-7 h-7 border-2 border-slate-200 border-t-[#0a0a0a] rounded-full animate-spin" /></div> : (
               <>
                 <div className="grid grid-cols-2 gap-3">
                   {(katalog.kategoriler || []).map((k: any) => (
@@ -680,22 +914,22 @@ export default function Sepet() {
         <div className="fixed inset-0 z-[116] bg-slate-50 overflow-y-auto">
           <div className="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-3">
             <button onClick={() => { setYeniOpen(false); setYeniKat(''); }} className="p-1.5 rounded-lg hover:bg-slate-100"><ChevronRight size={20} className="rotate-180 text-slate-700" /></button>
-            <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><Sparkles size={16} className="text-indigo-600" /> Yeni Eklenenler</p></div>
+            <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><Sparkles size={16} className="text-[#0a0a0a]" /> Yeni Eklenenler</p></div>
             <div className="w-8" />
           </div>
           <div className="max-w-md lg:max-w-4xl mx-auto p-4 space-y-3">
-            <div className="rounded-2xl bg-gradient-to-r from-indigo-600 to-violet-700 text-white p-3 flex items-center gap-3">
+            <div className="rounded-2xl bg-[#0a0a0a] text-white p-3 flex items-center gap-3">
               <Zap size={22} className="text-amber-300" />
               <div className="flex-1"><p className="text-sm font-semibold">Her gün yeni ürünler ekleniyor!</p><p className="text-[11px] text-white/70">Kaçırmadan keşfedin.</p></div>
               <button onClick={() => setBildirimOpen(true)} className="text-xs font-semibold bg-white/20 px-3 py-2 rounded-lg shrink-0">Bildirim Al 🔔</button>
             </div>
             <div className="flex gap-2 overflow-x-auto pb-1">
-              <button onClick={() => setYeniKat('')} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap ${!yeniKat ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>Tümü</button>
-              {(yeni.kategoriler || []).map((k: any) => <button key={k.id} onClick={() => setYeniKat(k.id)} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap ${yeniKat === k.id ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{k.ad}</button>)}
+              <button onClick={() => setYeniKat('')} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap ${!yeniKat ? 'bg-[#0a0a0a] text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>Tümü</button>
+              {(yeni.kategoriler || []).map((k: any) => <button key={k.id} onClick={() => setYeniKat(k.id)} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap ${yeniKat === k.id ? 'bg-[#0a0a0a] text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{k.ad}</button>)}
             </div>
             <p className="text-xs text-slate-400">{(yeni.urunler || []).filter((u: any) => !yeniKat || u.kategoriId === yeniKat).length} yeni ürün</p>
             <div className="grid grid-cols-2 gap-3">{(yeni.urunler || []).filter((u: any) => !yeniKat || u.kategoriId === yeniKat).map((u: any) => pCard(u))}</div>
-            <button onClick={() => setBildirimOpen(true)} className="w-full rounded-2xl bg-indigo-50 border border-indigo-100 p-3 flex items-center gap-3 mt-2"><div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center"><Zap size={20} /></div><div className="flex-1 text-left"><p className="text-sm font-semibold text-slate-800">Yeni ürünlerden ilk sen haberdar ol!</p><p className="text-[11px] text-slate-500">Bildirimleri aç, kaçırma.</p></div><ChevronRight size={16} className="text-indigo-400" /></button>
+            <button onClick={() => setBildirimOpen(true)} className="w-full rounded-2xl bg-slate-100 border border-slate-200 p-3 flex items-center gap-3 mt-2"><div className="w-10 h-10 rounded-xl bg-[#0a0a0a] text-white flex items-center justify-center"><Zap size={20} /></div><div className="flex-1 text-left"><p className="text-sm font-semibold text-slate-800">Yeni ürünlerden ilk sen haberdar ol!</p><p className="text-[11px] text-slate-500">Bildirimleri aç, kaçırma.</p></div><ChevronRight size={16} className="text-[#C9A227]" /></button>
           </div>
         </div>
       )}
@@ -709,7 +943,7 @@ export default function Sepet() {
             <div><label className="text-xs text-slate-500">İlgilendiğiniz Kategori</label><select value={bildirimForm.kategori} onChange={(e) => setBildirimForm({ ...bildirimForm, kategori: e.target.value })} className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl mt-1"><option value="">Farketmez</option>{(yeni.kategoriler || []).map((k: any) => <option key={k.id} value={k.ad}>{k.ad}</option>)}</select></div>
             <div><label className="text-xs text-slate-500">Beden</label><input value={bildirimForm.beden} onChange={(e) => setBildirimForm({ ...bildirimForm, beden: e.target.value })} placeholder="ör. M, L, 42" className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl mt-1" /></div>
             <div><label className="text-xs text-slate-500">İlgi Alanları / Notlar</label><input value={bildirimForm.ilgi} onChange={(e) => setBildirimForm({ ...bildirimForm, ilgi: e.target.value })} placeholder="ör. spor giyim, ayakkabı" className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl mt-1" /></div>
-            <button onClick={sendBildirim} className="w-full bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700">Bildirimleri Aç</button>
+            <button onClick={sendBildirim} className="w-full bg-[#0a0a0a] text-white py-3 rounded-2xl font-bold hover:bg-[#C9A227] transition-colors">Bildirimleri Aç</button>
           </div>
         </div>
       )}
@@ -722,7 +956,7 @@ export default function Sepet() {
           <div className="fixed inset-0 z-[116] bg-slate-50 overflow-y-auto">
             <div className="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-3">
               <button onClick={() => setSipOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-100"><ChevronRight size={20} className="rotate-180 text-slate-700" /></button>
-              <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><Package size={16} className="text-indigo-600" /> Siparişlerim</p></div>
+              <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><Package size={16} className="text-[#0a0a0a]" /> Siparişlerim</p></div>
               <div className="w-8" />
             </div>
             <div className="max-w-md lg:max-w-4xl mx-auto p-4 space-y-3">
@@ -734,7 +968,7 @@ export default function Sepet() {
               </div>
               <div className="flex gap-1.5 overflow-x-auto pb-1">
                 {[['tumu', 'Tümü'], ['hazirlaniyor', 'Hazırlanıyor'], ['kargoda', 'Kargoda'], ['teslim', 'Teslim'], ['iade', 'İade/İptal']].map(([k, t]) => (
-                  <button key={k} onClick={() => setSipTab(k)} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap ${sipTab === k ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{t}</button>
+                  <button key={k} onClick={() => setSipTab(k)} className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap ${sipTab === k ? 'bg-[#0a0a0a] text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{t}</button>
                 ))}
               </div>
               {list.length === 0 && <p className="text-center text-slate-400 py-12 text-sm">Bu durumda sipariş yok.</p>}
@@ -750,9 +984,9 @@ export default function Sepet() {
                     </div>
                     <div className="grid grid-cols-2 gap-2 mt-3">
                       {o.duzenlenebilir ? (
-                        <button onClick={() => { setSipOpen(false); if (o.token === token) document.getElementById('sepetim')?.scrollIntoView(); else window.location.href = `/sepet/${o.token}`; }} className="text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg py-2">Sepeti Aç</button>
+                        <button onClick={() => { setSipOpen(false); if (o.token === token) document.getElementById('sepetim')?.scrollIntoView(); else window.location.href = `/sepet/${o.token}`; }} className="text-xs font-medium text-[#0a0a0a] border border-slate-300 rounded-lg py-2">Sepeti Aç</button>
                       ) : (o.kargoTakip || o.durum === 'kargoda' || o.durum === 'teslim') ? (
-                        <button onClick={() => setKargoOrder(o)} className="text-xs font-medium text-indigo-600 border border-indigo-200 rounded-lg py-2 flex items-center justify-center gap-1"><Truck size={13} /> Kargo Takibi</button>
+                        <button onClick={() => openKargo(o)} className="text-xs font-medium text-[#0a0a0a] border border-slate-300 rounded-lg py-2 flex items-center justify-center gap-1"><Truck size={13} /> Kargo Takibi</button>
                       ) : <span className="text-xs text-slate-400 flex items-center justify-center">İşleniyor</span>}
                       <button onClick={() => { setSipOpen(false); openChat(); }} className="text-xs font-medium text-white bg-slate-900 rounded-lg py-2 flex items-center justify-center gap-1"><MessageCircle size={13} /> Asistana Bağlan</button>
                     </div>
@@ -779,32 +1013,49 @@ export default function Sepet() {
           <div className="fixed inset-0 z-[118] bg-slate-50 overflow-y-auto">
             <div className="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-3">
               <button onClick={() => setKargoOrder(null)} className="p-1.5 rounded-lg hover:bg-slate-100"><ChevronRight size={20} className="rotate-180 text-slate-700" /></button>
-              <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><Truck size={16} className="text-indigo-600" /> Kargo Takibi</p></div>
+              <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><Truck size={16} className="text-[#0a0a0a]" /> Kargo Takibi</p></div>
               <div className="w-8" />
             </div>
             <div className="max-w-md lg:max-w-4xl mx-auto p-4 space-y-3">
               <div className="bg-white rounded-2xl border border-slate-100 p-4 grid grid-cols-2 gap-3 text-sm">
                 <div><p className="text-[11px] text-slate-400">Sipariş No</p><p className="font-bold text-slate-800">{o.orderNo ? `${o.orderYil}-${String(o.orderNo).padStart(3, '0')}` : '#' + o.id.slice(-5)}</p></div>
-                <div><p className="text-[11px] text-slate-400">Kargo Takip No</p><p className="font-bold text-slate-800 font-mono">{o.kargoTakip || '—'}</p></div>
-                <div><p className="text-[11px] text-slate-400">Kargo Firması</p><p className="font-semibold text-slate-700">{o.kargoFirmasi || 'Yurtiçi Kargo'}</p></div>
-                <div><p className="text-[11px] text-slate-400">Durum</p><p className="font-semibold text-indigo-600">{steps[cur]?.t}</p></div>
+                <div><p className="text-[11px] text-slate-400">Kargo Takip No</p><p className="font-bold text-slate-800 font-mono">{kargoLive?.takip || o.kargoTakip || '—'}</p></div>
+                <div><p className="text-[11px] text-slate-400">Kargo Firması</p><p className="font-semibold text-slate-700">{kargoLive?.kargoFirmasi || o.kargoFirmasi || 'Yurtiçi Kargo'}</p></div>
+                <div><p className="text-[11px] text-slate-400">Durum</p><p className="font-semibold text-[#0a0a0a]">{kargoLive?.durum || steps[cur]?.t}</p></div>
               </div>
               <div className="bg-white rounded-2xl border border-slate-100 p-4">
-                <h3 className="font-bold text-slate-800 text-sm mb-3">Kargo Durumu</h3>
-                <div className="space-y-0">
-                  {steps.map((s, i) => (
-                    <div key={i} className="flex gap-3">
-                      <div className="flex flex-col items-center">
-                        <div className={`w-7 h-7 rounded-full flex items-center justify-center ${s.done ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-300'}`}>{s.done ? <CheckCircle2 size={15} /> : <span className="w-2 h-2 rounded-full bg-current" />}</div>
-                        {i < steps.length - 1 && <div className={`w-0.5 flex-1 min-h-[28px] ${i < cur ? 'bg-indigo-600' : 'bg-slate-200'}`} />}
-                      </div>
-                      <div className={`pb-4 ${i === cur ? '' : ''}`}><p className={`text-sm font-semibold ${s.done ? 'text-slate-800' : 'text-slate-400'}`}>{s.t}</p>{i === cur && <span className="text-[10px] text-indigo-600 font-medium">Güncel durum</span>}</div>
-                    </div>
-                  ))}
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="font-bold text-slate-800 text-sm">Kargo Durumu</h3>
+                  {kargoLiveBusy && <span className="text-[11px] text-slate-400">Güncelleniyor…</span>}
                 </div>
+                {kargoLive?.hareketler && kargoLive.hareketler.length > 0 ? (
+                  <div className="space-y-0">
+                    {kargoLive.hareketler.map((h: any, i: number) => (
+                      <div key={i} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className="w-7 h-7 rounded-full flex items-center justify-center bg-[#0a0a0a] text-white"><CheckCircle2 size={15} /></div>
+                          {i < kargoLive.hareketler.length - 1 && <div className="w-0.5 flex-1 min-h-[28px] bg-[#0a0a0a]" />}
+                        </div>
+                        <div className="pb-4 min-w-0"><p className="text-sm font-semibold text-slate-800">{h.durum}</p><p className="text-[11px] text-slate-400">{[h.tarih, h.birim].filter(Boolean).join(' · ')}</p></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="space-y-0">
+                    {steps.map((s, i) => (
+                      <div key={i} className="flex gap-3">
+                        <div className="flex flex-col items-center">
+                          <div className={`w-7 h-7 rounded-full flex items-center justify-center ${s.done ? 'bg-[#0a0a0a] text-white' : 'bg-slate-100 text-slate-300'}`}>{s.done ? <CheckCircle2 size={15} /> : <span className="w-2 h-2 rounded-full bg-current" />}</div>
+                          {i < steps.length - 1 && <div className={`w-0.5 flex-1 min-h-[28px] ${i < cur ? 'bg-[#0a0a0a]' : 'bg-slate-200'}`} />}
+                        </div>
+                        <div className="pb-4"><p className={`text-sm font-semibold ${s.done ? 'text-slate-800' : 'text-slate-400'}`}>{s.t}</p>{i === cur && <span className="text-[10px] text-[#0a0a0a] font-medium">Güncel durum</span>}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="rounded-2xl bg-indigo-50 border border-indigo-100 p-3 flex items-center gap-3"><Truck size={20} className="text-indigo-600" /><div><p className="text-sm font-semibold text-slate-800">{cur >= 3 ? 'Kargonuz teslim edildi 🎉' : cur >= 2 ? 'Kargonuz yola çıktı!' : 'Kargonuz hazırlanıyor'}</p><p className="text-[11px] text-slate-500">Durum değiştiğinde bilgilendirileceksiniz.</p></div></div>
-              <button onClick={() => { setKargoOrder(null); openChat(); }} className="w-full bg-slate-900 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2"><MessageCircle size={18} /> Bu Sipariş Hakkında Asistana Bağlan</button>
+              <div className="rounded-2xl bg-slate-100 border border-slate-200 p-3 flex items-center gap-3"><Truck size={20} className="text-[#0a0a0a]" /><div><p className="text-sm font-semibold text-slate-800">{(kargoLive?.teslim || cur >= 3) ? 'Kargonuz teslim edildi 🎉' : cur >= 2 ? 'Kargonuz yola çıktı!' : 'Kargonuz hazırlanıyor'}</p><p className="text-[11px] text-slate-500">Durum değiştiğinde bilgilendirileceksiniz.</p></div></div>
+              <button onClick={() => { setKargoOrder(null); setKargoLive(null); openChat(); }} className="w-full bg-slate-900 text-white py-3 rounded-2xl font-bold flex items-center justify-center gap-2"><MessageCircle size={18} /> Bu Sipariş Hakkında Asistana Bağlan</button>
             </div>
           </div>
         );
@@ -815,7 +1066,7 @@ export default function Sepet() {
         <div className="fixed inset-0 z-[116] bg-slate-50 overflow-y-auto">
           <div className="sticky top-0 z-20 bg-white border-b border-slate-100 px-4 py-3 flex items-center gap-3">
             <button onClick={() => setDestekOpen(false)} className="p-1.5 rounded-lg hover:bg-slate-100"><ChevronRight size={20} className="rotate-180 text-slate-700" /></button>
-            <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><MessageCircle size={16} className="text-indigo-600" /> Destek Merkezi</p><p className="text-[11px] text-slate-400">Size nasıl yardımcı olabiliriz?</p></div>
+            <div className="flex-1 text-center"><p className="font-bold text-slate-800 flex items-center justify-center gap-1.5"><MessageCircle size={16} className="text-[#0a0a0a]" /> Destek Merkezi</p><p className="text-[11px] text-slate-400">Size nasıl yardımcı olabiliriz?</p></div>
             <div className="w-8" />
           </div>
           <div className="max-w-md lg:max-w-4xl mx-auto p-4 space-y-4">
@@ -824,12 +1075,12 @@ export default function Sepet() {
               <p className="text-xs text-slate-400 mb-3">Talebinizle ilgili kategori seçerek bizimle paylaşın.</p>
               <div className="grid grid-cols-3 gap-2 mb-3">
                 {[['Sipariş Sorunu', Package], ['Ödeme Sorunu', CreditCard], ['İade Talebi', Truck], ['Değişim Talebi', Truck], ['Ürün Şikayeti', Flame], ['Diğer', HelpCircle]].map(([t, Ic]: any) => (
-                  <button key={t} onClick={() => setDestekForm({ ...destekForm, kategori: t })} className={`flex flex-col items-center gap-1 py-3 rounded-xl border text-[11px] font-medium ${destekForm.kategori === t ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500'}`}><Ic size={18} />{t}</button>
+                  <button key={t} onClick={() => setDestekForm({ ...destekForm, kategori: t })} className={`flex flex-col items-center gap-1 py-3 rounded-xl border text-[11px] font-medium ${destekForm.kategori === t ? 'border-[#0a0a0a] bg-slate-100 text-[#0a0a0a]' : 'border-slate-200 text-slate-500'}`}><Ic size={18} />{t}</button>
                 ))}
               </div>
               <input value={destekForm.konu} onChange={(e) => setDestekForm({ ...destekForm, konu: e.target.value })} placeholder="Talep konusu (kısa başlık)" className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl mb-2" />
               <textarea rows={3} value={destekForm.detay} onChange={(e) => setDestekForm({ ...destekForm, detay: e.target.value })} placeholder="Yaşadığınız sorunu kısaca yazın..." className="w-full px-3 py-2.5 text-base border border-slate-200 rounded-xl" />
-              <button onClick={sendDestek} className="w-full mt-2 bg-indigo-600 text-white py-3 rounded-2xl font-bold hover:bg-indigo-700 flex items-center justify-center gap-2"><Send size={16} /> Talep Oluştur</button>
+              <button onClick={sendDestek} className="w-full mt-2 bg-[#0a0a0a] text-white py-3 rounded-2xl font-bold hover:bg-[#C9A227] transition-colors flex items-center justify-center gap-2"><Send size={16} /> Talep Oluştur</button>
             </div>
             <div>
               <h3 className="font-bold text-slate-800 mb-2">Açık Taleplerim</h3>
@@ -843,7 +1094,7 @@ export default function Sepet() {
                 ); })}
               </div>
             </div>
-            <div className="rounded-2xl bg-white border border-slate-100 p-3 flex items-center gap-3"><div className="w-11 h-11 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><MessageCircle size={20} /></div><div className="flex-1"><p className="text-sm font-semibold text-slate-800">Canlı Destek</p><p className="text-[11px] text-slate-500">7/24 bize ulaşabilirsiniz.</p></div><button onClick={openChat} className="text-xs font-semibold text-white bg-green-600 px-3 py-2 rounded-lg">Asistana Yaz</button></div>
+            <div className="rounded-2xl bg-white border border-slate-100 p-3 flex items-center gap-3"><div className="w-11 h-11 rounded-xl bg-slate-100 text-[#0a0a0a] flex items-center justify-center"><MessageCircle size={20} /></div><div className="flex-1"><p className="text-sm font-semibold text-slate-800">Canlı Destek</p><p className="text-[11px] text-slate-500">7/24 bize ulaşabilirsiniz.</p></div><button onClick={openChat} className="text-xs font-semibold text-white bg-green-600 px-3 py-2 rounded-lg">Asistana Yaz</button></div>
           </div>
         </div>
       )}
@@ -860,15 +1111,15 @@ export default function Sepet() {
       {chatOpen && (
         <div className="fixed inset-0 z-[120] flex items-end sm:items-center justify-center bg-black/50" onClick={() => setChatOpen(false)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md bg-white rounded-t-3xl sm:rounded-3xl h-[85vh] sm:h-[80vh] flex flex-col overflow-hidden">
-            <div className="bg-indigo-600 text-white px-4 py-3 flex items-center gap-3">
+            <div className="bg-[#0a0a0a] text-white px-4 py-3 flex items-center gap-3">
               <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center"><MessageCircle size={18} /></div>
-              <div className="flex-1"><p className="font-semibold text-sm">{chatInfo?.name || 'Asistan'}</p><p className="text-[11px] text-indigo-200">Çevrimiçi · genellikle hemen yanıtlar</p></div>
+              <div className="flex-1"><p className="font-semibold text-sm">{chatInfo?.name || 'Asistan'}</p><p className="text-[11px] text-white/60">Çevrimiçi · genellikle hemen yanıtlar</p></div>
               <button onClick={() => setChatOpen(false)} className="w-8 h-8 rounded-full hover:bg-white/15 flex items-center justify-center"><X size={18} /></button>
             </div>
             <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-slate-50">
               {chatMsgs.map((m, i) => (
                 <div key={m.id || i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-line ${m.role === 'user' ? 'bg-indigo-600 text-white' : m.role === 'agent' ? 'bg-green-100 text-green-800' : 'bg-white border border-slate-100 text-slate-700'}`}>
+                  <div className={`max-w-[80%] rounded-2xl px-3.5 py-2 text-sm whitespace-pre-line ${m.role === 'user' ? 'bg-[#0a0a0a] text-white' : m.role === 'agent' ? 'bg-green-100 text-green-800' : 'bg-white border border-slate-100 text-slate-700'}`}>
                     {String(m.content).startsWith('data:image')
                       ? <img src={m.content} className="rounded-lg max-h-48 cursor-zoom-in" onClick={() => setLightbox(m.content)} />
                       : m.content}
@@ -879,12 +1130,12 @@ export default function Sepet() {
               <div ref={chatEnd} />
             </div>
             <div className="p-3 border-t border-slate-100 flex gap-2 items-center">
-              <label className="cursor-pointer text-slate-400 hover:text-indigo-600 shrink-0" title="Fotoğraf ekle">
+              <label className="cursor-pointer text-slate-400 hover:text-[#C9A227] shrink-0" title="Fotoğraf ekle">
                 <ImagePlus size={20} />
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) sendChatImage(f); e.currentTarget.value = ''; }} />
               </label>
               <input value={chatText} onChange={(e) => setChatText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && sendChat()} placeholder="Mesajınızı yazın..." className="flex-1 px-4 py-2.5 border border-slate-200 rounded-xl text-base" />
-              <button onClick={sendChat} disabled={chatBusy} className="bg-indigo-600 text-white px-4 rounded-xl hover:bg-indigo-700 disabled:opacity-50"><Send size={18} /></button>
+              <button onClick={sendChat} disabled={chatBusy} className="bg-[#0a0a0a] text-white px-4 rounded-xl hover:bg-[#C9A227] transition-colors disabled:opacity-50"><Send size={18} /></button>
             </div>
           </div>
         </div>

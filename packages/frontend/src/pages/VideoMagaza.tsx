@@ -1,13 +1,12 @@
 ﻿import { useEffect, useState, useMemo, useRef } from 'react';
-import { useParams, useNavigate, useSearchParams, useLocation, Link } from 'react-router-dom';
-import { Search, Heart, ShoppingBag, Zap, Home, LayoutGrid, Radio, User, Plus, Minus, X, Star, ChevronDown, Grid2x2, List, Truck, RotateCcw, ShieldCheck, Headphones, Lock, SlidersHorizontal, Tag, CreditCard, Check } from 'lucide-react';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
+import { Search, Heart, ShoppingBag, Zap, Home, LayoutGrid, Radio, User, Plus, Minus, X, Star, ChevronDown, Grid2x2, List, Truck, RotateCcw, ShieldCheck, Headphones, Lock, SlidersHorizontal, Tag, CreditCard, Check, Send } from 'lucide-react';
 import api, { apiErrorMessage } from '../lib/api';
 import StoreHeader from '../components/StoreHeader';
 import { IL_ILCE, ILLER } from '../lib/turkiye';
 
 const fmt = (n: number) => (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₺';
 const disc = (eski?: number, satis?: number) => (eski && satis && eski > satis) ? Math.round(((eski - satis) / eski) * 100) : 0;
-const vipRate = (p: number) => p >= 1500 ? 5 : p >= 800 ? 4 : 3;
 const discColor = (d: number) => d >= 30 ? 'bg-red-500' : d >= 20 ? 'bg-orange-500' : 'bg-green-500';
 
 export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
@@ -286,12 +285,15 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
     setBusy(true);
     try {
       const items = cartItems.map((x: any) => ({ productId: x.productId, adet: x.adet, varyasyon: x.varyasyon || undefined }));
+      // "Talebi Gönder": backend yalnızca TASLAK oluşturur (sipariş/stok YOK). Prefilled metin +
+      // mağaza WhatsApp numarası döner; müşteri wa.me ile mesajı kendi WhatsApp'ından mağazaya
+      // gönderir. Sipariş ancak o mesaj webhook'a ulaşınca oluşur.
       const r = await api.post(`/public/store/${slug}/order`, { customer: cust, items, discountCode: discountCode || undefined });
-      if (r.data.iframeUrl) { setPaytrUrl(r.data.iframeUrl); setCheckoutStep('odeme'); return; }
-      if (r.data.tamiAvailable) { setOrderInfo(r.data); setPayErr(''); setCheckoutStep('odeme'); return; }
-      if (r.data.paytrError) alert('Ödeme başlatılamadı: ' + r.data.paytrError + '\nSiparişiniz kaydedildi, sizinle iletişime geçilecek.');
+      const num = String(r.data?.whatsapp || '').replace(/\D/g, '');
+      const waLink = num && r.data?.whatsappMsg ? `https://wa.me/${num}?text=${encodeURIComponent(r.data.whatsappMsg)}` : null;
+      if (waLink) window.open(waLink, '_blank', 'noopener');
       track('browse', null, 'order');
-      setDone(r.data); setCart({}); setCheckout(false); setDiscountCode(''); setCodeInput(''); setPreview(null);
+      setDone({ ...r.data, waLink }); setCart({}); setCheckout(false); setDiscountCode(''); setCodeInput(''); setPreview(null);
     } catch (e) { alert(apiErrorMessage(e)); } finally { setBusy(false); }
   };
 
@@ -314,16 +316,21 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
   if (done) return (
     <div className="min-h-screen flex items-center justify-center bg-slate-100 p-6">
       <div className="bg-white rounded-2xl border border-slate-100 p-8 text-center max-w-sm">
-        <div className="w-16 h-16 rounded-full bg-green-100 text-green-600 flex items-center justify-center mx-auto mb-3"><ShieldCheck size={32} /></div>
-        <h1 className="text-xl font-bold text-slate-800">Siparişiniz Alındı!</h1>
-        <p className="text-sm text-slate-500 mt-2">Sipariş No: <b>{done.orderNo ? `${done.orderYil}-${String(done.orderNo).padStart(3, '0')}` : done.id?.slice(-5)}</b><br />En kısa sürede sizinle iletişime geçilecektir.</p>
-        <button onClick={() => { setDone(null); nav('/'); }} className="mt-4 bg-indigo-600 text-white px-5 py-2.5 rounded-xl font-semibold">Alışverişe Devam Et</button>
+        <div className="w-16 h-16 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center mx-auto mb-3"><Send size={28} /></div>
+        <h1 className="text-xl font-bold text-slate-800">Talebinizi WhatsApp'tan Gönderin</h1>
+        {done.talepNo && <p className="text-2xl font-mono font-bold text-slate-800 mt-2">{done.talepNo}</p>}
+        <div className="bg-amber-50 border border-amber-200 rounded-xl p-3 mt-3 text-left">
+          <p className="text-sm font-semibold text-amber-800 mb-1">Siparişiniz henüz oluşmadı.</p>
+          <p className="text-xs text-amber-700">Açılan WhatsApp ekranından hazırlanan mesajı mağazamıza <strong>göndermeniz</strong> gerekir. Talebiniz WhatsApp üzerinden iletildiğinde işlenecektir. İletilmeyen talepler için sipariş oluşmaz.</p>
+        </div>
+        {done.waLink && <a href={done.waLink} target="_blank" rel="noopener" className="mt-4 inline-flex items-center gap-2 px-5 py-3 bg-green-500 text-white rounded-xl font-semibold hover:bg-green-600 shadow"><Send size={18} /> WhatsApp'ta Aç ve Gönder</a>}
+        <button onClick={() => { setDone(null); nav('/'); }} className="mt-4 block mx-auto text-slate-500 text-sm underline">Alışverişe Devam Et</button>
       </div>
     </div>
   );
 
   const Card = ({ p }: any) => {
-    const d = disc(p.eskiFiyat, p.satisFiyat); const vp = (Number(data?.puanOrani) || 0) > 0 ? Number(data.puanOrani) : vipRate(p.satisFiyat);
+    const d = disc(p.eskiFiyat, p.satisFiyat);
     const vars = (p.variations || []);
     return (
       <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden flex flex-col">
@@ -346,7 +353,6 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
             </div>
           )}
           <div className="flex items-center gap-1.5 mt-1.5">{d > 0 && <span className="text-[11px] text-slate-400 line-through">{fmt(p.eskiFiyat)}</span>}<span className="text-base font-bold text-red-600">{fmt(p.satisFiyat)}</span></div>
-          <span className="inline-flex items-center gap-1 text-[10px] text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded mt-1.5 w-fit"><Star size={9} className="fill-indigo-600" /> %{vp} VIP Puan</span>
           <span className={`text-[11px] mt-1 flex items-center gap-1 ${(p.stokAdeti || 0) > 0 ? 'text-green-600' : 'text-red-500'}`}><span className={`w-1.5 h-1.5 rounded-full ${(p.stokAdeti || 0) > 0 ? 'bg-green-500' : 'bg-red-500'}`} /> {(p.stokAdeti || 0) > 0 ? 'Stokta var' : 'Stok yok'}</span>
           <button onClick={() => sepeteEkle(p)} disabled={(p.stokAdeti || 0) <= 0} className="w-full mt-auto pt-2.5 bg-indigo-600 text-white rounded-lg py-2 text-xs font-semibold inline-flex items-center justify-center gap-1.5 hover:bg-indigo-700 disabled:opacity-40"><ShoppingBag size={14} /> Sepete Ekle</button>
         </div>
@@ -448,7 +454,7 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
         {widgets.length > 0 && (
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-1">
             {widgets.map((w: any) => (
-              <button key={w.id} onClick={() => resolveLink(w.link)} className="text-left rounded-2xl p-4 text-white relative overflow-hidden min-h-[120px] flex flex-col justify-between hover:brightness-105 transition" style={{ background: w.image ? undefined : `linear-gradient(135deg, ${w.color || '#7c3aed'}, ${w.color || '#7c3aed'}cc)` }}>
+              <button key={w.id} onClick={() => resolveLink(w.link)} className="text-left rounded-2xl p-4 text-white relative overflow-hidden min-h-[120px] flex flex-col justify-between hover:brightness-105 transition" style={{ background: w.image ? undefined : `linear-gradient(135deg, ${w.color || '#22A95C'}, ${w.color || '#22A95C'}cc)` }}>
                 {w.image && <><img src={w.image} alt="" className="absolute inset-0 w-full h-full object-cover" /><span className="absolute inset-0 bg-black/35" /></>}
                 <div className="relative">
                   {w.badge && <span className="inline-block text-[9px] font-bold bg-white/25 px-2 py-0.5 rounded-full mb-1.5">{w.badge}</span>}
@@ -550,13 +556,6 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
             <p className="text-center text-[11px] text-slate-400 mt-2">{filtered.length} ürün · Sayfa {safePage}/{pageCount}</p>
           </>
         )}
-
-        {/* VIP bandı */}
-        <div className="mt-5 rounded-2xl bg-amber-50 border border-amber-100 p-4 flex items-center gap-3 flex-wrap">
-          <span className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center"><Star size={20} className="fill-amber-400 text-amber-400" /></span>
-          <div className="flex-1 min-w-[160px]"><p className="font-bold text-slate-800">VIP Üyelere Özel</p><p className="text-xs text-slate-500">Fırsat ürünlerinden ekstra VIP puan kazan.</p></div>
-          <Link to={`/uye/${slug}`} className="bg-amber-500 text-white px-4 py-2.5 rounded-xl text-sm font-semibold inline-flex items-center gap-1.5">VIP Üyeliğini İncele</Link>
-        </div>
       </div>
 
       {/* Story görüntüleyici */}
@@ -585,11 +584,9 @@ export default function VideoMagaza({ slug: slugProp }: { slug?: string }) {
           <div><p className="font-semibold text-white mb-2">Kurumsal</p><ul className="space-y-1.5 text-slate-400 text-xs"><li><button onClick={() => setLegalModal('hakkimizda')} className="hover:text-white">Hakkımızda</button></li><li><button onClick={() => setLegalModal('iletisim')} className="hover:text-white">İletişim</button></li><li><button onClick={() => setLegalModal('teslimat')} className="hover:text-white">Teslimat & Kargo</button></li></ul></div>
           <div><p className="font-semibold text-white mb-2">Yasal</p><ul className="space-y-1.5 text-slate-400 text-xs"><li><button onClick={() => setLegalModal('mesafeli')} className="hover:text-white text-left">Mesafeli Satış Sözleşmesi</button></li><li><button onClick={() => setLegalModal('iade')} className="hover:text-white text-left">İade, İptal ve Cayma Hakkı</button></li><li><button onClick={() => setLegalModal('gizlilik')} className="hover:text-white text-left">Gizlilik & Çerez Politikası</button></li><li><button onClick={() => setLegalModal('kvkk')} className="hover:text-white text-left">KVKK Aydınlatma Metni</button></li></ul></div>
           <div><p className="font-semibold text-white mb-2">Güvenli Ödeme</p>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="bg-white text-slate-900 text-[11px] font-bold px-2 py-1 rounded">VISA</span>
-              <span className="bg-white text-red-600 text-[11px] font-bold px-2 py-1 rounded">Mastercard</span>
-              <span className="bg-white text-blue-700 text-[11px] font-bold px-2 py-1 rounded">TROY</span>
-            </div>
+            <a href="https://www.iyzico.com" target="_blank" rel="noopener noreferrer" className="inline-block">
+              <img src="/iyzico-ile-ode.svg" alt="iyzico ile Öde — VISA, Mastercard, Troy, American Express" className="h-8 w-auto" loading="lazy" />
+            </a>
             <div className="flex items-center gap-2 mt-3 text-[11px] text-slate-400"><Lock size={13} /> 256-bit SSL Güvenli Ödeme</div>
           </div>
         </div>

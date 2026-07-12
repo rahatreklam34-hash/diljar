@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { useUrlState } from '../lib/useUrlState';
 import { giderKategorileri } from '../types';
 import { BarChart3, Download, ArrowUpRight, ArrowDownRight, Users, TrendingUp } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -9,11 +10,11 @@ const kategoriler = ['Satis', 'Tahsilat', ...giderKategorileri];
 
 export default function Raporlar() {
   const { hareketler, cariHesaplar, cariHareketler } = useApp();
-  const [activeTab, setActiveTab] = useState<'gelir-gider' | 'cari'>('gelir-gider');
+  const [activeTab, setActiveTab] = useUrlState<'gelir-gider' | 'cari'>('tab', 'gelir-gider');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
-  const [filterTip, setFilterTip] = useState<'all' | 'gelir' | 'gider'>('all');
-  const [filterKategori, setFilterKategori] = useState('all');
+  const [filterTip, setFilterTip] = useUrlState<'all' | 'gelir' | 'gider'>('tip', 'all');
+  const [filterKategori, setFilterKategori] = useUrlState('kat', 'all');
 
   const fmt = (v: number) => v.toLocaleString('tr-TR');
 
@@ -127,7 +128,7 @@ export default function Raporlar() {
         </div>
         <button
           onClick={activeTab === 'gelir-gider' ? exportGelirGiderPDF : exportCariPDF}
-          className="flex items-center gap-2 px-4 py-2.5 bg-[#6c63ff] text-white rounded-xl hover:bg-[#5b54e6] transition-colors shadow-lg shadow-[#6c63ff]/25"
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#1F9D57] text-white rounded-xl hover:bg-[#178A49] transition-colors shadow-lg shadow-[#1F9D57]/25"
         >
           <Download size={16} /> PDF Indir
         </button>
@@ -137,13 +138,13 @@ export default function Raporlar() {
       <div className="flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
         <button
           onClick={() => setActiveTab('gelir-gider')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'gelir-gider' ? 'bg-white text-[#6c63ff] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'gelir-gider' ? 'bg-white text-[#1F9D57] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
         >
           <TrendingUp size={15} /> Gelir / Gider
         </button>
         <button
           onClick={() => setActiveTab('cari')}
-          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'cari' ? 'bg-white text-[#6c63ff] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+          className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'cari' ? 'bg-white text-[#1F9D57] shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
         >
           <Users size={15} /> Cari Hesaplar
         </button>
@@ -161,7 +162,7 @@ export default function Raporlar() {
                   type="date"
                   value={dateFrom}
                   onChange={e => setDateFrom(e.target.value)}
-                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#6c63ff]/20 outline-none"
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1F9D57]/20 outline-none"
                 />
               </div>
               <div className="flex items-center gap-2">
@@ -170,13 +171,13 @@ export default function Raporlar() {
                   type="date"
                   value={dateTo}
                   onChange={e => setDateTo(e.target.value)}
-                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#6c63ff]/20 outline-none"
+                  className="px-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-[#1F9D57]/20 outline-none"
                 />
               </div>
               <select
                 value={filterTip}
                 onChange={e => setFilterTip(e.target.value as any)}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#6c63ff]/20"
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#1F9D57]/20"
               >
                 <option value="all">Tum Tipler</option>
                 <option value="gelir">Gelir</option>
@@ -185,7 +186,7 @@ export default function Raporlar() {
               <select
                 value={filterKategori}
                 onChange={e => setFilterKategori(e.target.value)}
-                className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#6c63ff]/20"
+                className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-[#1F9D57]/20"
               >
                 <option value="all">Tum Kategoriler</option>
                 {kategoriler.map(k => <option key={k} value={k}>{k}</option>)}

@@ -18,9 +18,15 @@ logs
 *.log
 npm-debug.log*
 
-# Uploads (runtime)
+# Uploads / runtime media
 uploads
 **/uploads
+product-images
+**/product-images
+wa_media
+**/wa_media
+wa_sessions
+**/wa_sessions
 
 # Prisma
 packages/backend/prisma/*.db

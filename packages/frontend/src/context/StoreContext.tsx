@@ -5,6 +5,7 @@ import { useAuth } from './AuthContext';
 export interface StoreData {
   products: any[];
   categories: any[];
+  brands: any[];
   salesCodes: any[];
   customers: any[];
   discountCodes: any[];
@@ -12,8 +13,14 @@ export interface StoreData {
   storeSetting: any | null;
   variationTemplates: any[];
   campaigns: any[];
+  socialAccounts: any[];
+  socialGroups: any[];
+  socialPersonas: any[];
+  igRules: any[];
+  igOtoAyar: any | null;
+  igMesajLog: any[];
 }
-const EMPTY: StoreData = { products: [], categories: [], salesCodes: [], customers: [], discountCodes: [], orders: [], storeSetting: null, variationTemplates: [], campaigns: [] };
+const EMPTY: StoreData = { products: [], categories: [], brands: [], salesCodes: [], customers: [], discountCodes: [], orders: [], storeSetting: null, variationTemplates: [], campaigns: [], socialAccounts: [], socialGroups: [], socialPersonas: [], igRules: [], igOtoAyar: null, igMesajLog: [] };
 
 interface Ctx extends StoreData {
   loading: boolean;

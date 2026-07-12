@@ -1,10 +1,12 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Plus, Pencil, Trash2, Search, X, Package, CheckCircle2, AlertTriangle, Ban, EyeOff, Download, Upload, Copy, BarChart3, List, LayoutGrid, Settings, Wallet, TrendingUp, ScanLine, Tag, RefreshCw, Store, Globe } from 'lucide-react';
+import { useUrlState } from '../lib/useUrlState';
+import { Plus, Pencil, Trash2, Search, X, Package, CheckCircle2, AlertTriangle, Ban, EyeOff, Download, Upload, Copy, BarChart3, List, LayoutGrid, Settings, Wallet, TrendingUp, ScanLine, Tag, RefreshCw, Store, Globe, ShoppingBag, Star } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import toast from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
 import { useStore } from '../context/StoreContext';
+import { useAuth } from '../context/AuthContext';
 import ImageDropzone from '../components/ImageDropzone';
 
 const fmt = (n: number) => '₺' + (n || 0).toLocaleString('tr-TR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -15,32 +17,56 @@ const PERIYOT: Record<string, number> = { '7': 7, '30': 30, '90': 90, '0': 99999
 interface Props { autoAdd?: boolean }
 
 export default function Urunlerim({ autoAdd }: Props) {
-  const { products, categories, salesCodes, variationTemplates, orders, reload } = useStore();
+  const { products, categories, brands, salesCodes, variationTemplates, orders, reload } = useStore();
+  const { isOwner } = useAuth();
+  const bulkDelete = async () => {
+    const arr = selProducts();
+    if (arr.length === 0) return;
+    if (!confirm(`${arr.length} ürün kalıcı olarak silinecek. Onaylıyor musunuz?`)) return;
+    let ok = 0;
+    for (const p of arr) { try { await api.delete(`/store/products/${p.id}`); ok++; } catch { /* */ } }
+    toast.success(`${ok}/${arr.length} ürün silindi`); setSel(new Set()); reload();
+  };
   const nav = useNavigate();
-  const [search, setSearch] = useState('');
-  const [katFilter, setKatFilter] = useState('');
-  const [markaFilter, setMarkaFilter] = useState('');
+  const [search, setSearch] = useUrlState('q', '');
+  const [katFilter, setKatFilter] = useUrlState('kat', '');
+  const [markaFilter, setMarkaFilter] = useUrlState('marka', '');
+  const [lokasyonFilter, setLokasyonFilter] = useState('');
   const [stokFilter, setStokFilter] = useState('all');
   const [magazaFilter, setMagazaFilter] = useState('all');
   const [durumFilter, setDurumFilter] = useState('all');
-  const [tab, setTab] = useState('tum');
+  const [tab, setTab] = useUrlState('tab', 'tum');
   const [view, setView] = useState<'list' | 'grid'>('list');
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useUrlState('page', 1);
   const [perPage, setPerPage] = useState(10);
+  // Arama debounce: input anlik, agir filtre + URL yazimi 300ms sonra -> her tusta full re-render olmaz
+  const [qInput, setQInput] = useState(search);
+  const qDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => { setQInput(search); }, [search]);
+  const onSearchChange = (v: string) => { setQInput(v); if (qDebounceRef.current) clearTimeout(qDebounceRef.current); qDebounceRef.current = setTimeout(() => { setSearch(v); setPage(1); }, 300); };
+  const clearSearch = () => { if (qDebounceRef.current) clearTimeout(qDebounceRef.current); setQInput(''); setSearch(''); };
   const [sel, setSel] = useState<Set<string>>(new Set());
   const [period, setPeriod] = useState('30');
   const [modalOpen, setModalOpen] = useState(false);
   const [edit, setEdit] = useState<any | null>(null);
   const [info, setInfo] = useState<any | null>(null);
-  const [bulk, setBulk] = useState<null | 'fiyat' | 'stok' | 'kategori'>(null);
-  const [bulkForm, setBulkForm] = useState<any>({ mode: 'yuzde', val: '', kategoriId: '' });
+  const [bulk, setBulk] = useState<null | 'fiyat' | 'stok' | 'kategori' | 'marka' | 'cinsiyet'>(null);
+  const [bulkForm, setBulkForm] = useState<any>({ mode: 'yuzde', val: '', kategoriId: '', marka: '', cinsiyet: '' });
+  const [lightboxUrl, setLightboxUrl] = useState<string | null>(null);
   const importRef = useRef<HTMLInputElement>(null);
+  const [sortBy, setSortBy] = useState<string>('');
+  const [cinsiyetFilter, setCinsiyetFilter] = useUrlState('cinsiyet', '');
+  const [fiyatMin, setFiyatMin] = useState('');
+  const [fiyatMax, setFiyatMax] = useState('');
 
   useEffect(() => { if (autoAdd) openNew(); /* eslint-disable-next-line */ }, [autoAdd]);
 
   const katName = (id?: string) => categories.find((c) => c.id === id)?.ad || '';
   const availableCodes = salesCodes.filter((c) => !c.used || (edit && c.code === edit.salesCode));
-  const markalar = useMemo(() => Array.from(new Set(products.map((p) => p.marka).filter(Boolean))) as string[], [products]);
+  const markalar = useMemo(() => (Array.from(new Set((brands || []).filter((b: any) => b.aktif !== false).map((b: any) => b.ad).filter(Boolean))) as string[]).sort((a, b) => a.localeCompare(b, 'tr')), [brands]);
+  const lokasyonlar = useMemo(() => Array.from(new Set(products.map((p) => p.lokasyon).filter(Boolean))).sort() as string[], [products]);
+  const cinsiyetLabel = (v: string) => ({ kadin: 'Kadın', erkek: 'Erkek', unisex: 'Unisex', cocuk: 'Çocuk' } as Record<string, string>)[v] || v;
+  const cinsiyetler = useMemo(() => (Array.from(new Set(products.map((p) => p.cinsiyet).filter(Boolean))) as string[]).sort((a, b) => cinsiyetLabel(a).localeCompare(cinsiyetLabel(b), 'tr')), [products]);
 
   // Satış verisi (ciro + adet), dönem filtreli
   const sold = useMemo(() => {
@@ -66,15 +92,6 @@ export default function Urunlerim({ autoAdd }: Props) {
   const stokColor = (s: number) => s === 0 ? 'text-red-500' : s <= 5 ? 'text-amber-600' : 'text-green-600';
   const varyasyonOzet = (p: any) => (p.variations || []).map((v: any) => v.deger).slice(0, 2).join(' / ');
 
-  const kpi = useMemo(() => {
-    let stokta = 0, azalan = 0, yok = 0, pasif = 0, maliyet = 0;
-    for (const p of products) { const s = p.stokAdeti || 0; if (!p.aktif) pasif++; if (s === 0) yok++; else { stokta++; if (s <= 5) azalan++; } maliyet += (p.alisFiyat || 0) * s; }
-    let satis = 0; for (const v of soldAll.rev.values()) satis += v;
-    const toplam = products.length || 1;
-    const kar = satis - maliyet;
-    return { toplam: products.length, stokta, azalan, yok, pasif, maliyet, satis, kar, karPct: satis ? (kar / satis) * 100 : 0, pct: (n: number) => ((n / toplam) * 100).toFixed(1) };
-  }, [products, soldAll]);
-
   const topSellers = useMemo(() => products.map((p) => ({ p, q: sold.qty.get(p.id) || 0 })).filter((x) => x.q > 0).sort((a, b) => b.q - a.q).slice(0, 8), [products, sold]);
   const maxQ = topSellers[0]?.q || 1;
 
@@ -82,25 +99,84 @@ export default function Urunlerim({ autoAdd }: Props) {
     let list = products.filter((p) => {
       if (katFilter && p.kategoriId !== katFilter) return false;
       if (markaFilter && p.marka !== markaFilter) return false;
+      if (lokasyonFilter && p.lokasyon !== lokasyonFilter) return false;
+      if (cinsiyetFilter && p.cinsiyet !== cinsiyetFilter) return false;
       if (durumFilter === 'aktif' && !p.aktif) return false;
       if (durumFilter === 'pasif' && p.aktif) return false;
+      if (durumFilter === 'onsiparis' && !p.onSiparis) return false;
       if (magazaFilter === 'acik' && !p.onlineMagaza) return false;
       if (magazaFilter === 'kapali' && p.onlineMagaza) return false;
       const s = p.stokAdeti || 0;
       if (stokFilter === 'var' && s <= 0) return false;
       if (stokFilter === 'azalan' && !(s > 0 && s <= 5)) return false;
       if (stokFilter === 'yok' && s !== 0) return false;
+      const fiyat = Number(p.satisFiyat) || 0;
+      if (fiyatMin && fiyat < Number(fiyatMin)) return false;
+      if (fiyatMax && fiyat > Number(fiyatMax)) return false;
       if (search) { const q = search.toLowerCase(); return [p.ad, p.sku, p.salesCode, p.barkod, p.marka].some((f) => (f || '').toLowerCase().includes(q)); }
       return true;
     });
-    if (tab === 'stok') list = [...list].sort((a, b) => (a.stokAdeti || 0) - (b.stokAdeti || 0));
+    // Sıralama — başlık tıklamalarıyla gelen `${kolon}_asc|desc` ve dropdown değerleri
+    let sb = sortBy;
+    if (sb === 'satis_cok') sb = 'yapilan_desc';
+    else if (sb === 'satis_az') sb = 'yapilan_asc';
+    const m = /^(.+)_(asc|desc)$/.exec(sb);
+    if (m) {
+      const key = m[1]; const dir = m[2] === 'asc' ? 1 : -1;
+      const val = (p: any): string | number => {
+        switch (key) {
+          case 'ad': return (p.ad || '').toLocaleLowerCase('tr');
+          case 'barkod': return (p.barkod || '').toLocaleLowerCase('tr');
+          case 'sku': return (p.sku || '').toLocaleLowerCase('tr');
+          case 'satiskodu': return (p.salesCode || '').toLocaleLowerCase('tr');
+          case 'alis': return Number(p.alisFiyat) || 0;
+          case 'fiyat': return Number(p.satisFiyat) || 0;
+          case 'stok': return Number(p.stokAdeti) || 0;
+          case 'maliyet': return (Number(p.alisFiyat) || 0) * (Number(p.stokAdeti) || 0);
+          case 'yapilan': return soldAll.qty.get(p.id) || 0;
+          case 'ciro': return soldAll.rev.get(p.id) || 0;
+          case 'fark': return (soldAll.rev.get(p.id) || 0) - (Number(p.alisFiyat) || 0) * (Number(p.stokAdeti) || 0);
+          case 'magaza': return p.onlineMagaza ? 1 : 0;
+          case 'durum': return p.aktif ? (Number(p.stokAdeti) || 0) > 0 ? 2 : 1 : 0;
+          default: return 0;
+        }
+      };
+      list = [...list].sort((a, b) => {
+        const va = val(a), vb = val(b);
+        if (typeof va === 'string' || typeof vb === 'string') return String(va).localeCompare(String(vb), 'tr') * dir;
+        return ((va as number) - (vb as number)) * dir;
+      });
+    }
+    else if (tab === 'stok') list = [...list].sort((a, b) => (a.stokAdeti || 0) - (b.stokAdeti || 0));
     else if (tab === 'encok') list = [...list].sort((a, b) => (soldAll.qty.get(b.id) || 0) - (soldAll.qty.get(a.id) || 0));
     else if (tab === 'kar') list = [...list].sort((a, b) => ((soldAll.rev.get(b.id) || 0) - (b.alisFiyat || 0) * (b.stokAdeti || 0)) - ((soldAll.rev.get(a.id) || 0) - (a.alisFiyat || 0) * (a.stokAdeti || 0)));
     return list;
-  }, [products, katFilter, markaFilter, durumFilter, stokFilter, magazaFilter, search, tab, soldAll]);
+  }, [products, katFilter, markaFilter, lokasyonFilter, cinsiyetFilter, durumFilter, stokFilter, magazaFilter, search, tab, soldAll, sortBy, fiyatMin, fiyatMax]);
+
+  const kpi = useMemo(() => {
+    let stokta = 0, azalan = 0, yok = 0, pasif = 0, maliyet = 0, toplamStokAdet = 0, onSiparisCount = 0;
+    for (const p of filtered) {
+      const s = p.stokAdeti || 0;
+      if (!p.aktif) pasif++;
+      if (p.onSiparis) { onSiparisCount++; continue; }
+      if (s === 0) yok++; else { stokta++; if (s <= 5) azalan++; }
+      maliyet += (p.alisFiyat || 0) * s;
+      toplamStokAdet += s;
+    }
+    let satis = 0; for (const p of filtered) { satis += soldAll.rev.get(p.id) || 0; }
+    const toplam = filtered.length || 1;
+    const kar = satis - maliyet;
+    return { toplam: filtered.length, stokta, azalan, yok, pasif, maliyet, satis, kar, karPct: satis ? (kar / satis) * 100 : 0, pct: (n: number) => ((n / toplam) * 100).toFixed(1), toplamStokAdet, onSiparisCount };
+  }, [filtered, soldAll]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
   const pageItems = filtered.slice((page - 1) * perPage, page * perPage);
+  // Başlık tıklaması: aynı kolona tekrar tıklandığında asc↔desc; farklı kolonda asc başlar
+  const toggleSort = (key: string) => {
+    setSortBy((cur) => (cur === `${key}_asc` ? `${key}_desc` : `${key}_asc`));
+    setPage(1);
+  };
+  const sortArrow = (key: string) => sortBy === `${key}_asc` ? ' ▲' : sortBy === `${key}_desc` ? ' ▼' : '';
   const pageIds = pageItems.map((p) => p.id);
   const allSelected = pageIds.length > 0 && pageIds.every((id) => sel.has(id));
   const toggleSelAll = () => setSel((s) => { const n = new Set(s); if (allSelected) pageIds.forEach((id) => n.delete(id)); else pageIds.forEach((id) => n.add(id)); return n; });
@@ -108,7 +184,7 @@ export default function Urunlerim({ autoAdd }: Props) {
   const selProducts = () => products.filter((p) => sel.has(p.id));
 
   // ── Form ──
-  const empty = { ad: '', sku: '', salesCode: '', marka: '', cinsiyet: 'unisex', kategoriId: '', alisFiyat: '', satisFiyat: '', eskiFiyat: '', oneCikan: false, onlineMagaza: false, stokAdeti: '', aciklama: '', tedarikciAd: '', tedarikciBarkod: '', lokasyon: '', images: [] as string[] };
+  const empty = { ad: '', sku: '', salesCode: '', marka: '', cinsiyet: 'unisex', kategoriId: '', alisFiyat: '', satisFiyat: '', eskiFiyat: '', kdv: '10', oneCikan: false, onlineMagaza: false, stokAdeti: '', aciklama: '', tedarikciAd: '', tedarikciBarkod: '', lokasyon: '', images: [] as string[] };
   const [form, setForm] = useState<any>(empty);
   const [varRows, setVarRows] = useState<any[]>([]);
   const [bedenDraft, setBedenDraft] = useState('');
@@ -128,7 +204,7 @@ export default function Urunlerim({ autoAdd }: Props) {
   function openNew() { setEdit(null); setForm({ ...empty }); setVarRows([]); setModalOpen(true); }
   function openEdit(p: any) {
     setEdit(p);
-    setForm({ ad: p.ad, sku: p.sku || '', salesCode: p.salesCode || '', marka: p.marka || '', cinsiyet: p.cinsiyet || 'unisex', kategoriId: p.kategoriId || '', alisFiyat: p.alisFiyat ?? '', satisFiyat: p.satisFiyat ?? '', eskiFiyat: p.eskiFiyat ?? '', oneCikan: !!p.oneCikan, onlineMagaza: !!p.onlineMagaza, stokAdeti: p.stokAdeti ?? '', aciklama: p.aciklama || '', tedarikciAd: p.tedarikciAd || '', tedarikciBarkod: p.tedarikciBarkod || '', lokasyon: p.lokasyon || '', images: p.images || [] });
+    setForm({ ad: p.ad, sku: p.sku || '', salesCode: p.salesCode || '', marka: p.marka || '', cinsiyet: p.cinsiyet || 'unisex', kategoriId: p.kategoriId || '', alisFiyat: p.alisFiyat ?? '', satisFiyat: p.satisFiyat ?? '', eskiFiyat: p.eskiFiyat ?? '', kdv: p.kdv ?? '10', oneCikan: !!p.oneCikan, onlineMagaza: !!p.onlineMagaza, stokAdeti: p.stokAdeti ?? '', aciklama: p.aciklama || '', tedarikciAd: p.tedarikciAd || '', tedarikciBarkod: p.tedarikciBarkod || '', lokasyon: p.lokasyon || '', images: p.images || [] });
     setVarRows((p.variations || []).map((v: any) => ({ ad: v.ad, deger: v.deger, stok: String(v.stok ?? '') })));
     setModalOpen(true);
   }
@@ -141,7 +217,7 @@ export default function Urunlerim({ autoAdd }: Props) {
     const body = {
       ad: form.ad, sku: form.sku || null, salesCode: form.salesCode || null, marka: form.marka || null, cinsiyet: form.cinsiyet,
       kategoriId: form.kategoriId || null, alisFiyat: Number(form.alisFiyat) || 0, satisFiyat: Number(form.satisFiyat) || 0,
-      eskiFiyat: form.eskiFiyat ? Number(form.eskiFiyat) : null, oneCikan: !!form.oneCikan, onlineMagaza: !!form.onlineMagaza,
+      eskiFiyat: form.eskiFiyat ? Number(form.eskiFiyat) : null, kdv: Number(form.kdv) || 0, oneCikan: !!form.oneCikan, onlineMagaza: !!form.onlineMagaza,
       stokAdeti: variations.length ? variations.reduce((s, v) => s + v.stok, 0) : (Number(form.stokAdeti) || 0),
       aciklama: form.aciklama || null, tedarikciAd: form.tedarikciAd || null, tedarikciBarkod: form.tedarikciBarkod || null, lokasyon: form.lokasyon, images: form.images, variations,
     };
@@ -181,22 +257,30 @@ export default function Urunlerim({ autoAdd }: Props) {
       codes.push(sum % 103); // checksum
       codes.push(106); // stop
       const seq = codes.map((c) => PATTERNS[c]).join('');
-      const h = 40; let x = 0, rects = '';
+      const h = 70; let x = 0, rects = '';
       for (let i = 0; i < seq.length; i++) {
         const w = parseInt(seq[i], 10);
         if (i % 2 === 0) rects += `<rect x="${x}" y="0" width="${w}" height="${h}" fill="#000"/>`;
         x += w;
       }
-      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${x} ${h}" preserveAspectRatio="none" style="width:100%;height:44px;display:block">${rects}</svg>`;
+      return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${x} ${h}" preserveAspectRatio="none" style="width:100%;height:78px;display:block">${rects}</svg>`;
     };
+    const esc = (s: any) => String(s == null ? '' : s).replace(/[<>&]/g, '');
     const labels = arr.map((p) => {
       const code = p.barkod || p.sku || p.salesCode || '';
-      return `<div style="border:1px solid #ddd;border-radius:6px;padding:8px;text-align:center;width:200px;display:inline-block;margin:4px;vertical-align:top">
-      <div style="font-size:12px;font-weight:600;margin-bottom:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${(p.ad || '').replace(/</g, '')}</div>
-      <div style="font-size:10px;color:#888;margin-bottom:4px">${p.sku || p.salesCode || ''}</div>
-      <div style="line-height:0;margin:2px 0">${code128(code)}</div>
-      <div style="font-family:monospace;font-size:11px;letter-spacing:2px;margin-top:2px">${code || '-'}</div>
-      <div style="font-size:11px;font-weight:700;margin-top:2px">${fmt(p.satisFiyat)}</div>
+      const skod = esc(p.salesCode || p.sku || '');
+      const ad = esc(p.ad);
+      const sol = esc(p.marka || p.sku || '');
+      const lok = p.lokasyon ? `LOK:${esc(p.lokasyon)}` : '';
+      const satir2 = [sol, lok].filter(Boolean).join('&nbsp;&nbsp;&nbsp;&nbsp;');
+      const digits = String(code).split('').map((d) => `<span style="margin:0 2px">${esc(d)}</span>`).join('');
+      return `<div style="border:2px solid #000;border-radius:14px;padding:16px 18px;text-align:center;width:360px;display:inline-block;margin:6px;vertical-align:top;box-sizing:border-box;page-break-inside:avoid">
+      ${skod ? `<div style="font-size:34px;font-weight:800;line-height:1;margin-bottom:6px;word-break:break-word">${skod}</div>` : ''}
+      ${ad ? `<div style="font-size:18px;font-weight:700;line-height:1.1;margin-bottom:6px;word-break:break-word">${ad}</div>` : ''}
+      ${satir2 ? `<div style="font-size:18px;font-weight:800;line-height:1.1;margin-bottom:10px">${satir2}</div>` : ''}
+      <div style="line-height:0;margin:6px 0 2px">${code128(code)}</div>
+      <div style="font-size:18px;font-weight:600;letter-spacing:1px;margin-top:2px">${digits || '-'}</div>
+      <div style="font-size:30px;font-weight:800;margin-top:8px">${fmt(p.satisFiyat)}</div>
     </div>`;
     }).join('');
     const w = window.open('', '_blank'); if (!w) { toast.error('Açılır pencere engellendi'); return; }
@@ -206,6 +290,8 @@ export default function Urunlerim({ autoAdd }: Props) {
 
   const runBulk = async () => {
     const list = selProducts(); if (!list.length) { toast.error('Önce ürün seçin'); return; }
+    if (bulk === 'marka') { if (!confirm(`${list.length} ürüne "${bulkForm.marka || 'Marka yok'}" markası atanacak. Onaylıyor musunuz?`)) return; }
+    else if (bulk === 'cinsiyet') { if (!bulkForm.cinsiyet) { toast.error('Cinsiyet seçin'); return; } if (!confirm(`${list.length} ürüne "${cinsiyetLabel(bulkForm.cinsiyet)}" cinsiyeti atanacak. Onaylıyor musunuz?`)) return; }
     try {
       for (const p of list) {
         if (bulk === 'fiyat') { const v = Number(bulkForm.val) || 0; const yeni = bulkForm.mode === 'yuzde' ? Math.round((p.satisFiyat || 0) * (1 + v / 100)) : bulkForm.mode === 'set' ? v : (p.satisFiyat || 0) + v; await api.patch(`/store/products/${p.id}`, { satisFiyat: yeni }); }
@@ -220,6 +306,8 @@ export default function Urunlerim({ autoAdd }: Props) {
           }
         }
         else if (bulk === 'kategori') { await api.patch(`/store/products/${p.id}`, { kategoriId: bulkForm.kategoriId || null }); }
+        else if (bulk === 'marka') { await api.patch(`/store/products/${p.id}`, { marka: bulkForm.marka || null }); }
+        else if (bulk === 'cinsiyet') { await api.patch(`/store/products/${p.id}`, { cinsiyet: bulkForm.cinsiyet }); }
       }
       toast.success(`${list.length} ürün güncellendi`); setBulk(null); setSel(new Set()); reload();
     } catch (e) { toast.error(apiErrorMessage(e)); }
@@ -228,6 +316,21 @@ export default function Urunlerim({ autoAdd }: Props) {
   // Online mağaza yayını
   const toggleOnline = async (p: any) => {
     try { await api.patch(`/store/products/${p.id}`, { onlineMagaza: !p.onlineMagaza }); toast.success(!p.onlineMagaza ? 'Mağazaya açıldı' : 'Mağazadan kaldırıldı'); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
+  };
+  const toggleOnSiparis = async (p: any) => {
+    try { await api.patch(`/store/products/${p.id}`, { onSiparis: !p.onSiparis }); toast.success(!p.onSiparis ? 'Ön sipariş olarak işaretlendi' : 'Ön siparişten çıkarıldı'); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
+  };
+  // Vitrin "Öne Çıkanlar" bölümünde gösterilecek ürünler
+  const toggleOneCikan = async (p: any) => {
+    try { await api.patch(`/store/products/${p.id}`, { oneCikan: !p.oneCikan }); toast.success(!p.oneCikan ? 'Öne çıkanlara eklendi' : 'Öne çıkanlardan kaldırıldı'); reload(); } catch (e) { toast.error(apiErrorMessage(e)); }
+  };
+  // Satır içi (inline) tek alan güncelleme: kategori / marka / cinsiyet
+  const inlineUpdate = async (p: any, field: 'kategoriId' | 'marka' | 'cinsiyet', value: string | null) => {
+    const prev = p[field];
+    if ((prev ?? null) === (value ?? null)) return;
+    p[field] = value; // optimistic
+    try { await api.patch(`/store/products/${p.id}`, { [field]: value }); toast.success('Güncellendi'); reload(); }
+    catch (e) { p[field] = prev; toast.error(apiErrorMessage(e)); }
   };
   const runPublish = async (open: boolean) => {
     const list = selProducts(); if (!list.length) { toast.error('Önce ürün seçin'); return; }
@@ -248,78 +351,104 @@ export default function Urunlerim({ autoAdd }: Props) {
       {/* Başlık */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl bg-indigo-100 flex items-center justify-center"><Package className="text-indigo-600" size={22} /></div>
+          <div className="w-11 h-11 rounded-xl bg-emerald-100 flex items-center justify-center"><Package className="text-emerald-600" size={22} /></div>
           <div><h1 className="text-2xl font-bold text-slate-800">Ürünlerim</h1><p className="text-sm text-slate-400">Tüm ürünlerinizi yönetin, analiz edin ve barkod yazdırın.</p></div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <button onClick={excelIndir} className="inline-flex items-center gap-1.5 px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50"><Download size={16} className="text-green-600" /> Excel İndir</button>
-          <button onClick={() => barkodYazdir()} className="inline-flex items-center gap-1.5 px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50"><ScanLine size={16} className="text-indigo-600" /> Barkod Yazdır</button>
+          <button onClick={() => barkodYazdir()} className="inline-flex items-center gap-1.5 px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50"><ScanLine size={16} className="text-emerald-600" /> Barkod Yazdır</button>
           <button onClick={() => importRef.current?.click()} className="inline-flex items-center gap-1.5 px-3 py-2.5 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50"><Upload size={16} /> Ürünleri İçe Aktar</button>
           <input ref={importRef} type="file" accept=".xlsx,.xls,.csv" onChange={importFile} className="hidden" />
-          <button onClick={openNew} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm bg-indigo-600 text-white rounded-xl font-medium hover:bg-indigo-700"><Plus size={16} /> Yeni Ürün Ekle</button>
+          <button onClick={openNew} className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm bg-emerald-600 text-white rounded-xl font-medium hover:bg-emerald-700"><Plus size={16} /> Yeni Ürün Ekle</button>
         </div>
       </div>
 
       {/* KPI (8) */}
       <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
-        <Kpi icon={Package} cls="bg-indigo-100 text-indigo-600" label="Toplam Ürün" value={kpi.toplam.toLocaleString('tr-TR')} sub="Aktif ürün" />
+        <Kpi icon={Package} cls="bg-emerald-100 text-emerald-600" label="Toplam Model" value={kpi.toplam.toLocaleString('tr-TR')} sub={`${kpi.toplamStokAdet.toLocaleString('tr-TR')} adet stok`} />
         <Kpi icon={CheckCircle2} cls="bg-green-100 text-green-600" label="Stokta Olan" value={kpi.stokta} sub={`%${kpi.pct(kpi.stokta)}`} />
         <Kpi icon={AlertTriangle} cls="bg-amber-100 text-amber-600" label="Stokta Azalan" value={kpi.azalan} sub={`%${kpi.pct(kpi.azalan)}`} />
         <Kpi icon={Ban} cls="bg-red-100 text-red-600" label="Stokta Olmayan" value={kpi.yok} sub={`%${kpi.pct(kpi.yok)}`} />
         <Kpi icon={EyeOff} cls="bg-slate-200 text-slate-600" label="Pasif Ürün" value={kpi.pasif} sub={`%${kpi.pct(kpi.pasif)}`} />
         <Kpi icon={Wallet} cls="bg-sky-100 text-sky-600" label="Toplam Maliyet" value={fmt0(kpi.maliyet)} />
-        <Kpi icon={Wallet} cls="bg-violet-100 text-violet-600" label="Yapılan Satış" value={fmt0(kpi.satis)} />
+        <Kpi icon={Wallet} cls="bg-green-100 text-green-600" label="Yapılan Satış" value={fmt0(kpi.satis)} />
         <Kpi icon={TrendingUp} cls="bg-emerald-100 text-emerald-600" label="Kâr / Zarar" value={fmt0(kpi.kar)} sub={`%${kpi.karPct.toFixed(1)}`} valueCls={kpi.kar >= 0 ? 'text-green-600' : 'text-red-600'} />
       </div>
+      {kpi.onSiparisCount > 0 && <div className="text-xs text-blue-600 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1.5">Ön sipariş: {kpi.onSiparisCount} model (depo hesabına dahil değil)</div>}
 
       {/* Sekmeler */}
       <div className="flex items-center gap-1 border-b border-slate-200 overflow-x-auto">
         {[['tum', 'Tüm Ürünler'], ['stok', 'Stok Durumu'], ['encok', 'En Çok Satılanlar'], ['kar', 'Kâr / Zarar Analizi']].map(([k, t]) => (
-          <button key={k} onClick={() => { setTab(k); setPage(1); }} className={`px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap ${tab === k ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>{t}</button>
+          <button key={k} onClick={() => { setTab(k); setPage(1); }} className={`px-4 py-2.5 text-sm font-medium border-b-2 whitespace-nowrap ${tab === k ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}>{t}</button>
         ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[1fr_320px] gap-5 items-start">
+      <div className="grid grid-cols-1 gap-5 items-start">
         {/* SOL: filtre + tablo */}
         <div className="space-y-4 min-w-0">
           <div className="bg-white rounded-2xl border border-slate-200 p-3 flex items-center gap-3 flex-wrap">
-            <div className="relative flex-1 min-w-[200px]"><Search size={15} className="absolute left-3 top-3 text-slate-400" /><input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Ürün adı, barkod, SKU veya satış kodu ara..." className="w-full pl-9 pr-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
+            <div className="relative flex-1 min-w-[200px]"><Search size={15} className="absolute left-3 top-3 text-slate-400" /><input value={qInput} onChange={(e) => onSearchChange(e.target.value)} placeholder="Ürün adı, barkod, SKU veya satış kodu ara..." className="w-full pl-9 pr-3 py-2.5 text-sm border border-slate-200 rounded-xl" /></div>
             <Sel label="Kategori" value={katFilter} onChange={(v) => { setKatFilter(v); setPage(1); }} options={[['', 'Tümü'], ...categories.map((c) => [c.id, c.ad] as [string, string])]} />
             <Sel label="Marka" value={markaFilter} onChange={(v) => { setMarkaFilter(v); setPage(1); }} options={[['', 'Tümü'], ...markalar.map((m) => [m, m] as [string, string])]} />
-            <Sel label="Durum" value={durumFilter} onChange={(v) => { setDurumFilter(v); setPage(1); }} options={[['all', 'Tümü'], ['aktif', 'Aktif'], ['pasif', 'Pasif']]} />
+            <Sel label="Lokasyon" value={lokasyonFilter} onChange={(v) => { setLokasyonFilter(v); setPage(1); }} options={[['', 'Tümü'], ...lokasyonlar.map((m) => [m, m] as [string, string])]} />
+            <Sel label="Cinsiyet" value={cinsiyetFilter} onChange={(v) => { setCinsiyetFilter(v); setPage(1); }} options={[['', 'Tümü'], ...cinsiyetler.map((c) => [c, cinsiyetLabel(c)] as [string, string])]} />
+            <Sel label="Durum" value={durumFilter} onChange={(v) => { setDurumFilter(v); setPage(1); }} options={[['all', 'Tümü'], ['aktif', 'Aktif'], ['pasif', 'Pasif'], ['onsiparis', 'Ön Sipariş']]} />
             <Sel label="Stok Durumu" value={stokFilter} onChange={(v) => { setStokFilter(v); setPage(1); }} options={[['all', 'Tümü'], ['var', 'Stokta Var'], ['azalan', 'Azalan'], ['yok', 'Stok Yok']]} />
             <Sel label="Mağaza" value={magazaFilter} onChange={(v) => { setMagazaFilter(v); setPage(1); }} options={[['all', 'Tümü'], ['acik', 'Mağazada'], ['kapali', 'Mağazada Değil']]} />
-            <button onClick={() => { setSearch(''); setKatFilter(''); setMarkaFilter(''); setDurumFilter('all'); setStokFilter('all'); setMagazaFilter('all'); setPage(1); }} className="px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50 self-end">Temizle</button>
+            <Sel label="Sırala" value={sortBy} onChange={(v) => { setSortBy(v); setPage(1); }} options={[['', 'Varsayılan'], ['fiyat_desc', 'Fiyat ↓'], ['fiyat_asc', 'Fiyat ↑'], ['stok_desc', 'Stok ↓'], ['stok_asc', 'Stok ↑'], ['alis_desc', 'Alış ↓'], ['alis_asc', 'Alış ↑'], ['ad_asc', 'Ad A-Z'], ['ad_desc', 'Ad Z-A'], ['satis_cok', 'Satış ↓'], ['satis_az', 'Satış ↑']]} />
+            <div className="flex items-center gap-1">
+              <input value={fiyatMin} onChange={(e) => { setFiyatMin(e.target.value); setPage(1); }} placeholder="Min ₺" className="w-16 px-2 py-2.5 text-xs border border-slate-200 rounded-lg" />
+              <span className="text-slate-300">-</span>
+              <input value={fiyatMax} onChange={(e) => { setFiyatMax(e.target.value); setPage(1); }} placeholder="Max ₺" className="w-16 px-2 py-2.5 text-xs border border-slate-200 rounded-lg" />
+            </div>
+            <button onClick={() => { clearSearch(); setKatFilter(''); setMarkaFilter(''); setLokasyonFilter(''); setCinsiyetFilter(''); setDurumFilter('all'); setStokFilter('all'); setMagazaFilter('all'); setSortBy(''); setFiyatMin(''); setFiyatMax(''); setPage(1); }} className="px-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white hover:bg-slate-50 self-end">Temizle</button>
             <div className="flex items-center gap-1 self-end">
-              <button onClick={() => setView('list')} className={`w-9 h-9 rounded-lg border flex items-center justify-center ${view === 'list' ? 'bg-indigo-50 border-indigo-300 text-indigo-600' : 'border-slate-200 text-slate-400'}`}><List size={16} /></button>
-              <button onClick={() => setView('grid')} className={`w-9 h-9 rounded-lg border flex items-center justify-center ${view === 'grid' ? 'bg-indigo-50 border-indigo-300 text-indigo-600' : 'border-slate-200 text-slate-400'}`}><LayoutGrid size={16} /></button>
+              <button onClick={() => setView('list')} className={`w-9 h-9 rounded-lg border flex items-center justify-center ${view === 'list' ? 'bg-emerald-50 border-emerald-300 text-emerald-600' : 'border-slate-200 text-slate-400'}`}><List size={16} /></button>
+              <button onClick={() => setView('grid')} className={`w-9 h-9 rounded-lg border flex items-center justify-center ${view === 'grid' ? 'bg-emerald-50 border-emerald-300 text-emerald-600' : 'border-slate-200 text-slate-400'}`}><LayoutGrid size={16} /></button>
               <button onClick={() => toast('Görünüm ayarları yakında')} className="w-9 h-9 rounded-lg border border-slate-200 text-slate-400 flex items-center justify-center hover:bg-slate-50"><Settings size={16} /></button>
             </div>
           </div>
 
           {sel.size > 0 && (
-            <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-2.5 flex items-center gap-2 flex-wrap text-sm">
-              <span className="text-indigo-700 font-medium">{sel.size} ürün seçili</span>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl px-4 py-2.5 flex items-center gap-2 flex-wrap text-sm">
+              <span className="text-emerald-700 font-medium">{sel.size} ürün seçili</span>
               <button onClick={() => runPublish(true)} className="ml-auto px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1"><Store size={13} /> Mağazaya Aç</button>
               <button onClick={() => runPublish(false)} className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-xs inline-flex items-center gap-1"><EyeOff size={13} /> Mağazadan Kaldır</button>
-              <button onClick={() => { setBulkForm({ mode: 'yuzde', val: '', kategoriId: '' }); setBulk('fiyat'); }} className="px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs">Toplu Fiyat</button>
-              <button onClick={() => { setBulkForm({ mode: 'set', val: '', kategoriId: '' }); setBulk('stok'); }} className="px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs">Stok Güncelle</button>
-              <button onClick={() => { setBulkForm({ mode: '', val: '', kategoriId: categories[0]?.id || '' }); setBulk('kategori'); }} className="px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs">Kategori Ata</button>
-              <button onClick={() => barkodYazdir(selProducts())} className="px-3 py-1.5 bg-white border border-indigo-200 rounded-lg text-xs">Barkod Yazdır</button>
-              <button onClick={() => setSel(new Set())} className="text-indigo-500 text-xs">Temizle</button>
-              <button onClick={() => setSel(new Set(filtered.map((p) => p.id)))} className="text-indigo-600 text-xs font-medium">Tüm filtreyi seç ({filtered.length})</button>
+              <button onClick={() => { setBulkForm({ mode: 'yuzde', val: '', kategoriId: '' }); setBulk('fiyat'); }} className="px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs">Toplu Fiyat</button>
+              <button onClick={() => { setBulkForm({ mode: 'set', val: '', kategoriId: '' }); setBulk('stok'); }} className="px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs">Stok Güncelle</button>
+              <button onClick={() => { setBulkForm({ mode: '', val: '', kategoriId: categories[0]?.id || '', marka: '', cinsiyet: '' }); setBulk('kategori'); }} className="px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs">Kategori Ata</button>
+              <button onClick={() => { setBulkForm({ mode: '', val: '', kategoriId: '', marka: markalar[0] || '', cinsiyet: '' }); setBulk('marka'); }} className="px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs">Marka Ata</button>
+              <button onClick={() => { setBulkForm({ mode: '', val: '', kategoriId: '', marka: '', cinsiyet: CINSIYET[0] }); setBulk('cinsiyet'); }} className="px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs">Cinsiyet Ata</button>
+              <button onClick={() => barkodYazdir(selProducts())} className="px-3 py-1.5 bg-white border border-emerald-200 rounded-lg text-xs">Barkod Yazdır</button>
+              {isOwner && <button onClick={bulkDelete} className="px-3 py-1.5 bg-rose-600 text-white rounded-lg text-xs font-medium inline-flex items-center gap-1"><Trash2 size={13} /> Seçilenleri Sil</button>}
+              <button onClick={() => setSel(new Set())} className="text-emerald-500 text-xs">Temizle</button>
+              <button onClick={() => setSel(new Set(filtered.map((p) => p.id)))} className="text-emerald-600 text-xs font-medium">Tüm filtreyi seç ({filtered.length})</button>
             </div>
           )}
 
           {view === 'list' ? (
             <div className="bg-white rounded-2xl border border-slate-200 overflow-x-auto">
-              <table className="w-full text-sm min-w-[1040px]">
+              <table className="w-full text-sm min-w-[1300px]">
                 <thead className="text-slate-400 text-left text-xs uppercase border-b border-slate-100 whitespace-nowrap">
                   <tr>
                     <th className="px-3 py-3"><input type="checkbox" checked={allSelected} onChange={toggleSelAll} /></th>
-                    <th className="px-3 py-3">Ürün</th><th className="px-3 py-3">Barkod</th><th className="px-3 py-3">SKU</th><th className="px-3 py-3">Satış Kodu</th>
-                    <th className="px-3 py-3">Alış</th><th className="px-3 py-3">Satış</th><th className="px-3 py-3">Stok</th><th className="px-3 py-3">Maliyet</th>
-                    <th className="px-3 py-3">Yapılan Satış</th><th className="px-3 py-3">+/- Durum</th><th className="px-3 py-3">Mağaza</th><th className="px-3 py-3">Durum</th><th className="px-3 py-3 text-right">İşlemler</th>
+                    <th className="px-3 py-3 cursor-pointer select-none hover:text-slate-600" onClick={() => toggleSort('ad')}>Ürün{sortArrow('ad')}</th>
+                    <th className="px-3 py-3">Kategori</th>
+                    <th className="px-3 py-3">Marka</th>
+                    <th className="px-3 py-3">Cinsiyet</th>
+                    <th className="px-3 py-3 cursor-pointer select-none hover:text-slate-600" onClick={() => toggleSort('barkod')}>Barkod{sortArrow('barkod')}</th>
+                    <th className="px-3 py-3 cursor-pointer select-none hover:text-slate-600" onClick={() => toggleSort('sku')}>SKU{sortArrow('sku')}</th>
+                    <th className="px-3 py-3 cursor-pointer select-none hover:text-slate-600" onClick={() => toggleSort('satiskodu')}>Satış Kodu{sortArrow('satiskodu')}</th>
+                    <th className="px-3 py-3 cursor-pointer select-none hover:text-slate-600" onClick={() => toggleSort('alis')}>Alış{sortArrow('alis')}</th>
+                    <th className="px-3 py-3 cursor-pointer select-none hover:text-slate-600" onClick={() => toggleSort('fiyat')}>Satış{sortArrow('fiyat')}</th>
+                    <th className="px-3 py-3 cursor-pointer select-none hover:text-slate-600" onClick={() => toggleSort('stok')}>Stok{sortArrow('stok')}</th>
+                    <th className="px-3 py-3 cursor-pointer select-none hover:text-slate-600" onClick={() => toggleSort('maliyet')}>Maliyet{sortArrow('maliyet')}</th>
+                    <th className="px-3 py-3 cursor-pointer select-none hover:text-slate-600" onClick={() => toggleSort('yapilan')}>Yapılan Satış{sortArrow('yapilan')}</th>
+                    <th className="px-3 py-3 cursor-pointer select-none hover:text-slate-600" onClick={() => toggleSort('fark')}>+/- Durum{sortArrow('fark')}</th>
+                    <th className="px-3 py-3 cursor-pointer select-none hover:text-slate-600" onClick={() => toggleSort('magaza')}>Mağaza{sortArrow('magaza')}</th>
+                    <th className="px-3 py-3">Öne Çıkan</th>
+                    <th className="px-3 py-3 cursor-pointer select-none hover:text-slate-600" onClick={() => toggleSort('durum')}>Durum{sortArrow('durum')}</th>
+                    <th className="px-3 py-3 text-right">İşlemler</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -328,7 +457,26 @@ export default function Urunlerim({ autoAdd }: Props) {
                     return (
                       <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/60">
                         <td className="px-3 py-3"><input type="checkbox" checked={sel.has(p.id)} onChange={() => toggleSel(p.id)} /></td>
-                        <td className="px-3 py-3"><div className="flex items-center gap-2.5"><img src={(p.images || [])[0] || ''} className="w-10 h-10 rounded-lg object-cover bg-slate-100 shrink-0" /><div className="min-w-0"><p className="font-medium text-slate-800 truncate">{p.ad}</p><p className="text-xs text-slate-400">{vz || katName(p.kategoriId) || p.marka || '-'}</p></div></div></td>
+                        <td className="px-3 py-3"><div className="flex items-center gap-2.5"><img src={(p.images || [])[0] || ''} onClick={() => { const u = (p.images || [])[0]; if (u) setLightboxUrl(u); }} className="w-10 h-10 rounded-lg object-cover bg-slate-100 shrink-0 cursor-zoom-in" /><div className="min-w-0"><div className="flex items-center gap-1.5"><p className="font-medium text-slate-800 truncate">{p.ad}</p>{p.onSiparis && <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-600 font-bold flex-shrink-0">Ön Sipariş</span>}{!p.aktif && <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-500 font-bold flex-shrink-0">Pasif</span>}</div><p className="text-xs text-slate-400">{vz || katName(p.kategoriId) || p.marka || '-'}</p></div></div></td>
+                        <td className="px-3 py-3">
+                          <select value={p.kategoriId || ''} onClick={(e) => e.stopPropagation()} onChange={(e) => { e.stopPropagation(); inlineUpdate(p, 'kategoriId', e.target.value || null); }} className={inlineSel}>
+                            <option value="">Seçiniz</option>
+                            {categories.map((c) => <option key={c.id} value={c.id}>{c.ad}</option>)}
+                          </select>
+                        </td>
+                        <td className="px-3 py-3">
+                          <select value={markalar.includes(p.marka || '') ? (p.marka || '') : (p.marka ? '__cur' : '')} onClick={(e) => e.stopPropagation()} onChange={(e) => { e.stopPropagation(); const v = e.target.value; if (v === '__cur') return; inlineUpdate(p, 'marka', v || null); }} className={inlineSel}>
+                            <option value="">Seçiniz</option>
+                            {p.marka && !markalar.includes(p.marka) && <option value="__cur">{p.marka}</option>}
+                            {markalar.map((m) => <option key={m} value={m}>{m}</option>)}
+                          </select>
+                        </td>
+                        <td className="px-3 py-3">
+                          <select value={p.cinsiyet || ''} onClick={(e) => e.stopPropagation()} onChange={(e) => { e.stopPropagation(); inlineUpdate(p, 'cinsiyet', e.target.value || null); }} className={inlineSel}>
+                            <option value="">Seçiniz</option>
+                            {CINSIYET.map((c) => <option key={c} value={c}>{cinsiyetLabel(c)}</option>)}
+                          </select>
+                        </td>
                         <td className="px-3 py-3 text-slate-500 font-mono text-xs">{p.barkod || '-'}</td>
                         <td className="px-3 py-3 text-slate-500 font-mono text-xs">{p.sku || '-'}</td>
                         <td className="px-3 py-3 text-slate-500 font-mono text-xs">{p.salesCode || '-'}</td>
@@ -339,10 +487,11 @@ export default function Urunlerim({ autoAdd }: Props) {
                         <td className="px-3 py-3 text-slate-600">{fmt(ciro)}</td>
                         <td className={`px-3 py-3 font-semibold ${fark >= 0 ? 'text-green-600' : 'text-red-500'}`}>{fark >= 0 ? '+' : ''}{fmt0(fark)}</td>
                         <td className="px-3 py-3"><button onClick={() => toggleOnline(p)} title={p.onlineMagaza ? 'Mağazadan kaldır' : 'Mağazaya aç'} className={`inline-flex items-center gap-1 whitespace-nowrap text-xs px-2.5 py-1 rounded-full font-medium border ${p.onlineMagaza ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-50 text-slate-400 border-slate-200'}`}>{p.onlineMagaza ? <Globe size={12} /> : <Ban size={12} />}{p.onlineMagaza ? 'Mağazada' : 'Kapalı'}</button></td>
+                        <td className="px-3 py-3"><button onClick={() => toggleOneCikan(p)} title={p.oneCikan ? 'Öne çıkanlardan kaldır' : 'Öne çıkanlara ekle'} className={`inline-flex items-center gap-1 whitespace-nowrap text-xs px-2.5 py-1 rounded-full font-medium border ${p.oneCikan ? 'bg-amber-50 text-amber-700 border-amber-200' : 'bg-slate-50 text-slate-400 border-slate-200'}`}><Star size={12} className={p.oneCikan ? 'fill-amber-400 text-amber-500' : ''} />{p.oneCikan ? 'Öne Çıkan' : 'Normal'}</button></td>
                         <td className="px-3 py-3"><span className={`inline-block whitespace-nowrap text-xs px-2.5 py-1 rounded-full font-medium ${d.c}`}>{d.t}</span></td>
                         <td className="px-3 py-3"><div className="flex items-center justify-end gap-1 whitespace-nowrap">
+                          <IBtn onClick={() => toggleOnSiparis(p)} icon={p.onSiparis ? ShoppingBag : ShoppingBag} title={p.onSiparis ? 'Ön Siparişten Çıkar' : 'Ön Sipariş'} cls={p.onSiparis ? 'text-blue-600 border-blue-200 bg-blue-50' : ''} />
                           <IBtn onClick={() => openEdit(p)} icon={Pencil} title="Düzenle" />
-                          <IBtn onClick={() => duplicate(p)} icon={Copy} title="Kopyala" />
                           <IBtn onClick={() => nav(`/depo/urun/${p.id}`)} icon={BarChart3} title="Stok Kartı" />
                           <IBtn onClick={() => barkodYazdir([p])} icon={ScanLine} title="Barkod" />
                           <IBtn onClick={() => del(p)} icon={Trash2} title="Sil" cls="text-red-400 border-red-100 hover:bg-red-50" />
@@ -350,7 +499,7 @@ export default function Urunlerim({ autoAdd }: Props) {
                       </tr>
                     );
                   })}
-                  {pageItems.length === 0 && <tr><td colSpan={14} className="px-4 py-16 text-center text-slate-400">Ürün bulunamadı.</td></tr>}
+                  {pageItems.length === 0 && <tr><td colSpan={17} className="px-4 py-16 text-center text-slate-400">Ürün bulunamadı.</td></tr>}
                 </tbody>
               </table>
             </div>
@@ -358,9 +507,9 @@ export default function Urunlerim({ autoAdd }: Props) {
             <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
               {pageItems.map((p) => { const stok = p.stokAdeti || 0; const d = durumOf(p); return (
                 <div key={p.id} className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
-                  <div className="relative aspect-square bg-slate-100"><img src={(p.images || [])[0] || ''} className="w-full h-full object-cover" /><span className={`absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full font-medium ${d.c}`}>{d.t}</span><button onClick={() => toggleOnline(p)} title={p.onlineMagaza ? 'Mağazadan kaldır' : 'Mağazaya aç'} className={`absolute top-2 right-2 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium border ${p.onlineMagaza ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white/90 text-slate-500 border-slate-200'}`}>{p.onlineMagaza ? <Globe size={11} /> : <Store size={11} />}{p.onlineMagaza ? 'Mağazada' : 'Aç'}</button></div>
+                  <div className="relative aspect-square bg-slate-100"><img src={(p.images || [])[0] || ''} onClick={() => { const u = (p.images || [])[0]; if (u) setLightboxUrl(u); }} className="w-full h-full object-cover cursor-zoom-in" /><span className={`absolute top-2 left-2 text-[10px] px-2 py-0.5 rounded-full font-medium ${d.c}`}>{d.t}</span><button onClick={() => toggleOnline(p)} title={p.onlineMagaza ? 'Mağazadan kaldır' : 'Mağazaya aç'} className={`absolute top-2 right-2 inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium border ${p.onlineMagaza ? 'bg-emerald-500 text-white border-emerald-500' : 'bg-white/90 text-slate-500 border-slate-200'}`}>{p.onlineMagaza ? <Globe size={11} /> : <Store size={11} />}{p.onlineMagaza ? 'Mağazada' : 'Aç'}</button></div>
                   <div className="p-3"><p className="font-medium text-slate-800 truncate">{p.ad}</p><p className="text-xs text-slate-400 mb-2">{p.sku || p.salesCode || '-'}</p><div className="flex items-center justify-between text-sm"><span className="font-semibold">{fmt(p.satisFiyat)}</span><span className={`text-xs font-bold ${stokColor(stok)}`}>{stok} adet</span></div>
-                    <div className="flex items-center gap-1 mt-2"><IBtn onClick={() => openEdit(p)} icon={Pencil} title="Düzenle" /><IBtn onClick={() => duplicate(p)} icon={Copy} title="Kopyala" /><IBtn onClick={() => barkodYazdir([p])} icon={ScanLine} title="Barkod" /><IBtn onClick={() => del(p)} icon={Trash2} title="Sil" cls="text-red-400 border-red-100 hover:bg-red-50" /></div>
+                    <div className="flex items-center gap-1 mt-2"><IBtn onClick={() => openEdit(p)} icon={Pencil} title="Düzenle" /><IBtn onClick={() => barkodYazdir([p])} icon={ScanLine} title="Barkod" /><IBtn onClick={() => del(p)} icon={Trash2} title="Sil" cls="text-red-400 border-red-100 hover:bg-red-50" /></div>
                   </div>
                 </div>
               ); })}
@@ -372,55 +521,21 @@ export default function Urunlerim({ autoAdd }: Props) {
             <p className="text-sm text-slate-500">Toplam {filtered.length.toLocaleString('tr-TR')} ürün</p>
             <div className="flex items-center gap-1">
               <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center disabled:opacity-40 hover:bg-slate-50">‹</button>
-              {pages.map((p, i) => p === '...' ? <span key={i} className="px-2 text-slate-400">…</span> : <button key={i} onClick={() => setPage(p as number)} className={`w-8 h-8 rounded-lg text-sm ${page === p ? 'bg-indigo-600 text-white' : 'border border-slate-200 hover:bg-slate-50'}`}>{p}</button>)}
+              {pages.map((p, i) => p === '...' ? <span key={i} className="px-2 text-slate-400">…</span> : <button key={i} onClick={() => setPage(p as number)} className={`w-8 h-8 rounded-lg text-sm ${page === p ? 'bg-emerald-600 text-white' : 'border border-slate-200 hover:bg-slate-50'}`}>{p}</button>)}
               <button disabled={page >= totalPages} onClick={() => setPage(page + 1)} className="w-8 h-8 rounded-lg border border-slate-200 flex items-center justify-center disabled:opacity-40 hover:bg-slate-50">›</button>
             </div>
             <select value={perPage} onChange={(e) => { setPerPage(Number(e.target.value)); setPage(1); }} className="px-3 py-2 text-sm border border-slate-200 rounded-xl">{[10, 25, 50, 100].map((n) => <option key={n} value={n}>{n} / sayfa</option>)}</select>
           </div>
         </div>
-
-        {/* SAĞ panel */}
-        <div className="space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-200 p-4">
-            <div className="flex items-center justify-between mb-3"><h3 className="text-sm font-semibold text-slate-700">En Çok Satılanlar</h3>
-              <select value={period} onChange={(e) => setPeriod(e.target.value)} className="text-xs px-2 py-1 border border-slate-200 rounded-lg">{[['7', '7 gün'], ['30', '30 gün'], ['90', '90 gün'], ['0', 'Tümü']].map(([v, t]) => <option key={v} value={v}>{t}</option>)}</select>
-            </div>
-            <div className="space-y-2.5">
-              {topSellers.map(({ p, q }, i) => (
-                <div key={p.id} className="flex items-center gap-2.5">
-                  <span className="text-xs font-bold text-slate-400 w-4">{i + 1}</span>
-                  <img src={(p.images || [])[0] || ''} className="w-9 h-9 rounded-lg object-cover bg-slate-100 shrink-0" />
-                  <div className="min-w-0 flex-1"><p className="text-sm font-medium text-slate-700 truncate">{p.ad}</p><div className="h-1.5 bg-slate-100 rounded-full mt-1 overflow-hidden"><div className="h-full bg-indigo-500 rounded-full" style={{ width: `${(q / maxQ) * 100}%` }} /></div></div>
-                  <span className="text-xs text-slate-500 whitespace-nowrap">{q} adet</span>
-                </div>
-              ))}
-              {topSellers.length === 0 && <p className="text-sm text-slate-400">Bu dönemde satış yok.</p>}
-            </div>
-            <button onClick={() => { setTab('encok'); setPeriod('0'); }} className="w-full mt-3 text-sm text-indigo-600 font-medium">Tümünü Gör →</button>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Stok Durumu</h3>
-            <div className="flex items-center gap-4">
-              <Donut segments={donut} total={donutTotal} />
-              <div className="flex-1 space-y-1.5">
-                {donut.map((d) => (<div key={d.t} className="flex items-center justify-between text-xs"><span className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-full" style={{ background: d.c }} />{d.t}</span><span className="text-slate-500">{d.n} ({((d.n / donutTotal) * 100).toFixed(1)}%)</span></div>))}
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-2xl border border-slate-200 p-4">
-            <h3 className="text-sm font-semibold text-slate-700 mb-3">Hızlı İşlemler</h3>
-            <div className="grid grid-cols-2 gap-2">
-              <QBtn onClick={() => barkodYazdir()} icon={ScanLine} label="Barkod Yazdır" />
-              <QBtn onClick={() => { if (!sel.size) { toast.error('Önce ürün seçin'); return; } setBulkForm({ mode: 'yuzde', val: '', kategoriId: '' }); setBulk('fiyat'); }} icon={Wallet} label="Toplu Fiyat Güncelle" />
-              <QBtn onClick={() => { if (!sel.size) { toast.error('Önce ürün seçin'); return; } setBulkForm({ mode: 'set', val: '', kategoriId: '' }); setBulk('stok'); }} icon={RefreshCw} label="Stok Güncelle" />
-              <QBtn onClick={() => { if (!sel.size) { toast.error('Önce ürün seçin'); return; } setBulkForm({ mode: '', val: '', kategoriId: categories[0]?.id || '' }); setBulk('kategori'); }} icon={Tag} label="Toplu Kategori Ata" />
-              <button onClick={() => { setDurumFilter('pasif'); setPage(1); }} className="col-span-2 inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm border border-slate-200 rounded-lg hover:bg-slate-50"><EyeOff size={15} /> Pasif Ürünleri Göster</button>
-            </div>
-          </div>
-        </div>
       </div>
+
+      {/* Görsel büyütme (lightbox) */}
+      {lightboxUrl && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/80 p-4" onClick={() => setLightboxUrl(null)}>
+          <button onClick={() => setLightboxUrl(null)} className="absolute top-4 right-4 text-white/80 hover:text-white"><X size={28} /></button>
+          <img src={lightboxUrl} onClick={(e) => e.stopPropagation()} className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain" />
+        </div>
+      )}
 
       {/* Satış bilgisi modal */}
       {info && (() => { const stok = info.stokAdeti || 0; const maliyet = (info.alisFiyat || 0) * stok; const ciro = soldAll.rev.get(info.id) || 0; const adet = soldAll.qty.get(info.id) || 0; return (
@@ -437,23 +552,25 @@ export default function Urunlerim({ autoAdd }: Props) {
       {bulk && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setBulk(null)}>
           <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm bg-white rounded-2xl p-5 space-y-3">
-            <div className="flex items-center justify-between"><h3 className="font-semibold text-slate-800">{bulk === 'fiyat' ? 'Toplu Fiyat Güncelle' : bulk === 'stok' ? 'Stok Güncelle' : 'Kategori Ata'}</h3><button onClick={() => setBulk(null)}><X size={18} className="text-slate-400" /></button></div>
+            <div className="flex items-center justify-between"><h3 className="font-semibold text-slate-800">{bulk === 'fiyat' ? 'Toplu Fiyat Güncelle' : bulk === 'stok' ? 'Stok Güncelle' : bulk === 'kategori' ? 'Kategori Ata' : bulk === 'marka' ? 'Marka Ata' : 'Cinsiyet Ata'}</h3><button onClick={() => setBulk(null)}><X size={18} className="text-slate-400" /></button></div>
             <p className="text-xs text-slate-400">{sel.size} ürün etkilenecek.</p>
             {bulk === 'fiyat' && (<>
-              <div className="grid grid-cols-3 gap-2">{[['yuzde', '% Değişim'], ['tutar', '± Tutar'], ['set', 'Sabit']].map(([m, t]) => <button key={m} onClick={() => setBulkForm((f: any) => ({ ...f, mode: m }))} className={`py-2 text-xs rounded-lg border ${bulkForm.mode === m ? 'border-indigo-500 bg-indigo-50 text-indigo-700' : 'border-slate-200 text-slate-500'}`}>{t}</button>)}</div>
+              <div className="grid grid-cols-3 gap-2">{[['yuzde', '% Değişim'], ['tutar', '± Tutar'], ['set', 'Sabit']].map(([m, t]) => <button key={m} onClick={() => setBulkForm((f: any) => ({ ...f, mode: m }))} className={`py-2 text-xs rounded-lg border ${bulkForm.mode === m ? 'border-emerald-500 bg-emerald-50 text-emerald-700' : 'border-slate-200 text-slate-500'}`}>{t}</button>)}</div>
               <input type="number" value={bulkForm.val} onChange={(e) => setBulkForm((f: any) => ({ ...f, val: e.target.value }))} placeholder={bulkForm.mode === 'yuzde' ? 'ör. 10 (=%10 zam), -10 (indirim)' : 'Tutar'} className={inp} />
             </>)}
             {bulk === 'stok' && <><input type="number" value={bulkForm.val} onChange={(e) => setBulkForm((f: any) => ({ ...f, val: e.target.value }))} placeholder="Yeni stok adedi" className={inp} /><p className="text-[11px] text-slate-400 -mt-1">Varyasyonlu ürünlerde her varyasyonun stoğu bu değere ayarlanır; toplam stok otomatik hesaplanır.</p></>}
             {bulk === 'kategori' && <select value={bulkForm.kategoriId} onChange={(e) => setBulkForm((f: any) => ({ ...f, kategoriId: e.target.value }))} className={inp}><option value="">Kategori yok</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.ad}</option>)}</select>}
-            <button onClick={runBulk} className="w-full bg-indigo-600 text-white py-2.5 rounded-lg font-medium hover:bg-indigo-700">Uygula</button>
+            {bulk === 'marka' && <select value={bulkForm.marka} onChange={(e) => setBulkForm((f: any) => ({ ...f, marka: e.target.value }))} className={inp}><option value="">Marka yok</option>{markalar.map((m) => <option key={m} value={m}>{m}</option>)}</select>}
+            {bulk === 'cinsiyet' && <select value={bulkForm.cinsiyet} onChange={(e) => setBulkForm((f: any) => ({ ...f, cinsiyet: e.target.value }))} className={inp}>{CINSIYET.map((c) => <option key={c} value={c}>{cinsiyetLabel(c)}</option>)}</select>}
+            <button onClick={runBulk} className="w-full bg-emerald-600 text-white py-2.5 rounded-lg font-medium hover:bg-emerald-700">Uygula</button>
           </div>
         </div>
       )}
 
       {/* Form modal */}
       {modalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onClick={() => setModalOpen(false)}>
-          <form onClick={(e) => e.stopPropagation()} onSubmit={save} className="w-full max-w-2xl bg-white rounded-2xl p-6 max-h-[88vh] overflow-y-auto">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50" onMouseDown={(e) => { if (e.target === e.currentTarget) setModalOpen(false); }}>
+          <form onMouseDown={(e) => e.stopPropagation()} onSubmit={save} className="w-full max-w-2xl bg-white rounded-2xl p-6 max-h-[88vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4"><h3 className="text-lg font-bold text-slate-800">{edit ? 'Ürünü Düzenle' : 'Yeni Ürün'}</h3><button type="button" onClick={() => setModalOpen(false)}><X size={20} className="text-slate-400" /></button></div>
             <label className="block text-xs text-slate-500 mb-1">Ürün Görseli * (max 5, ilki kapak)</label>
             <ImageDropzone images={form.images} onChange={(imgs) => set('images', imgs)} max={5} onEnhance={async (src) => { const r = await api.post('/store/enhance-image', { image: src }); return r.data.image as string; }} />
@@ -461,13 +578,14 @@ export default function Urunlerim({ autoAdd }: Props) {
               <Field label="Ürün Adı *"><input required value={form.ad} onChange={(e) => set('ad', e.target.value)} className={inp} /></Field>
               <Field label="SKU"><input value={form.sku} onChange={(e) => set('sku', e.target.value)} placeholder="ör. PRTS-001-XL-BLK" className={inp} /></Field>
               <Field label="Satış Kodu">{availableCodes.length > 0 ? (<select value={form.salesCode} onChange={(e) => set('salesCode', e.target.value)} className={inp}><option value="">Seçiniz (havuzdan)</option>{availableCodes.map((c) => <option key={c.id} value={c.code}>{c.code}</option>)}</select>) : (<input value={form.salesCode} onChange={(e) => set('salesCode', e.target.value)} placeholder="Havuz boş - manuel" className={inp} />)}</Field>
-              <Field label="Marka"><input value={form.marka} onChange={(e) => set('marka', e.target.value)} className={inp} /></Field>
+              <Field label="Marka"><select value={form.marka || ''} onChange={(e) => set('marka', e.target.value)} className={inp}><option value="">Seçiniz</option>{form.marka && !markalar.includes(form.marka) && <option value={form.marka}>{form.marka}</option>}{markalar.map((m) => <option key={m} value={m}>{m}</option>)}</select></Field>
               <Field label="Cinsiyet *"><select required value={form.cinsiyet} onChange={(e) => set('cinsiyet', e.target.value)} className={inp}>{CINSIYET.map((c) => <option key={c} value={c}>{c}</option>)}</select></Field>
               <Field label="Kategori"><select value={form.kategoriId} onChange={(e) => set('kategoriId', e.target.value)} className={inp}><option value="">Seçiniz</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.ad}</option>)}</select></Field>
               <Field label="Lokasyon *"><input required value={form.lokasyon} onChange={(e) => set('lokasyon', e.target.value)} placeholder="Raf / Depo" className={inp} /></Field>
               <Field label="Alış Fiyatı"><input type="number" step="0.01" value={form.alisFiyat} onChange={(e) => set('alisFiyat', e.target.value)} className={inp} /></Field>
               <Field label="Satış Fiyatı"><input type="number" step="0.01" value={form.satisFiyat} onChange={(e) => set('satisFiyat', e.target.value)} className={inp} /></Field>
               <Field label="Eski/Liste Fiyatı"><input type="number" step="0.01" value={form.eskiFiyat} onChange={(e) => set('eskiFiyat', e.target.value)} className={inp} /></Field>
+              <Field label="KDV Oranı (%)"><select value={form.kdv} onChange={(e) => set('kdv', e.target.value)} className={inp}><option value="0">%0</option><option value="1">%1</option><option value="10">%10</option><option value="20">%20</option></select></Field>
               <Field label="Stok Adeti"><input type="number" value={form.stokAdeti} onChange={(e) => set('stokAdeti', e.target.value)} className={inp} /></Field>
               <Field label="Barkod"><input value={edit?.barkod || 'Otomatik oluşturulacak'} disabled className={inp + ' bg-slate-50 text-slate-400'} /></Field>
               <Field label="Tedarikçi Adı"><input value={form.tedarikciAd} onChange={(e) => set('tedarikciAd', e.target.value)} className={inp} /></Field>
@@ -485,10 +603,10 @@ export default function Urunlerim({ autoAdd }: Props) {
               )}
               <div className="flex items-center gap-2 mt-2">
                 <input value={bedenDraft} onChange={(e) => setBedenDraft(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addBedenRow(); } }} placeholder="+ Beden ekle (örn. M, 38)" className="flex-1 px-2 py-1.5 text-sm border border-slate-200 rounded-lg" />
-                <button type="button" onClick={addBedenRow} className="text-xs bg-indigo-600 text-white px-3 py-1.5 rounded-lg hover:bg-indigo-700 whitespace-nowrap">Ekle</button>
+                <button type="button" onClick={addBedenRow} className="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg hover:bg-emerald-700 whitespace-nowrap">Ekle</button>
               </div>
             </div>
-            <div className="flex justify-end gap-2 mt-4"><button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">İptal</button><button type="submit" className="px-5 py-2 text-sm bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700">Kaydet</button></div>
+            <div className="flex justify-end gap-2 mt-4"><button type="button" onClick={() => setModalOpen(false)} className="px-4 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-lg">İptal</button><button type="submit" className="px-5 py-2 text-sm bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700">Kaydet</button></div>
           </form>
         </div>
       )}
@@ -496,7 +614,8 @@ export default function Urunlerim({ autoAdd }: Props) {
   );
 }
 
-const inp = 'w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-300';
+const inp = 'w-full px-3 py-2 text-sm border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-emerald-300';
+const inlineSel = 'max-w-[140px] px-2 py-1.5 text-xs border border-slate-200 rounded-lg bg-white text-slate-600 outline-none focus:ring-2 focus:ring-emerald-300 cursor-pointer';
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <div><label className="block text-xs text-slate-500 mb-1">{label}</label>{children}</div>; }
 function Kpi({ icon: Ic, cls, label, value, sub, valueCls }: any) {
   return <div className="bg-white rounded-2xl border border-slate-200 p-3.5"><div className="flex items-center gap-2 mb-1.5"><div className={`w-9 h-9 rounded-lg flex items-center justify-center ${cls}`}><Ic size={18} /></div><p className="text-[11px] text-slate-400 leading-tight">{label}</p></div><p className={`text-xl font-bold ${valueCls || 'text-slate-800'}`}>{typeof value === 'number' ? value.toLocaleString('tr-TR') : value}</p>{sub && <p className="text-[11px] text-slate-400">{sub}</p>}</div>;
