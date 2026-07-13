@@ -93,6 +93,10 @@ model Tenant {
   igOtoYanitKurallar IgOtoYanitKural[]
   igOtoAyar          IgOtoAyar?
   igMesajLoglari     IgMesajLog[]
+  cihazlar           Cihaz[]
+  cihazGruplar       CihazGrup[]
+  cihazGorevler      CihazGorev[]
+  cihazGorevSonuclar CihazGorevSonuc[]
 }
 
 model User {
@@ -1709,4 +1713,74 @@ model IgMesajLog {
   createdAt DateTime @default(now())
 
   @@index([tenantId])
+}
+
+// ───────── Etkileşim Ağı → Chrome eklentisi tabanlı cihaz (tarayıcı) yönetimi ─────────
+// Her Cihaz = eklenti kurulu bir Chrome tarayıcısı. Panelden görev gönderilir; eklenti
+// 3-5 sn'de bir poll ile görevi çeker, adımları (ac/yaz/tikla) yürütür, sonucu bildirir.
+model Cihaz {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad             String
+  aktivasyonKodu String    @unique
+  baglandi       Boolean   @default(false) // aktivasyon kodu ile eşleşti mi
+  grupId         String?
+  etiketler      String? // virgülle ayrılmış
+  platform       String    @default("chrome")
+  tarayiciBilgi  String? // userAgent
+  cevrimici      Boolean   @default(false)
+  sonGoruldu     DateTime?
+  aktifSekmeUrl  String?
+  durum          String    @default("aktif") // aktif | pasif
+  notlar         String?
+  createdAt      DateTime  @default(now())
+
+  @@index([tenantId])
+}
+
+model CihazGrup {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  ad        String
+  aciklama  String?
+  createdAt DateTime @default(now())
+
+  @@unique([tenantId, ad])
+  @@index([tenantId])
+}
+
+model CihazGorev {
+  id        String            @id @default(cuid())
+  tenantId  String
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  baslik    String?
+  hedefTip  String            @default("cihaz") // cihaz | grup | tumu
+  hedefId   String? // grup id (hedefTip=grup)
+  adimlar   Json // [{tip:'ac',url}|{tip:'yaz',selector,deger}|{tip:'tikla',selector}]
+  durum     String            @default("beklemede") // beklemede | calisiyor | basarili | basarisiz | kismi | iptal
+  olusturan String?
+  createdAt DateTime          @default(now())
+  sonuclar  CihazGorevSonuc[]
+
+  @@index([tenantId])
+}
+
+model CihazGorevSonuc {
+  id           String     @id @default(cuid())
+  tenantId     String
+  tenant       Tenant     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  gorevId      String
+  gorev        CihazGorev @relation(fields: [gorevId], references: [id], onDelete: Cascade)
+  cihazId      String
+  durum        String     @default("beklemede") // beklemede | calisiyor | basarili | basarisiz
+  mesaj        String?
+  cekildiAt    DateTime?
+  tamamlandiAt DateTime?
+  createdAt    DateTime   @default(now())
+
+  @@index([tenantId])
+  @@index([gorevId])
+  @@index([cihazId])
 }

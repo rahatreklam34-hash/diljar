@@ -111,7 +111,7 @@ export const navGroups: MenuGroup[] = [
       { to: '/musteri-davranislari', icon: UserCheck, label: 'Musteri Davranislari' },
       { to: '/asistan', icon: Bot, label: 'Yapay Zeka Asistani' },
       { to: '/asistan-satislari', icon: Bot, label: 'Asistan Satislari' },
-      { to: '/etkilesim-agi', icon: Network, label: 'Etkilesim Agi' },
+      { to: '/etkilesim-agi', icon: Network, label: 'Tarayici Agi' },
       { to: '/ig-oto-yanit', icon: MessageCircle, label: 'Instagram Oto-Yanit' },
     ],
   },

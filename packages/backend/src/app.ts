@@ -27,6 +27,7 @@ import publicRoutes from './modules/public/public.routes';
 import birfaturaRoutes from './modules/birfatura/birfatura.routes';
 import whatsappRoutes from './modules/whatsapp/wa.routes';
 import importRoutes from './modules/import/import.routes';
+import { cihazPanelRoutes, cihazAgentRoutes } from './modules/cihaz/cihaz.routes';
 import { startCargoPoller } from './modules/cargo/cargo.poller';
 import whatsappWebhook from './modules/whatsapp/wa.webhook';
 import instagramWebhook from './modules/store/ig.webhook';
@@ -71,6 +72,9 @@ export function createApp() {
   // Instagram Messaging (oto-yanıt) webhook'u — PUBLIC (auth/tenant middleware'inden ÖNCE)
   app.use('/api/v1/instagram/webhook', instagramWebhook);
 
+  // Cihaz (Chrome eklentisi) agent uçları — PUBLIC (device JWT ile; auth/tenant'tan ÖNCE)
+  app.use('/api/v1/cihaz-agent', cihazAgentRoutes);
+
   // WhatsApp medya dosyaları (gelen/giden) — statik public servis
   app.use('/wa-media', express.static(mediaDir()));
 
@@ -94,6 +98,7 @@ export function createApp() {
   app.use('/api/v1/ads', adsRoutes);
   app.use('/api/v1/whatsapp', whatsappRoutes);
   app.use('/api/v1/import', importRoutes);
+  app.use('/api/v1/cihaz', cihazPanelRoutes);
 
   // Sunucu açılışında aktif WhatsApp hatlarını (oturum dosyası varsa) yeniden bağla
   setTimeout(() => { reconnectActiveLines().catch(() => {}); }, 5000);

@@ -1,0 +1,33 @@
+Diljar Tarayıcı Ağı Ajanı — Kurulum
+====================================
+
+Bu eklenti, Diljar yönetim panelinden ("Tarayıcı Ağı" / Etkileşim Ağı) gönderilen
+görevleri (sayfa aç, metin yaz, butona tıkla) bu tarayıcıda otomatik yürütür.
+
+KURULUM (Geliştirici Modu):
+1. Chrome'da adres çubuğuna yazın:  chrome://extensions
+2. Sağ üstten "Geliştirici modu"nu (Developer mode) AÇIN.
+3. "Paketlenmemiş öğe yükle" (Load unpacked) butonuna tıklayın.
+4. Bu klasörü (chrome-extension) seçin.
+5. Eklenti simgesine tıklayın (araç çubuğunda).
+
+BAĞLANMA:
+1. Panelde "Tarayıcı Ağı" > "Cihaz Ekle" ile bir cihaz oluşturun.
+2. Ekranda çıkan AKTİVASYON KODUNU kopyalayın (ör. DJ-XXXX-XXXX).
+3. Eklenti penceresinde:
+   - Sunucu adresi: https://diljar.com  (varsayılan)
+   - Aktivasyon kodu: kopyaladığınız kod
+   - "Bağlan" tıklayın.
+4. Cihaz panelde birkaç saniye içinde "Çevrim İçi" görünür.
+
+GÖREV GÖNDERME:
+- Panelden cihazı/grubu seçip "Görev Gönder" ile adımları tanımlayın:
+  • Sayfa Aç (URL)  → oturum sekmesini açar
+  • Metin Yaz (selector, değer)
+  • Tıkla (selector)
+- İlk "Sayfa Aç" sonrası aynı sekme, yeni görevlerde yenilenmeden kullanılır.
+
+NOTLAR:
+- Eklenti yalnızca panelden gelen görevdeki adreste işlem yapar.
+- Sunucu adresini "Ayarlar" (options) sayfasından değiştirebilirsiniz.
+- Bağlantıyı kesmek için eklenti penceresinde "Bağlantıyı Kes".

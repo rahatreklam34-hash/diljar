@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 480px; margin: 40px auto; color: #0f172a; }
+    h1 { font-size: 18px; }
+    label { display: block; margin: 14px 0 4px; font-size: 13px; color: #475569; }
+    input { width: 100%; box-sizing: border-box; padding: 9px; border: 1px solid #cbd5e1; border-radius: 8px; }
+    button { margin-top: 14px; padding: 9px 16px; background: #0f172a; color: #fff; border: 0; border-radius: 8px; font-weight: 600; cursor: pointer; }
+    .ok { color: #047857; font-size: 13px; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Diljar Tarayıcı Ağı — Ayarlar</h1>
+  <label>Sunucu adresi</label>
+  <input id="serverUrl" type="text" placeholder="https://diljar.com" />
+  <button id="kaydet">Kaydet</button>
+  <div id="ok" class="ok" style="display:none">Kaydedildi ✓</div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    chrome.storage.local.get(['serverUrl'], (d) => { $('serverUrl').value = d.serverUrl || 'https://diljar.com'; });
+    $('kaydet').addEventListener('click', () => {
+      const serverUrl = ($('serverUrl').value || 'https://diljar.com').trim().replace(/\/+$/, '');
+      chrome.storage.local.set({ serverUrl }, () => { $('ok').style.display = 'block'; setTimeout(() => $('ok').style.display = 'none', 2500); });
+    });
+  </script>
+</body>
+</html>

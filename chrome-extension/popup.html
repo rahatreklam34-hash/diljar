@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <style>
+    body { width: 300px; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 14px; color: #0f172a; }
+    h1 { font-size: 15px; margin: 0 0 4px; display: flex; align-items: center; gap: 6px; }
+    .sub { font-size: 11px; color: #64748b; margin-bottom: 12px; }
+    label { font-size: 11px; color: #475569; display: block; margin: 8px 0 3px; }
+    input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
+    button { width: 100%; margin-top: 10px; padding: 9px; border: 0; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    .primary { background: #0f172a; color: #fff; }
+    .ghost { background: #f1f5f9; color: #0f172a; }
+    .status { margin-top: 12px; padding: 10px; border-radius: 8px; font-size: 12px; }
+    .on { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
+    .off { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
+    .row { display: flex; gap: 6px; align-items: center; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .dot.on { background: #10b981; }
+    .dot.off { background: #ef4444; }
+  </style>
+</head>
+<body>
+  <h1>🌐 Diljar Tarayıcı Ağı</h1>
+  <div class="sub">Bu tarayıcıyı panele bağlayın</div>
+
+  <div id="baglidegil">
+    <label>Sunucu adresi</label>
+    <input id="serverUrl" type="text" placeholder="https://diljar.com" />
+    <label>Aktivasyon kodu</label>
+    <input id="kod" type="text" placeholder="DJ-XXXX-XXXX" style="text-transform:uppercase" />
+    <button class="primary" id="baglan">Bağlan</button>
+  </div>
+
+  <div id="bagli" style="display:none">
+    <div class="status on">
+      <div class="row"><span class="dot on"></span> <b id="cihazAd">Bağlı</b></div>
+      <div style="margin-top:6px; color:#475569">Cihaz aktif ve görev bekliyor.</div>
+    </div>
+    <button class="ghost" id="kes">Bağlantıyı Kes</button>
+  </div>
+
+  <div id="msg" class="status off" style="display:none"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
