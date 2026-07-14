@@ -1994,12 +1994,30 @@ function EtkilesimKonsolu({ isOpen, onClose, urun }: { isOpen: boolean; onClose:
   const [loading, setLoading] = useState(false);
   const [gonder, setGonder] = useState(false);
   const [cinsFiltre, setCinsFiltre] = useState(true);
+  const [pos, setPos] = useState<{ x: number; y: number }>(() => {
+    try { const s = JSON.parse(localStorage.getItem('cy_etk_pos') || 'null'); if (s && typeof s.x === 'number') return s; } catch { /* yok */ }
+    return { x: Math.max(20, (window.innerWidth || 1200) - 520), y: 90 };
+  });
 
   useEffect(() => {
     if (!isOpen) return;
     setLoading(true);
     api.get('/cihaz').then(({ data }) => setCihazlar(data.cihazlar || [])).catch(() => {}).finally(() => setLoading(false));
   }, [isOpen]);
+
+  useEffect(() => { try { localStorage.setItem('cy_etk_pos', JSON.stringify(pos)); } catch { /* yok */ } }, [pos]);
+
+  const startDrag = (e: any) => {
+    if (e.target.closest('button')) return;
+    const sx = e.clientX, sy = e.clientY, ox = pos.x, oy = pos.y;
+    const move = (ev: any) => {
+      const nx = Math.min(Math.max(0, ox + ev.clientX - sx), (window.innerWidth || 1200) - 340);
+      const ny = Math.min(Math.max(0, oy + ev.clientY - sy), (window.innerHeight || 800) - 60);
+      setPos({ x: nx, y: ny });
+    };
+    const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+    document.addEventListener('mousemove', move); document.addEventListener('mouseup', up);
+  };
 
   if (!isOpen) return null;
 
@@ -2035,19 +2053,17 @@ function EtkilesimKonsolu({ isOpen, onClose, urun }: { isOpen: boolean; onClose:
     try {
       await api.post('/cihaz/etkilesim', { satisKodu, urunAd: urun?.ad || null, eslesmeler: eslesme.map((e) => ({ cihazId: e.cihazId, beden: e.beden })) });
       toast.success(`${eslesme.length} cihaza yorum gönderildi`);
-      onClose();
     } catch (e) { toast.error(apiErrorMessage(e)); }
     finally { setGonder(false); }
   };
 
   return (
-    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
-      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-3">
-          <p className="font-bold text-slate-800 flex items-center gap-2"><Users size={18} className="text-indigo-600" /> Etkileşim Konsolu</p>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
-        </div>
-
+    <div className="fixed z-[140] w-[340px] max-w-[95vw] bg-white rounded-2xl shadow-2xl border border-slate-200 flex flex-col max-h-[85vh]" style={{ left: pos.x, top: pos.y }}>
+      <div onMouseDown={startDrag} className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100 cursor-move select-none bg-slate-50/80 rounded-t-2xl">
+        <p className="font-bold text-slate-800 flex items-center gap-2 text-sm"><Move size={14} className="text-slate-400" /><Users size={16} className="text-indigo-600" /> Etkileşim Konsolu</p>
+        <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+      </div>
+      <div className="p-4 overflow-y-auto">
         {!urun ? (
           <div className="text-center py-10 text-slate-400 text-sm">Önce bir ürün okutun/arayın. Son okutulan ürün burada görünecek.</div>
         ) : (
