@@ -88,6 +88,7 @@ export default function CanliYayinSatis() {
   const [sellers, setSellers] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem('cy_sellers') || '[]'); } catch { return []; } });
   const [search, setSearch] = useState('');
   const [barkodModal, setBarkodModal] = useState<any>(null);
+  const [etkModal, setEtkModal] = useState(false);
   const [flash, setFlash] = useState<Record<string, { price: number; exp: number }>>({});
   const [priceOverride, setPriceOverride] = useState<Record<string, number>>({});
   const [editPrice, setEditPrice] = useState(false);
@@ -1068,6 +1069,7 @@ export default function CanliYayinSatis() {
           <button onClick={openHistory} title="Geçmiş yayınlar" className="inline-flex items-center gap-1 px-2 h-8 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200"><History size={14} /><span className="hidden xl:inline">Geçmiş</span></button>
           <button onClick={() => setKampOpen(true)} title="Kampanyalar" className="inline-flex items-center gap-1 px-2 h-8 rounded-lg text-xs font-medium bg-amber-100 text-amber-700 hover:bg-amber-200"><Tag size={14} /><span className="hidden xl:inline">Kampanya</span></button>
           <button onClick={() => setReportOpen(true)} title="Raporlar" className="inline-flex items-center gap-1 px-2 h-8 rounded-lg text-xs font-medium bg-slate-100 text-slate-600 hover:bg-slate-200"><BarChart3 size={14} /><span className="hidden xl:inline">Rapor</span></button>
+          <button onClick={() => setEtkModal(true)} title="Etkileşim Konsolu — son okutulan ürünü, beden eşleşen cihazlara yorum yazdır" className="inline-flex items-center gap-1 px-2 h-8 rounded-lg text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200"><Users size={14} /><span className="hidden xl:inline">Etkileşim</span></button>
           {stream?.token && (
             <button onClick={() => { navigator.clipboard?.writeText(`${location.origin}/katalog/stream/${stream.token}`); toast.success('Yayın katalog linki kopyalandı'); }} title="Yayın katalog linkini kopyala" className="inline-flex items-center gap-1 px-2 h-8 rounded-lg text-xs font-medium bg-teal-100 text-teal-700 hover:bg-teal-200"><Share2 size={14} /><span className="hidden xl:inline">Link</span></button>
           )}
@@ -1557,6 +1559,9 @@ export default function CanliYayinSatis() {
         </div>
       )}
 
+      {/* Etkileşim Konsolu — son okutulan ürünü beden eşleşen cihazlara yorum yazdır */}
+      <EtkilesimKonsolu isOpen={etkModal} onClose={() => setEtkModal(false)} urun={barkodModal} />
+
       {/* Hizli kayit modal */}
       {kayitModal && (
         <div className="fixed inset-0 z-[110] flex items-center justify-center p-4 bg-black/50" onClick={() => setKayitModal(false)}>
@@ -1977,6 +1982,110 @@ function OnayliMusteriler({ orders, customers }: { orders: any[]; customers: any
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ═══════════ Etkileşim Konsolu ═══════════
+// Son okutulan ürünün (barkodModal) satış kodunu, profil bedeni ürün bedenleriyle
+// eşleşen ÇEVRİMİÇİ cihazlara '<satisKodu> <beden>' + Enter olarak yazdırır.
+function EtkilesimKonsolu({ isOpen, onClose, urun }: { isOpen: boolean; onClose: () => void; urun: any }) {
+  const [cihazlar, setCihazlar] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [gonder, setGonder] = useState(false);
+  const [cinsFiltre, setCinsFiltre] = useState(true);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    setLoading(true);
+    api.get('/cihaz').then(({ data }) => setCihazlar(data.cihazlar || [])).catch(() => {}).finally(() => setLoading(false));
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  const satisKodu = urun?.salesCode || '';
+  const stokVars = (urun?.variations || []).filter((v: any) => (v.stok || 0) > 0);
+  const bedenKeys = new Set(stokVars.map((v: any) => sizeKey(v.deger)));
+  const hasVars = stokVars.length > 0;
+  const online = cihazlar.filter((c) => c.cevrimici);
+
+  const cinsOk = (c: any) => {
+    if (!cinsFiltre) return true;
+    if (!urun?.cinsiyet || !c.cinsiyet) return true;
+    if (norm(urun.cinsiyet) === 'unisex' || norm(c.cinsiyet) === 'unisex') return true;
+    return norm(urun.cinsiyet) === norm(c.cinsiyet);
+  };
+
+  const eslesme = online.map((c) => {
+    if (!cinsOk(c)) return null;
+    if (!hasVars) return { cihazId: c.id, ad: c.ad, beden: '' };
+    const beds = [c.ustBeden, c.altBeden, c.ayakkabiBeden].filter(Boolean);
+    const matched = beds.find((b: string) => bedenKeys.has(sizeKey(b)));
+    return matched ? { cihazId: c.id, ad: c.ad, beden: matched } : null;
+  }).filter(Boolean) as { cihazId: string; ad: string; beden: string }[];
+
+  const send = async () => {
+    if (!satisKodu) return toast.error('Ürünün satış kodu yok');
+    if (!eslesme.length) return toast.error('Eşleşen çevrimiçi cihaz yok');
+    setGonder(true);
+    try {
+      await api.post('/cihaz/etkilesim', { satisKodu, urunAd: urun?.ad || null, eslesmeler: eslesme.map((e) => ({ cihazId: e.cihazId, beden: e.beden })) });
+      toast.success(`${eslesme.length} cihaza yorum gönderildi`);
+      onClose();
+    } catch (e) { toast.error(apiErrorMessage(e)); }
+    finally { setGonder(false); }
+  };
+
+  return (
+    <div className="fixed inset-0 z-[140] flex items-center justify-center p-4 bg-black/50" onClick={onClose}>
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] overflow-y-auto p-5" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3">
+          <p className="font-bold text-slate-800 flex items-center gap-2"><Users size={18} className="text-indigo-600" /> Etkileşim Konsolu</p>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-600"><X size={18} /></button>
+        </div>
+
+        {!urun ? (
+          <div className="text-center py-10 text-slate-400 text-sm">Önce bir ürün okutun/arayın. Son okutulan ürün burada görünecek.</div>
+        ) : (
+          <>
+            <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-50 border border-slate-100">
+              <div className="w-14 h-14 rounded-lg bg-white border overflow-hidden shrink-0">
+                {(urun.images || [])[0] ? <img src={urun.images[0]} className="w-full h-full object-cover" /> : <span className="w-full h-full flex items-center justify-center text-slate-300"><Package size={20} /></span>}
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-slate-800 text-sm truncate">{urun.ad}</p>
+                <p className="text-[11px] text-slate-500">Kod: <span className="font-mono font-bold bg-slate-800 text-white px-1.5 py-0.5 rounded">{satisKodu || '-'}</span>{urun.cinsiyet ? ` · ${urun.cinsiyet}` : ''}</p>
+                <div className="mt-1 flex flex-wrap gap-1">
+                  {hasVars ? stokVars.map((v: any, i: number) => <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600">{v.deger} ({v.stok})</span>) : <span className="text-[10px] text-slate-400">Varyasyon yok (tek beden)</span>}
+                </div>
+              </div>
+            </div>
+
+            <label className="flex items-center gap-2 text-xs text-slate-600 mt-3">
+              <input type="checkbox" checked={cinsFiltre} onChange={(e) => setCinsFiltre(e.target.checked)} /> Cinsiyete göre de filtrele
+            </label>
+
+            <div className="mt-3">
+              <p className="text-xs font-semibold text-slate-600 mb-1">Eşleşen çevrimiçi cihazlar: {loading ? '...' : eslesme.length} / {online.length} online</p>
+              <div className="max-h-56 overflow-y-auto space-y-1">
+                {loading ? <p className="text-sm text-slate-400 py-4 text-center">Cihazlar yükleniyor...</p>
+                  : eslesme.length === 0 ? <p className="text-sm text-slate-400 py-4 text-center">Bu ürünün bedenleriyle eşleşen çevrimiçi cihaz yok.</p>
+                  : eslesme.map((e) => (
+                    <div key={e.cihazId} className="flex items-center justify-between px-3 py-2 rounded-lg bg-slate-50 border border-slate-100 text-sm">
+                      <span className="text-slate-700">{e.ad}</span>
+                      <span className="font-mono text-[11px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded">{satisKodu}{e.beden ? ` ${e.beden}` : ''}</span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            <button onClick={send} disabled={gonder || !eslesme.length} className="w-full mt-4 py-2.5 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700 disabled:opacity-60 inline-flex items-center justify-center gap-2">
+              <Send size={16} /> {gonder ? 'Gönderiliyor...' : `Eşleşen ${eslesme.length} Cihaza Yorum Yazdır`}
+            </button>
+            <p className="text-[11px] text-slate-400 mt-2">Cihazlar "Otomasyonu Çalıştır" ile ilgili sayfada bekliyor olmalı. Her cihaz kendi bedenini yazıp Enter'a basar.</p>
+          </>
+        )}
+      </div>
     </div>
   );
 }

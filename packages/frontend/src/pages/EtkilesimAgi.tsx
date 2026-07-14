@@ -82,6 +82,9 @@ export default function EtkilesimAgi() {
   const [grupModal, setGrupModal] = useState(false);
   const [gorevModal, setGorevModal] = useState(false);
   const [profilModal, setProfilModal] = useState(false);
+  const [otoModal, setOtoModal] = useState(false);
+  const [otoUrl, setOtoUrl] = useState('');
+  const [otoGonder, setOtoGonder] = useState(false);
   const [bulkIslem, setBulkIslem] = useState('');
 
   // ── Veri çekme (canlı polling) ──
@@ -181,6 +184,24 @@ export default function EtkilesimAgi() {
     } catch (e) { toast.error(apiErrorMessage(e)); }
   };
 
+  // Otomasyonu Çalıştır: TÜM cihazları URL'ye yönlendir + sayfa ortasına tıkla (beklemede bırak)
+  const otomasyonBaslat = async () => {
+    const url = otoUrl.trim();
+    if (!url) return toast.error('URL girin');
+    setOtoGonder(true);
+    try {
+      await api.post('/cihaz/gorev', {
+        baslik: 'Otomasyon: sayfa aç + ortaya tıkla',
+        hedefTip: 'tumu',
+        adimlar: [{ tip: 'ac', url }, { tip: 'tiklaMerkez' }],
+      });
+      toast.success('Otomasyon başlatıldı — tüm cihazlar sayfaya yönlendiriliyor');
+      setOtoModal(false);
+      loadGorevler();
+    } catch (e) { toast.error(apiErrorMessage(e)); }
+    finally { setOtoGonder(false); }
+  };
+
   return (
     <div className="space-y-5">
       {/* Başlık */}
@@ -193,6 +214,7 @@ export default function EtkilesimAgi() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => setOtoModal(true)} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-xl bg-slate-900 text-white font-medium hover:bg-slate-800"><PlayCircle size={16} /> Otomasyonu Çalıştır</button>
           <button onClick={() => setGrupModal(true)} className="inline-flex items-center gap-1.5 px-3 py-2 text-sm rounded-xl border bg-white border-slate-200 text-slate-600 hover:bg-slate-50"><Users2 size={15} /> Gruplar</button>
           <button onClick={() => { setDuzenle(null); setCihazForm(EMPTY_CIHAZ); setCihazModal(true); }} className="inline-flex items-center gap-1.5 px-4 py-2 text-sm rounded-xl bg-emerald-600 text-white font-medium hover:bg-emerald-700"><Plus size={16} /> Cihaz Ekle</button>
         </div>
@@ -443,6 +465,19 @@ export default function EtkilesimAgi() {
         await bulkUygula('profil', p);
         setProfilModal(false);
       }} />
+
+      {/* ── Otomasyonu Çalıştır (tüm cihazlar: sayfa aç + ortaya tıkla) ── */}
+      <Modal isOpen={otoModal} onClose={() => setOtoModal(false)} title="Otomasyonu Çalıştır">
+        <div className="space-y-3">
+          <p className="text-xs text-slate-500">Girdiğin URL <b>tüm cihazlarda</b> açılır ve sayfanın ortasına bir kez tıklanır. Cihazlar bu sayfada bekler; sonra Canlı Yayın Satış'taki <b>Etkileşim Konsolu</b>'ndan yorum gönderirsin.</p>
+          <div>
+            <label className="text-xs text-slate-500">Sayfa URL</label>
+            <input value={otoUrl} onChange={(e) => setOtoUrl(e.target.value)} placeholder="https://www.instagram.com/... (canlı yayın)" className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm" />
+          </div>
+          <div className="text-[11px] text-slate-400">Hedef: <b>{ozet.cevrimici || 0}</b> çevrim içi / {ozet.toplam || 0} cihaz</div>
+          <button onClick={otomasyonBaslat} disabled={otoGonder} className="w-full py-2.5 rounded-lg bg-slate-900 text-white font-medium hover:bg-slate-800 disabled:opacity-60 inline-flex items-center justify-center gap-2"><PlayCircle size={16} /> {otoGonder ? 'Başlatılıyor...' : 'Tüm Cihazlarda Başlat'}</button>
+        </div>
+      </Modal>
     </div>
   );
 }

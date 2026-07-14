@@ -1779,6 +1779,7 @@ model CihazGorevSonuc {
   gorev        CihazGorev @relation(fields: [gorevId], references: [id], onDelete: Cascade)
   cihazId      String
   durum        String     @default("beklemede") // beklemede | calisiyor | basarili | basarisiz
+  adimlar      Json? // cihaza özel adımlar (ör. etkileşim '<satisKodu> <beden>'); yoksa görevin adimlar'ı kullanılır
   mesaj        String?
   cekildiAt    DateTime?
   tamamlandiAt DateTime?

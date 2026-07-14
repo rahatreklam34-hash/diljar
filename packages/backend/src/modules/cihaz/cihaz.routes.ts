@@ -289,6 +289,37 @@ panel.get('/gorevler', asyncHandler(async (req: Request, res: Response) => {
   res.json({ gorevler: out });
 }));
 
+// ── Etkileşim konsolu: satış kodu + eşleşen cihazlara cihaz-başına '<satisKodu> <beden>' + Enter ──
+panel.post('/etkilesim', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const satisKodu = String(req.body?.satisKodu || '').trim();
+  const urunAd = req.body?.urunAd ? String(req.body.urunAd) : null;
+  const eslesmeler: { cihazId: string; beden?: string }[] = Array.isArray(req.body?.eslesmeler) ? req.body.eslesmeler : [];
+  if (!satisKodu) throw new ApiError(400, 'Satış kodu gerekli');
+  if (!eslesmeler.length) throw new ApiError(400, 'Eşleşen cihaz yok');
+  const cihazlar = await prisma.cihaz.findMany({ where: { tenantId: t, id: { in: eslesmeler.map((e) => e.cihazId) } }, select: { id: true } });
+  const valid = new Set(cihazlar.map((c) => c.id));
+  const gorev = await prisma.$transaction(async (tx) => {
+    const g = await tx.cihazGorev.create({
+      data: {
+        tenantId: t, baslik: `Etkileşim: ${satisKodu}${urunAd ? ' — ' + urunAd : ''}`,
+        hedefTip: 'cihaz', adimlar: [], durum: 'beklemede',
+        olusturan: (req as any).user?.fullName || (req as any).user?.email || null,
+      },
+    });
+    for (const e of eslesmeler) {
+      if (!valid.has(e.cihazId)) continue;
+      const beden = String(e.beden || '').trim();
+      const text = beden ? `${satisKodu} ${beden}` : satisKodu;
+      await tx.cihazGorevSonuc.create({
+        data: { tenantId: t, gorevId: g.id, cihazId: e.cihazId, durum: 'beklemede', adimlar: [{ tip: 'yaz', deger: text, enter: true }] as any },
+      });
+    }
+    return g;
+  });
+  res.status(201).json({ ok: true, gorevId: gorev.id, hedef: eslesmeler.length });
+}));
+
 // ═════════════════════════ AGENT ROUTER (PUBLIC) ═════════════════════════
 const agent = Router();
 
@@ -330,7 +361,7 @@ agent.get('/poll', asyncHandler(async (req: Request, res: Response) => {
     const g = gorevMap.get(b.gorevId);
     if (!g || g.durum === 'iptal') continue;
     await prisma.cihazGorevSonuc.update({ where: { id: b.id }, data: { durum: 'calisiyor', cekildiAt: new Date() } });
-    gorevlerOut.push({ gorevSonucId: b.id, gorevId: g.id, baslik: g.baslik, adimlar: g.adimlar });
+    gorevlerOut.push({ gorevSonucId: b.id, gorevId: g.id, baslik: g.baslik, adimlar: (b as any).adimlar || g.adimlar });
   }
   if (gorevlerOut.length) {
     for (const gid of gorevIds) await recomputeGorevDurum(gid);
