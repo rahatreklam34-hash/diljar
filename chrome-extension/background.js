@@ -111,28 +111,100 @@ async function execInTab(tabId, func, args) {
   return res?.result || { ok: false, msg: 'Enjeksiyon sonucu yok' };
 }
 
-// ── Adım listesini yürüt (hem uzak görev hem yerel makro kullanır) ──
+// ── CDP (chrome.debugger) ile GERÇEK (trusted) tıklama/yazma ──
+// Sentetik (isTrusted:false) olaylar bazı sitelerde (canlı yayın/video/overlay)
+// yok sayılır. Bu yüzden gerçek fare/klavye olaylarını CDP üzerinden gönderiyoruz.
+function dbgCmd(tabId, method, params) {
+  return new Promise((resolve, reject) => {
+    chrome.debugger.sendCommand({ tabId }, method, params || {}, (res) => {
+      const e = chrome.runtime.lastError;
+      if (e) reject(new Error(e.message)); else resolve(res);
+    });
+  });
+}
+function dbgAttach(tabId) {
+  return new Promise((resolve, reject) => {
+    chrome.debugger.attach({ tabId }, '1.3', () => {
+      const e = chrome.runtime.lastError;
+      if (e && !/already attached/i.test(e.message)) reject(new Error(e.message)); else resolve();
+    });
+  });
+}
+function dbgDetach(tabId) { return new Promise((resolve) => { chrome.debugger.detach({ tabId }, () => { void chrome.runtime.lastError; resolve(); }); }); }
+
+async function cdpClickXY(tabId, x, y) {
+  await dbgCmd(tabId, 'Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, buttons: 0 });
+  await dbgCmd(tabId, 'Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', buttons: 1, clickCount: 1 });
+  await dbgCmd(tabId, 'Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', buttons: 0, clickCount: 1 });
+}
+// Sayfa merkezini (CSS px) hesapla
+function _center() { return { x: Math.floor(window.innerWidth / 2), y: Math.floor(window.innerHeight / 2) }; }
+// Selector merkezini hesapla (scroll into view sonrası)
+function _rectCenter(selector) {
+  const el = document.querySelector(selector);
+  if (!el) return null;
+  el.scrollIntoView({ block: 'center', inline: 'center' });
+  const r = el.getBoundingClientRect();
+  return { x: Math.floor(r.left + r.width / 2), y: Math.floor(r.top + r.height / 2) };
+}
+async function cdpType(tabId, text) {
+  await dbgCmd(tabId, 'Input.insertText', { text });
+}
+async function cdpEnter(tabId) {
+  const base = { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, nativeVirtualKeyCode: 13 };
+  await dbgCmd(tabId, 'Input.dispatchKeyEvent', { type: 'keyDown', ...base, text: '\r' });
+  await dbgCmd(tabId, 'Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+}
+
+// ── Adım listesini yürüt (CDP gerçek olaylar; başarısızsa sentetik fallback) ──
 async function runSteps(adimlar) {
   let tabId = (await cfg()).oturumTabId;
-  for (const adim of (adimlar || [])) {
-    if (adim.tip === 'ac') {
-      tabId = await ensureTab(adim.url);
-    } else if (adim.tip === 'yaz') {
-      if (tabId == null) tabId = await ensureTab(null);
-      const r = await execInTab(tabId, _domYaz, [adim.selector || null, String(adim.deger ?? ''), !!adim.enter]);
-      if (!r.ok) throw new Error(r.msg);
-    } else if (adim.tip === 'tikla') {
-      if (tabId == null) tabId = await ensureTab(null);
-      const r = await execInTab(tabId, _domTikla, [adim.selector]);
-      if (!r.ok) throw new Error(r.msg);
-    } else if (adim.tip === 'tiklaMerkez') {
-      if (tabId == null) tabId = await ensureTab(null);
-      await execInTab(tabId, _domTiklaMerkez, []);
-    } else if (adim.tip === 'tus') {
-      if (tabId == null) tabId = await ensureTab(null);
-      await execInTab(tabId, _domTus, [adim.selector || null, adim.key || 'Enter']);
+  if (tabId == null) tabId = await ensureTab(null);
+  let cdpOk = false;
+  try { await dbgAttach(tabId); cdpOk = true; } catch (_) { cdpOk = false; }
+  try {
+    for (const adim of (adimlar || [])) {
+      if (adim.tip === 'ac') {
+        // navigasyon: debugger'ı bırak, aç, tekrar bağlan
+        if (cdpOk) { await dbgDetach(tabId); cdpOk = false; }
+        tabId = await ensureTab(adim.url);
+        try { await dbgAttach(tabId); cdpOk = true; } catch (_) { cdpOk = false; }
+        await new Promise((r) => setTimeout(r, 1200));
+      } else if (adim.tip === 'tiklaMerkez') {
+        if (cdpOk) {
+          const c = (await execInTab(tabId, _center, [])) || { x: 400, y: 300 };
+          await cdpClickXY(tabId, c.x, c.y);
+        } else { await execInTab(tabId, _domTiklaMerkez, []); }
+      } else if (adim.tip === 'tikla') {
+        if (cdpOk) {
+          const c = await execInTab(tabId, _rectCenter, [adim.selector]);
+          if (!c) throw new Error('Öğe bulunamadı: ' + adim.selector);
+          await cdpClickXY(tabId, c.x, c.y);
+        } else {
+          const r = await execInTab(tabId, _domTikla, [adim.selector]);
+          if (!r.ok) throw new Error(r.msg);
+        }
+      } else if (adim.tip === 'yaz') {
+        if (cdpOk) {
+          if (adim.selector) {
+            const c = await execInTab(tabId, _rectCenter, [adim.selector]);
+            if (c) await cdpClickXY(tabId, c.x, c.y);
+          }
+          await new Promise((r) => setTimeout(r, 200));
+          await cdpType(tabId, String(adim.deger ?? ''));
+          if (adim.enter) { await new Promise((r) => setTimeout(r, 200)); await cdpEnter(tabId); }
+        } else {
+          const r = await execInTab(tabId, _domYaz, [adim.selector || null, String(adim.deger ?? ''), !!adim.enter]);
+          if (!r.ok) throw new Error(r.msg);
+        }
+      } else if (adim.tip === 'tus') {
+        if (cdpOk && (adim.key || 'Enter') === 'Enter') await cdpEnter(tabId);
+        else await execInTab(tabId, _domTus, [adim.selector || null, adim.key || 'Enter']);
+      }
+      await new Promise((r) => setTimeout(r, adim.bekle || 600));
     }
-    await new Promise((r) => setTimeout(r, adim.bekle || 600));
+  } finally {
+    if (cdpOk) { try { await dbgDetach(tabId); } catch (_) {} }
   }
 }
 

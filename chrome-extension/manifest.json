@@ -1,9 +1,9 @@
 {
   "manifest_version": 3,
   "name": "Diljar Tarayıcı Ağı Ajanı",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Diljar yönetim panelinden gönderilen görevleri (sayfa aç, metin yaz, tıkla) bu tarayıcıda yürütür.",
-  "permissions": ["storage", "scripting", "tabs", "alarms"],
+  "permissions": ["storage", "scripting", "tabs", "alarms", "debugger"],
   "host_permissions": ["<all_urls>"],
   "background": {
     "service_worker": "background.js"
