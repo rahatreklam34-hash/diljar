@@ -1,33 +1,36 @@
-Diljar Tarayıcı Ağı Ajanı — Kurulum
-====================================
-
-Bu eklenti, Diljar yönetim panelinden ("Tarayıcı Ağı" / Etkileşim Ağı) gönderilen
-görevleri (sayfa aç, metin yaz, butona tıkla) bu tarayıcıda otomatik yürütür.
+Diljar Tarayıcı Ağı Ajanı — Kurulum & Kullanım
+================================================
 
 KURULUM (Geliştirici Modu):
 1. Chrome'da adres çubuğuna yazın:  chrome://extensions
 2. Sağ üstten "Geliştirici modu"nu (Developer mode) AÇIN.
-3. "Paketlenmemiş öğe yükle" (Load unpacked) butonuna tıklayın.
-4. Bu klasörü (chrome-extension) seçin.
-5. Eklenti simgesine tıklayın (araç çubuğunda).
+3. "Paketlenmemiş öğe yükle" (Load unpacked) → bu klasörü seçin.
+4. Araç çubuğunda eklenti simgesini sabitleyin (puzzle ikonu > raptiye).
 
-BAĞLANMA:
-1. Panelde "Tarayıcı Ağı" > "Cihaz Ekle" ile bir cihaz oluşturun.
-2. Ekranda çıkan AKTİVASYON KODUNU kopyalayın (ör. DJ-XXXX-XXXX).
-3. Eklenti penceresinde:
-   - Sunucu adresi: https://diljar.com  (varsayılan)
-   - Aktivasyon kodu: kopyaladığınız kod
-   - "Bağlan" tıklayın.
-4. Cihaz panelde birkaç saniye içinde "Çevrim İçi" görünür.
+────────────────────────────────────────
+A) OTOMASYON KAYDET-OYNAT (yerel — önerilen)
+────────────────────────────────────────
+1. Otomasyon yapacağınız web sayfasını açın (hedef sayfa).
+2. Eklenti penceresini açın → "● Kayıt Başlat".
+3. Sayfada normal şekilde işlemleri YAPIN:
+   - Bir alana tıklayın, yazı yazın, butona basın, Enter'a basın.
+   - Eklenti bunları ELEMENT bazlı kaydeder (koordinat değil), sayfa
+     boyutu değişse de doğru öğeyi bulur.
+4. Bitince eklenti penceresinden (veya sayfadaki kırmızı "Durdur"dan) durdurun.
+5. Otomasyona bir AD verin, isterseniz "Başlangıç URL" girin → Kaydet.
+6. "Kayıtlı Otomasyonlar" listesinden ▶ Başlat ile tekrar oynatın.
+   (Başlangıç URL varsa o sayfa açılır, sonra adımlar AYNI sekmede
+    yenilenmeden sırayla uygulanır.)
 
-GÖREV GÖNDERME:
-- Panelden cihazı/grubu seçip "Görev Gönder" ile adımları tanımlayın:
-  • Sayfa Aç (URL)  → oturum sekmesini açar
-  • Metin Yaz (selector, değer)
-  • Tıkla (selector)
-- İlk "Sayfa Aç" sonrası aynı sekme, yeni görevlerde yenilenmeden kullanılır.
+────────────────────────────────────────
+B) PANELDEN UZAKTAN GÖREV (opsiyonel)
+────────────────────────────────────────
+1. Panelde "Tarayıcı Ağı" > "Cihaz Ekle" ile cihaz oluşturun.
+2. Çıkan AKTİVASYON KODUNU kopyalayın (DJ-XXXX-XXXX).
+3. Eklenti penceresinde Sunucu (https://diljar.com) + kodu girip "Bağlan".
+4. Cihaz panelde "Çevrim İçi" görünür; panelden görev gönderebilirsiniz.
 
 NOTLAR:
-- Eklenti yalnızca panelden gelen görevdeki adreste işlem yapar.
+- Kayıt/oynatma için panele bağlanmak ŞART DEĞİL (yerel çalışır).
+- chrome:// ve Chrome Web Store sayfalarında kayıt yapılamaz (Chrome kısıtı).
 - Sunucu adresini "Ayarlar" (options) sayfasından değiştirebilirsiniz.
-- Bağlantıyı kesmek için eklenti penceresinde "Bağlantıyı Kes".

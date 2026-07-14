@@ -3,7 +3,7 @@ import {
   Network, Plus, Trash2, Pencil, Search, LayoutGrid, List, X, Users2,
   Wifi, WifiOff, Send, CheckSquare, Square, Copy, RefreshCw, MonitorSmartphone,
   PlayCircle, ClipboardList, Clock, CheckCircle2, XCircle, Loader2,
-  MousePointerClick, Type as TypeIcon, Globe, FolderPlus,
+  MousePointerClick, Type as TypeIcon, Globe, FolderPlus, UserCircle2,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api, { apiErrorMessage } from '../lib/api';
@@ -14,6 +14,7 @@ import Modal from '../components/Modal';
 interface Cihaz {
   id: string; ad: string; aktivasyonKodu: string; baglandi: boolean;
   grupId: string | null; etiketler: string | null; platform: string;
+  cinsiyet: string | null; ustBeden: string | null; altBeden: string | null; ayakkabiBeden: string | null;
   tarayiciBilgi: string | null; cevrimici: boolean; sonGoruldu: string | null;
   aktifSekmeUrl: string | null; durum: string; notlar: string | null; createdAt: string;
 }
@@ -21,6 +22,12 @@ interface Grup { id: string; ad: string; aciklama: string | null; }
 interface Adim { tip: 'ac' | 'yaz' | 'tikla'; url?: string; selector?: string; deger?: string; }
 interface GorevSonuc { id: string; cihazId: string; cihazAd: string; durum: string; mesaj: string | null; tamamlandiAt: string | null; }
 interface Gorev { id: string; baslik: string | null; hedefTip: string; durum: string; adimlar: Adim[]; olusturan: string | null; createdAt: string; sonuclar: GorevSonuc[]; }
+
+const CINSIYETLER = [{ v: 'kadin', l: 'Kadın' }, { v: 'erkek', l: 'Erkek' }, { v: 'unisex', l: 'Unisex' }, { v: 'cocuk', l: 'Çocuk' }];
+const CINSIYET_LBL: Record<string, string> = { kadin: 'Kadın', erkek: 'Erkek', unisex: 'Unisex', cocuk: 'Çocuk' };
+const UST_BEDENLER = ['S', 'M', 'L', 'XL', 'XXL', 'XXXL', 'XXXXL'];
+const ALT_BEDENLER = ['26', '27', '28', '29', '30', '31', '32', '33', '34', '36', '38', '40', '42', '44', '46', '48', '50'];
+const AYAKKABI_BEDENLER = ['35', '36', '37', '38', '39', '40', '41', '42', '43', '44', '45', '46'];
 
 const parseTags = (s: any): string[] => String(s || '').split(',').map((x) => x.trim()).filter(Boolean);
 
@@ -49,7 +56,7 @@ function durumRozet(durum: string) {
   return <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${k.c}`}><I size={11} className={durum === 'calisiyor' ? 'animate-spin' : ''} /> {k.l}</span>;
 }
 
-const EMPTY_CIHAZ = { ad: '', grupId: '', etiketler: '', notlar: '' };
+const EMPTY_CIHAZ = { ad: '', grupId: '', etiketler: '', notlar: '', cinsiyet: '', ustBeden: '', altBeden: '', ayakkabiBeden: '' };
 
 export default function EtkilesimAgi() {
   const [cihazlar, setCihazlar] = useState<Cihaz[]>([]);
@@ -63,6 +70,8 @@ export default function EtkilesimAgi() {
   const [fGrup, setFGrup] = useUrlState('grup', '');
   const [fDurum, setFDurum] = useUrlState('durum', ''); // '' | online | offline
   const [fEtiket, setFEtiket] = useUrlState('etiket', '');
+  const [fCinsiyet, setFCinsiyet] = useUrlState('cinsiyet', '');
+  const [fBeden, setFBeden] = useUrlState('beden', '');
   const [gorunum, setGorunum] = useUrlState('gorunum', 'grid');
 
   const [secili, setSecili] = useState<Set<string>>(new Set());
@@ -72,6 +81,7 @@ export default function EtkilesimAgi() {
   const [yeniKod, setYeniKod] = useState<{ ad: string; kod: string } | null>(null);
   const [grupModal, setGrupModal] = useState(false);
   const [gorevModal, setGorevModal] = useState(false);
+  const [profilModal, setProfilModal] = useState(false);
   const [bulkIslem, setBulkIslem] = useState('');
 
   // ── Veri çekme (canlı polling) ──
@@ -113,9 +123,11 @@ export default function EtkilesimAgi() {
       if (fDurum === 'online' && !c.cevrimici) return false;
       if (fDurum === 'offline' && c.cevrimici) return false;
       if (fEtiket && !parseTags(c.etiketler).includes(fEtiket)) return false;
+      if (fCinsiyet && c.cinsiyet !== fCinsiyet) return false;
+      if (fBeden && ![c.ustBeden, c.altBeden, c.ayakkabiBeden].includes(fBeden)) return false;
       return true;
     });
-  }, [cihazlar, search, fGrup, fDurum, fEtiket]);
+  }, [cihazlar, search, fGrup, fDurum, fEtiket, fCinsiyet, fBeden]);
 
   const grupAd = (id: string | null) => gruplar.find((g) => g.id === id)?.ad || '';
 
@@ -126,13 +138,17 @@ export default function EtkilesimAgi() {
   // ── Cihaz kaydet ──
   const cihazKaydet = async () => {
     if (!cihazForm.ad.trim()) return toast.error('Cihaz adı gerekli');
+    const profil = {
+      cinsiyet: cihazForm.cinsiyet || null, ustBeden: cihazForm.ustBeden || null,
+      altBeden: cihazForm.altBeden || null, ayakkabiBeden: cihazForm.ayakkabiBeden || null,
+    };
     try {
       if (duzenle) {
-        await api.patch(`/cihaz/${duzenle.id}`, { ad: cihazForm.ad, grupId: cihazForm.grupId || null, etiketler: cihazForm.etiketler || null, notlar: cihazForm.notlar || null });
+        await api.patch(`/cihaz/${duzenle.id}`, { ad: cihazForm.ad, grupId: cihazForm.grupId || null, etiketler: cihazForm.etiketler || null, notlar: cihazForm.notlar || null, ...profil });
         toast.success('Cihaz güncellendi');
         setCihazModal(false); setDuzenle(null);
       } else {
-        const { data } = await api.post('/cihaz', { ad: cihazForm.ad, grupId: cihazForm.grupId || null, etiketler: cihazForm.etiketler || null, notlar: cihazForm.notlar || null });
+        const { data } = await api.post('/cihaz', { ad: cihazForm.ad, grupId: cihazForm.grupId || null, etiketler: cihazForm.etiketler || null, notlar: cihazForm.notlar || null, ...profil });
         setCihazModal(false);
         setYeniKod({ ad: data.ad, kod: data.aktivasyonKodu });
       }
@@ -217,6 +233,13 @@ export default function EtkilesimAgi() {
             <select value={fGrup} onChange={(e) => setFGrup(e.target.value)} className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white"><option value="">Grup (tümü)</option>{gruplar.map((g) => <option key={g.id} value={g.id}>{g.ad}</option>)}</select>
             <select value={fDurum} onChange={(e) => setFDurum(e.target.value)} className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white"><option value="">Durum (tümü)</option><option value="online">Çevrim İçi</option><option value="offline">Çevrim Dışı</option></select>
             <select value={fEtiket} onChange={(e) => setFEtiket(e.target.value)} className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white"><option value="">Etiket (tümü)</option>{tumEtiketler.map((t) => <option key={t} value={t}>{t}</option>)}</select>
+            <select value={fCinsiyet} onChange={(e) => setFCinsiyet(e.target.value)} className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white"><option value="">Cinsiyet (tümü)</option>{CINSIYETLER.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}</select>
+            <select value={fBeden} onChange={(e) => setFBeden(e.target.value)} className="px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white">
+              <option value="">Beden (tümü)</option>
+              <optgroup label="Üst Giyim">{UST_BEDENLER.map((b) => <option key={`u${b}`} value={b}>{b}</option>)}</optgroup>
+              <optgroup label="Alt Giyim">{ALT_BEDENLER.map((b) => <option key={`a${b}`} value={b}>{b}</option>)}</optgroup>
+              <optgroup label="Ayakkabı">{AYAKKABI_BEDENLER.map((b) => <option key={`s${b}`} value={b}>{b}</option>)}</optgroup>
+            </select>
             <div className="flex items-center gap-1 border border-slate-200 rounded-xl p-0.5">
               <button onClick={() => setGorunum('grid')} className={`p-1.5 rounded-lg ${gorunum === 'grid' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}><LayoutGrid size={15} /></button>
               <button onClick={() => setGorunum('list')} className={`p-1.5 rounded-lg ${gorunum === 'list' ? 'bg-slate-800 text-white' : 'text-slate-400'}`}><List size={15} /></button>
@@ -232,6 +255,7 @@ export default function EtkilesimAgi() {
             {secili.size > 0 && (
               <>
                 <button onClick={() => setGorevModal(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600 text-white font-medium"><Send size={14} /> Görev Gönder</button>
+                <button onClick={() => setProfilModal(true)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 text-white font-medium"><UserCircle2 size={14} /> Profil Ata</button>
                 <select value={bulkIslem} onChange={(e) => { const v = e.target.value; setBulkIslem(''); if (!v) return;
                   if (v === 'sil') bulkUygula('sil');
                   else if (v === 'durum-aktif') bulkUygula('durum', { durum: 'aktif' });
@@ -282,13 +306,21 @@ export default function EtkilesimAgi() {
                   {parseTags(c.etiketler).length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">{parseTags(c.etiketler).map((t) => <span key={t} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 text-[10px]">{t}</span>)}</div>
                   )}
+                  {(c.cinsiyet || c.ustBeden || c.altBeden || c.ayakkabiBeden) && (
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {c.cinsiyet && <span className="px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-600 text-[10px] font-medium">{CINSIYET_LBL[c.cinsiyet] || c.cinsiyet}</span>}
+                      {c.ustBeden && <span className="px-1.5 py-0.5 rounded bg-sky-50 text-sky-600 text-[10px]">Üst: {c.ustBeden}</span>}
+                      {c.altBeden && <span className="px-1.5 py-0.5 rounded bg-teal-50 text-teal-600 text-[10px]">Alt: {c.altBeden}</span>}
+                      {c.ayakkabiBeden && <span className="px-1.5 py-0.5 rounded bg-amber-50 text-amber-600 text-[10px]">Ayakkabı: {c.ayakkabiBeden}</span>}
+                    </div>
+                  )}
                   <div className="mt-2 flex items-center gap-1.5 text-[11px] text-slate-500">
                     <span className={`px-2 py-0.5 rounded font-mono ${c.baglandi ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{c.aktivasyonKodu}</span>
                     <button onClick={() => kopyala(c.aktivasyonKodu)} title="Kodu kopyala" className="text-slate-400 hover:text-slate-600"><Copy size={13} /></button>
                   </div>
                   {c.aktifSekmeUrl && <div className="mt-1 text-[10px] text-slate-400 truncate" title={c.aktifSekmeUrl}>Sekme: {c.aktifSekmeUrl}</div>}
                   <div className="mt-3 flex items-center gap-1 border-t border-slate-100 pt-2">
-                    <button onClick={() => { setDuzenle(c); setCihazForm({ ad: c.ad, grupId: c.grupId || '', etiketler: c.etiketler || '', notlar: c.notlar || '' }); setCihazModal(true); }} className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-xs text-slate-500 hover:bg-slate-50 rounded-lg"><Pencil size={13} /> Düzenle</button>
+                    <button onClick={() => { setDuzenle(c); setCihazForm({ ad: c.ad, grupId: c.grupId || '', etiketler: c.etiketler || '', notlar: c.notlar || '', cinsiyet: c.cinsiyet || '', ustBeden: c.ustBeden || '', altBeden: c.altBeden || '', ayakkabiBeden: c.ayakkabiBeden || '' }); setCihazModal(true); }} className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-xs text-slate-500 hover:bg-slate-50 rounded-lg"><Pencil size={13} /> Düzenle</button>
                     <button onClick={() => kodYenile(c)} className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-xs text-slate-500 hover:bg-slate-50 rounded-lg"><RefreshCw size={13} /> Kod</button>
                     <button onClick={() => cihazSil(c)} className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 text-xs text-red-500 hover:bg-red-50 rounded-lg"><Trash2 size={13} /> Sil</button>
                   </div>
@@ -311,7 +343,7 @@ export default function EtkilesimAgi() {
                       <td className="p-3"><span className="font-mono text-[11px] text-slate-500">{c.aktivasyonKodu}</span> <button onClick={() => kopyala(c.aktivasyonKodu)} className="text-slate-300 hover:text-slate-500"><Copy size={12} /></button></td>
                       <td className="p-3 text-slate-400 text-xs">{sonGorulduLabel(c.sonGoruldu)}</td>
                       <td className="p-3 text-right whitespace-nowrap">
-                        <button onClick={() => { setDuzenle(c); setCihazForm({ ad: c.ad, grupId: c.grupId || '', etiketler: c.etiketler || '', notlar: c.notlar || '' }); setCihazModal(true); }} className="text-slate-400 hover:text-slate-600 p-1"><Pencil size={14} /></button>
+                        <button onClick={() => { setDuzenle(c); setCihazForm({ ad: c.ad, grupId: c.grupId || '', etiketler: c.etiketler || '', notlar: c.notlar || '', cinsiyet: c.cinsiyet || '', ustBeden: c.ustBeden || '', altBeden: c.altBeden || '', ayakkabiBeden: c.ayakkabiBeden || '' }); setCihazModal(true); }} className="text-slate-400 hover:text-slate-600 p-1"><Pencil size={14} /></button>
                         <button onClick={() => kodYenile(c)} className="text-slate-400 hover:text-slate-600 p-1"><RefreshCw size={14} /></button>
                         <button onClick={() => cihazSil(c)} className="text-red-400 hover:text-red-600 p-1"><Trash2 size={14} /></button>
                       </td>
@@ -372,6 +404,15 @@ export default function EtkilesimAgi() {
           <div><label className="text-xs text-slate-500">Cihaz adı *</label><input value={cihazForm.ad} onChange={(e) => setCihazForm({ ...cihazForm, ad: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm" placeholder="Örn. Ofis PC 1 / Kadınlar-01" /></div>
           <div><label className="text-xs text-slate-500">Grup</label><select value={cihazForm.grupId} onChange={(e) => setCihazForm({ ...cihazForm, grupId: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm bg-white"><option value="">Grupsuz</option>{gruplar.map((g) => <option key={g.id} value={g.id}>{g.ad}</option>)}</select></div>
           <div><label className="text-xs text-slate-500">Etiketler (virgülle)</label><input value={cihazForm.etiketler} onChange={(e) => setCihazForm({ ...cihazForm, etiketler: e.target.value })} className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm" placeholder="istanbul, departman-a" /></div>
+          <div className="border-t border-slate-100 pt-3">
+            <div className="text-xs font-semibold text-slate-600 mb-2 inline-flex items-center gap-1"><UserCircle2 size={13} /> Profil</div>
+            <div className="grid grid-cols-2 gap-2">
+              <div><label className="text-[11px] text-slate-500">Cinsiyet</label><select value={cihazForm.cinsiyet} onChange={(e) => setCihazForm({ ...cihazForm, cinsiyet: e.target.value })} className="w-full mt-1 px-2 py-2 border border-slate-200 rounded-lg text-sm bg-white"><option value="">Seçiniz</option>{CINSIYETLER.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}</select></div>
+              <div><label className="text-[11px] text-slate-500">Üst Giyim Bedeni</label><select value={cihazForm.ustBeden} onChange={(e) => setCihazForm({ ...cihazForm, ustBeden: e.target.value })} className="w-full mt-1 px-2 py-2 border border-slate-200 rounded-lg text-sm bg-white"><option value="">Seçiniz</option>{UST_BEDENLER.map((b) => <option key={b} value={b}>{b}</option>)}</select></div>
+              <div><label className="text-[11px] text-slate-500">Alt Giyim Bedeni</label><select value={cihazForm.altBeden} onChange={(e) => setCihazForm({ ...cihazForm, altBeden: e.target.value })} className="w-full mt-1 px-2 py-2 border border-slate-200 rounded-lg text-sm bg-white"><option value="">Seçiniz</option>{ALT_BEDENLER.map((b) => <option key={b} value={b}>{b}</option>)}</select></div>
+              <div><label className="text-[11px] text-slate-500">Ayakkabı Bedeni</label><select value={cihazForm.ayakkabiBeden} onChange={(e) => setCihazForm({ ...cihazForm, ayakkabiBeden: e.target.value })} className="w-full mt-1 px-2 py-2 border border-slate-200 rounded-lg text-sm bg-white"><option value="">Seçiniz</option>{AYAKKABI_BEDENLER.map((b) => <option key={b} value={b}>{b}</option>)}</select></div>
+            </div>
+          </div>
           <div><label className="text-xs text-slate-500">Not</label><textarea value={cihazForm.notlar} onChange={(e) => setCihazForm({ ...cihazForm, notlar: e.target.value })} rows={2} className="w-full mt-1 px-3 py-2 border border-slate-200 rounded-lg text-sm" /></div>
           <button onClick={cihazKaydet} className="w-full py-2.5 rounded-lg bg-emerald-600 text-white font-medium hover:bg-emerald-700">{duzenle ? 'Kaydet' : 'Oluştur ve Aktivasyon Kodu Al'}</button>
         </div>
@@ -394,7 +435,45 @@ export default function EtkilesimAgi() {
 
       {/* ── Görev Oluştur ── */}
       <GorevModal isOpen={gorevModal} onClose={() => setGorevModal(false)} secili={Array.from(secili)} gruplar={gruplar} onDone={() => { setGorevModal(false); loadGorevler(); loadCihazlar(true); setTab('gorevler'); }} />
+
+      {/* ── Toplu Profil Ata ── */}
+      <ProfilModal isOpen={profilModal} onClose={() => setProfilModal(false)} adet={secili.size} onKaydet={async (p) => {
+        await bulkUygula('profil', p);
+        setProfilModal(false);
+      }} />
     </div>
+  );
+}
+
+// ═══════════ Toplu Profil Ata Modal ═══════════
+function ProfilModal({ isOpen, onClose, adet, onKaydet }: { isOpen: boolean; onClose: () => void; adet: number; onKaydet: (p: any) => Promise<void>; }) {
+  const [cinsiyet, setCinsiyet] = useState('');
+  const [ustBeden, setUstBeden] = useState('');
+  const [altBeden, setAltBeden] = useState('');
+  const [ayakkabiBeden, setAyakkabiBeden] = useState('');
+  useEffect(() => { if (isOpen) { setCinsiyet(''); setUstBeden(''); setAltBeden(''); setAyakkabiBeden(''); } }, [isOpen]);
+  const kaydet = () => {
+    const p: any = {};
+    if (cinsiyet) p.cinsiyet = cinsiyet;
+    if (ustBeden) p.ustBeden = ustBeden;
+    if (altBeden) p.altBeden = altBeden;
+    if (ayakkabiBeden) p.ayakkabiBeden = ayakkabiBeden;
+    if (!Object.keys(p).length) { toast.error('En az bir profil değeri seçin'); return; }
+    onKaydet(p);
+  };
+  return (
+    <Modal isOpen={isOpen} onClose={onClose} title={`Profil Ata (${adet} cihaz)`}>
+      <div className="space-y-3">
+        <p className="text-xs text-slate-500">Yalnızca doldurduğun alanlar seçili cihazlara uygulanır. Boş bıraktıkların değişmez.</p>
+        <div className="grid grid-cols-2 gap-2">
+          <div><label className="text-[11px] text-slate-500">Cinsiyet</label><select value={cinsiyet} onChange={(e) => setCinsiyet(e.target.value)} className="w-full mt-1 px-2 py-2 border border-slate-200 rounded-lg text-sm bg-white"><option value="">Değiştirme</option>{CINSIYETLER.map((c) => <option key={c.v} value={c.v}>{c.l}</option>)}</select></div>
+          <div><label className="text-[11px] text-slate-500">Üst Giyim Bedeni</label><select value={ustBeden} onChange={(e) => setUstBeden(e.target.value)} className="w-full mt-1 px-2 py-2 border border-slate-200 rounded-lg text-sm bg-white"><option value="">Değiştirme</option>{UST_BEDENLER.map((b) => <option key={b} value={b}>{b}</option>)}</select></div>
+          <div><label className="text-[11px] text-slate-500">Alt Giyim Bedeni</label><select value={altBeden} onChange={(e) => setAltBeden(e.target.value)} className="w-full mt-1 px-2 py-2 border border-slate-200 rounded-lg text-sm bg-white"><option value="">Değiştirme</option>{ALT_BEDENLER.map((b) => <option key={b} value={b}>{b}</option>)}</select></div>
+          <div><label className="text-[11px] text-slate-500">Ayakkabı Bedeni</label><select value={ayakkabiBeden} onChange={(e) => setAyakkabiBeden(e.target.value)} className="w-full mt-1 px-2 py-2 border border-slate-200 rounded-lg text-sm bg-white"><option value="">Değiştirme</option>{AYAKKABI_BEDENLER.map((b) => <option key={b} value={b}>{b}</option>)}</select></div>
+        </div>
+        <button onClick={kaydet} className="w-full py-2.5 rounded-lg bg-indigo-600 text-white font-medium hover:bg-indigo-700">Seçili Cihazlara Uygula</button>
+      </div>
+    </Modal>
   );
 }
 

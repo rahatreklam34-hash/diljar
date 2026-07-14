@@ -3,44 +3,74 @@
 <head>
   <meta charset="UTF-8" />
   <style>
-    body { width: 300px; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 14px; color: #0f172a; }
+    body { width: 320px; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 0; padding: 14px; color: #0f172a; }
     h1 { font-size: 15px; margin: 0 0 4px; display: flex; align-items: center; gap: 6px; }
-    .sub { font-size: 11px; color: #64748b; margin-bottom: 12px; }
+    .sub { font-size: 11px; color: #64748b; margin-bottom: 10px; }
     label { font-size: 11px; color: #475569; display: block; margin: 8px 0 3px; }
     input { width: 100%; box-sizing: border-box; padding: 8px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 13px; }
-    button { width: 100%; margin-top: 10px; padding: 9px; border: 0; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; }
+    button { margin-top: 8px; padding: 9px; border: 0; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; width: 100%; }
     .primary { background: #0f172a; color: #fff; }
     .ghost { background: #f1f5f9; color: #0f172a; }
-    .status { margin-top: 12px; padding: 10px; border-radius: 8px; font-size: 12px; }
+    .rec { background: #ef4444; color: #fff; }
+    .go { background: #059669; color: #fff; }
+    .status { margin-top: 10px; padding: 10px; border-radius: 8px; font-size: 12px; }
     .on { background: #ecfdf5; color: #047857; border: 1px solid #a7f3d0; }
     .off { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
     .row { display: flex; gap: 6px; align-items: center; }
     .dot { width: 8px; height: 8px; border-radius: 50%; }
     .dot.on { background: #10b981; }
-    .dot.off { background: #ef4444; }
+    hr { border: 0; border-top: 1px solid #e2e8f0; margin: 14px 0; }
+    .sec-title { font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 4px; display:flex; align-items:center; gap:6px; }
+    .macro { border: 1px solid #e2e8f0; border-radius: 8px; padding: 8px; margin-top: 6px; }
+    .macro b { font-size: 12px; }
+    .macro .u { font-size: 10px; color: #94a3b8; word-break: break-all; }
+    .macro .btns { display: flex; gap: 6px; margin-top: 6px; }
+    .macro .btns button { margin-top: 0; padding: 6px; font-size: 11px; }
+    .small { padding: 6px; font-size: 11px; }
+    .del { background: #fee2e2; color: #b91c1c; }
   </style>
 </head>
 <body>
   <h1>🌐 Diljar Tarayıcı Ağı</h1>
-  <div class="sub">Bu tarayıcıyı panele bağlayın</div>
 
+  <!-- Bağlantı -->
   <div id="baglidegil">
+    <div class="sub">Bu tarayıcıyı panele bağla (opsiyonel — uzaktan görev için)</div>
     <label>Sunucu adresi</label>
     <input id="serverUrl" type="text" placeholder="https://diljar.com" />
     <label>Aktivasyon kodu</label>
     <input id="kod" type="text" placeholder="DJ-XXXX-XXXX" style="text-transform:uppercase" />
     <button class="primary" id="baglan">Bağlan</button>
   </div>
-
   <div id="bagli" style="display:none">
-    <div class="status on">
-      <div class="row"><span class="dot on"></span> <b id="cihazAd">Bağlı</b></div>
-      <div style="margin-top:6px; color:#475569">Cihaz aktif ve görev bekliyor.</div>
-    </div>
-    <button class="ghost" id="kes">Bağlantıyı Kes</button>
+    <div class="status on"><div class="row"><span class="dot on"></span> <b id="cihazAd">Bağlı</b></div></div>
+    <button class="ghost small" id="kes">Bağlantıyı Kes</button>
   </div>
 
   <div id="msg" class="status off" style="display:none"></div>
+
+  <hr />
+
+  <!-- Makro Kaydet-Oynat -->
+  <div class="sec-title">🎬 Otomasyon (Makro) Kaydet</div>
+  <div class="sub">Aktif sekmede "Kayıt Başlat"a bas, yapacağın işlemleri (tıkla/yaz/tuş) uygula, sonra durdur ve kaydet. Element tabanlı kayıt — sayfa boyutu değişse de şaşmaz.</div>
+  <button class="rec" id="recBtn">● Kayıt Başlat</button>
+
+  <div id="kaydetBox" style="display:none">
+    <label>Otomasyon adı</label>
+    <input id="makroAd" type="text" placeholder="Örn. Müşteri bilgisi gir" />
+    <label>Başlangıç URL (opsiyonel — oynatınca bu sayfa açılır)</label>
+    <input id="makroUrl" type="text" placeholder="https://..." />
+    <div class="row" style="gap:6px">
+      <button class="go" id="makroKaydet">Kaydet</button>
+      <button class="ghost" id="makroIptal">İptal</button>
+    </div>
+    <div class="sub" id="adimSay"></div>
+  </div>
+
+  <hr />
+  <div class="sec-title">📁 Kayıtlı Otomasyonlar</div>
+  <div id="makroListe"></div>
 
   <script src="popup.js"></script>
 </body>

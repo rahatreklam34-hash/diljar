@@ -1727,6 +1727,10 @@ model Cihaz {
   baglandi       Boolean   @default(false) // aktivasyon kodu ile eşleşti mi
   grupId         String?
   etiketler      String? // virgülle ayrılmış
+  cinsiyet       String? // kadin | erkek | unisex | cocuk
+  ustBeden       String? // S | M | L | XL | XXL | XXXL | XXXXL
+  altBeden       String? // rakamsal (30,31,32...)
+  ayakkabiBeden  String? // rakamsal (38,39,40...)
   platform       String    @default("chrome")
   tarayiciBilgi  String? // userAgent
   cevrimici      Boolean   @default(false)

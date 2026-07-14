@@ -100,6 +100,10 @@ panel.post('/', asyncHandler(async (req: Request, res: Response) => {
       aktivasyonKodu: kod,
       grupId: req.body?.grupId || null,
       etiketler: req.body?.etiketler || null,
+      cinsiyet: req.body?.cinsiyet || null,
+      ustBeden: req.body?.ustBeden || null,
+      altBeden: req.body?.altBeden || null,
+      ayakkabiBeden: req.body?.ayakkabiBeden || null,
       notlar: req.body?.notlar || null,
     },
   });
@@ -112,7 +116,7 @@ panel.patch('/:id', asyncHandler(async (req: Request, res: Response) => {
   const found = await prisma.cihaz.findFirst({ where: { id: req.params.id, tenantId: t } });
   if (!found) throw new ApiError(404, 'Cihaz bulunamadı');
   const data: any = {};
-  for (const k of ['ad', 'grupId', 'etiketler', 'durum', 'notlar']) {
+  for (const k of ['ad', 'grupId', 'etiketler', 'durum', 'notlar', 'cinsiyet', 'ustBeden', 'altBeden', 'ayakkabiBeden']) {
     if (k in req.body) data[k] = req.body[k];
   }
   res.json(await prisma.cihaz.update({ where: { id: req.params.id }, data }));
@@ -169,6 +173,15 @@ panel.post('/bulk', asyncHandler(async (req: Request, res: Response) => {
       await prisma.cihaz.update({ where: { id: c.id }, data: { etiketler: Array.from(set).join(',') } });
       sonuc++;
     }
+  } else if (islem === 'profil') {
+    // Toplu profil ata: cinsiyet / ustBeden / altBeden / ayakkabiBeden (yalnız gönderilenler)
+    const p: any = {};
+    for (const k of ['cinsiyet', 'ustBeden', 'altBeden', 'ayakkabiBeden']) {
+      if (deger && k in deger) p[k] = deger[k] || null;
+    }
+    if (!Object.keys(p).length) throw new ApiError(400, 'Profil değeri gerekli');
+    const r = await prisma.cihaz.updateMany({ where: { id: { in: validIds }, tenantId: t }, data: p });
+    sonuc = r.count;
   } else {
     throw new ApiError(400, 'Geçersiz işlem');
   }
