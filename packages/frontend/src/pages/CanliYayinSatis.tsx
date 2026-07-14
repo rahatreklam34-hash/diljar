@@ -2018,7 +2018,11 @@ function EtkilesimKonsolu({ isOpen, onClose, urun }: { isOpen: boolean; onClose:
 
   const eslesme = online.map((c) => {
     if (!cinsOk(c)) return null;
-    if (!hasVars) return { cihazId: c.id, ad: c.ad, beden: '' };
+    if (!hasVars) {
+      // Varyasyonsuz ürün: yalnızca genel stok varsa eşleş
+      return (urun?.stokAdeti || 0) > 0 ? { cihazId: c.id, ad: c.ad, beden: '' } : null;
+    }
+    // Varyasyonlu: cihazın bedeni STOKLU bir varyasyonla eşleşmeli (bedenKeys yalnız stok>0 içerir)
     const beds = [c.ustBeden, c.altBeden, c.ayakkabiBeden].filter(Boolean);
     const matched = beds.find((b: string) => bedenKeys.has(sizeKey(b)));
     return matched ? { cihazId: c.id, ad: c.ad, beden: matched } : null;
@@ -2056,7 +2060,11 @@ function EtkilesimKonsolu({ isOpen, onClose, urun }: { isOpen: boolean; onClose:
                 <p className="font-semibold text-slate-800 text-sm truncate">{urun.ad}</p>
                 <p className="text-[11px] text-slate-500">Kod: <span className="font-mono font-bold bg-slate-800 text-white px-1.5 py-0.5 rounded">{satisKodu || '-'}</span>{urun.cinsiyet ? ` · ${urun.cinsiyet}` : ''}</p>
                 <div className="mt-1 flex flex-wrap gap-1">
-                  {hasVars ? stokVars.map((v: any, i: number) => <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600">{v.deger} ({v.stok})</span>) : <span className="text-[10px] text-slate-400">Varyasyon yok (tek beden)</span>}
+                  {(urun.variations || []).length > 0
+                    ? (urun.variations || []).map((v: any, i: number) => (v.stok || 0) > 0
+                        ? <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-50 text-emerald-600">{v.deger} ({v.stok})</span>
+                        : <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-red-50 text-red-400 line-through" title="Stok yok — eşleşmez">{v.deger} (0)</span>)
+                    : <span className={`text-[10px] px-1.5 py-0.5 rounded ${(urun.stokAdeti || 0) > 0 ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-400'}`}>Tek beden · Stok: {urun.stokAdeti || 0}</span>}
                 </div>
               </div>
             </div>
