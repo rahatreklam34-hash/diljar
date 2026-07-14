@@ -19,7 +19,7 @@ interface Cihaz {
   aktifSekmeUrl: string | null; durum: string; notlar: string | null; createdAt: string;
 }
 interface Grup { id: string; ad: string; aciklama: string | null; }
-interface Adim { tip: 'ac' | 'yaz' | 'tikla'; url?: string; selector?: string; deger?: string; }
+interface Adim { tip: 'ac' | 'yaz' | 'tikla' | 'tiklaMerkez' | 'tus'; url?: string; selector?: string; deger?: string; enter?: boolean; key?: string; }
 interface GorevSonuc { id: string; cihazId: string; cihazAd: string; durum: string; mesaj: string | null; tamamlandiAt: string | null; }
 interface Gorev { id: string; baslik: string | null; hedefTip: string; durum: string; adimlar: Adim[]; olusturan: string | null; createdAt: string; sonuclar: GorevSonuc[]; }
 
@@ -375,8 +375,10 @@ export default function EtkilesimAgi() {
                 {(g.adimlar || []).map((a, i) => (
                   <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-50 border border-slate-100 text-[11px] text-slate-500">
                     {a.tip === 'ac' && <><Globe size={11} /> Aç: {a.url}</>}
-                    {a.tip === 'yaz' && <><TypeIcon size={11} /> Yaz: {a.selector} = "{a.deger}"</>}
+                    {a.tip === 'tiklaMerkez' && <><MousePointerClick size={11} /> Ortaya tıkla</>}
+                    {a.tip === 'yaz' && <><TypeIcon size={11} /> Yaz: "{a.deger}"{a.enter !== false ? ' + Enter' : ''}{a.selector ? ` (${a.selector})` : ''}</>}
                     {a.tip === 'tikla' && <><MousePointerClick size={11} /> Tıkla: {a.selector}</>}
+                    {a.tip === 'tus' && <><MousePointerClick size={11} /> Tuş: {a.key}</>}
                   </span>
                 ))}
               </div>
@@ -525,7 +527,7 @@ function GorevModal({ isOpen, onClose, secili, gruplar, onDone }: { isOpen: bool
     }
   }, [isOpen, secili.length]);
 
-  const adimEkle = (tip: Adim['tip']) => setAdimlar((a) => [...a, tip === 'ac' ? { tip: 'ac', url: '' } : tip === 'yaz' ? { tip: 'yaz', selector: '', deger: '' } : { tip: 'tikla', selector: '' }]);
+  const adimEkle = (tip: Adim['tip']) => setAdimlar((a) => [...a, tip === 'ac' ? { tip: 'ac', url: '' } : tip === 'yaz' ? { tip: 'yaz', selector: '', deger: '', enter: true } : tip === 'tiklaMerkez' ? { tip: 'tiklaMerkez' } : { tip: 'tikla', selector: '' }]);
   const adimGuncelle = (i: number, patch: Partial<Adim>) => setAdimlar((a) => a.map((x, idx) => idx === i ? { ...x, ...patch } : x));
   const adimSil = (i: number) => setAdimlar((a) => a.filter((_, idx) => idx !== i));
 
@@ -535,7 +537,7 @@ function GorevModal({ isOpen, onClose, secili, gruplar, onDone }: { isOpen: bool
     if (!adimlar.length) return toast.error('En az bir adım ekleyin');
     for (const a of adimlar) {
       if (a.tip === 'ac' && !a.url) return toast.error('Sayfa Aç adımında URL gerekli');
-      if (a.tip === 'yaz' && (!a.selector || a.deger == null)) return toast.error('Metin Yaz adımında selector ve değer gerekli');
+      if (a.tip === 'yaz' && (a.deger == null || a.deger === '')) return toast.error('Metin Yaz adımında yazılacak metin gerekli');
       if (a.tip === 'tikla' && !a.selector) return toast.error('Tıkla adımında selector gerekli');
     }
     setGonderiliyor(true);
@@ -570,24 +572,31 @@ function GorevModal({ isOpen, onClose, secili, gruplar, onDone }: { isOpen: bool
             {adimlar.map((a, i) => (
               <div key={i} className="flex items-start gap-2 p-2 rounded-lg border border-slate-100 bg-slate-50">
                 <span className="mt-2 text-[11px] text-slate-400 w-5">{i + 1}.</span>
-                <select value={a.tip} onChange={(e) => { const tip = e.target.value as Adim['tip']; adimGuncelle(i, tip === 'ac' ? { tip, url: '', selector: undefined, deger: undefined } : tip === 'yaz' ? { tip, selector: '', deger: '', url: undefined } : { tip, selector: '', url: undefined, deger: undefined }); }} className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-sm">
+                <select value={a.tip} onChange={(e) => { const tip = e.target.value as Adim['tip']; adimGuncelle(i, tip === 'ac' ? { tip, url: '', selector: undefined, deger: undefined } : tip === 'yaz' ? { tip, selector: '', deger: '', enter: true, url: undefined } : tip === 'tiklaMerkez' ? { tip, selector: undefined, url: undefined, deger: undefined } : { tip, selector: '', url: undefined, deger: undefined }); }} className="px-2 py-1.5 rounded-lg border border-slate-200 bg-white text-sm">
                   <option value="ac">Sayfa Aç</option>
+                  <option value="tiklaMerkez">Sayfa Ortasına Tıkla</option>
                   <option value="yaz">Metin Yaz</option>
                   <option value="tikla">Tıkla</option>
                 </select>
-                <div className="flex-1 flex gap-2">
+                <div className="flex-1 flex gap-2 items-center flex-wrap">
                   {a.tip === 'ac' && <input value={a.url || ''} onChange={(e) => adimGuncelle(i, { url: e.target.value })} placeholder="https://ornek.com/sayfa" className="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 text-sm" />}
-                  {a.tip === 'yaz' && <><input value={a.selector || ''} onChange={(e) => adimGuncelle(i, { selector: e.target.value })} placeholder="CSS selector (ör. #ad)" className="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 text-sm" /><input value={a.deger || ''} onChange={(e) => adimGuncelle(i, { deger: e.target.value })} placeholder="Yazılacak metin" className="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 text-sm" /></>}
+                  {a.tip === 'tiklaMerkez' && <span className="text-xs text-slate-400 py-1.5">Ekranın ortasına bir kez tıklar (odak için)</span>}
+                  {a.tip === 'yaz' && <>
+                    <input value={a.deger || ''} onChange={(e) => adimGuncelle(i, { deger: e.target.value })} placeholder="Yazılacak metin (yorum)" className="flex-1 min-w-[140px] px-2 py-1.5 rounded-lg border border-slate-200 text-sm" />
+                    <input value={a.selector || ''} onChange={(e) => adimGuncelle(i, { selector: e.target.value })} placeholder="selector (boş = odaktaki alan)" className="flex-1 min-w-[140px] px-2 py-1.5 rounded-lg border border-slate-200 text-sm" />
+                    <label className="inline-flex items-center gap-1 text-xs text-slate-500 whitespace-nowrap"><input type="checkbox" checked={a.enter !== false} onChange={(e) => adimGuncelle(i, { enter: e.target.checked })} /> Enter</label>
+                  </>}
                   {a.tip === 'tikla' && <input value={a.selector || ''} onChange={(e) => adimGuncelle(i, { selector: e.target.value })} placeholder="CSS selector (ör. button.gonder)" className="flex-1 px-2 py-1.5 rounded-lg border border-slate-200 text-sm" />}
                 </div>
                 <button onClick={() => adimSil(i)} className="mt-1 text-red-400 hover:text-red-600 p-1"><X size={15} /></button>
               </div>
             ))}
           </div>
-          <div className="mt-2 flex items-center gap-2">
+          <div className="mt-2 flex items-center gap-2 flex-wrap">
             <button onClick={() => adimEkle('ac')} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50"><Globe size={13} /> Sayfa Aç</button>
+            <button onClick={() => adimEkle('tiklaMerkez')} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50"><MousePointerClick size={13} /> Ortaya Tıkla</button>
             <button onClick={() => adimEkle('yaz')} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50"><TypeIcon size={13} /> Metin Yaz</button>
-            <button onClick={() => adimEkle('tikla')} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50"><MousePointerClick size={13} /> Tıkla</button>
+            <button onClick={() => adimEkle('tikla')} className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-slate-200 text-xs text-slate-600 hover:bg-slate-50"><MousePointerClick size={13} /> Tıkla (selector)</button>
           </div>
         </div>
 

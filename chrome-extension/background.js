@@ -50,15 +50,28 @@ function waitComplete(tabId, timeout = 30000) {
 }
 
 // ── DOM eylemleri (hedef sekmede enjekte edilir) ──
-function _domYaz(selector, deger) {
-  const el = document.querySelector(selector);
-  if (!el) return { ok: false, msg: 'Alan bulunamadı: ' + selector };
+function _domYaz(selector, deger, enter) {
+  // selector boşsa odaktaki (aktif) alana yaz — "yorum ekle" alanı gibi
+  let el = selector ? document.querySelector(selector) : (document.activeElement || null);
+  if (!el || el === document.body) return { ok: false, msg: 'Yazılacak alan bulunamadı (önce alana tıklayın)' };
   el.focus();
-  const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
-  const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
-  if (setter) setter.call(el, deger); else el.value = deger;
-  el.dispatchEvent(new Event('input', { bubbles: true }));
-  el.dispatchEvent(new Event('change', { bubbles: true }));
+  if (el.isContentEditable) {
+    el.textContent = deger;
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, data: deger, inputType: 'insertText' }));
+  } else {
+    const proto = el.tagName === 'TEXTAREA' ? window.HTMLTextAreaElement.prototype : window.HTMLInputElement.prototype;
+    const setter = Object.getOwnPropertyDescriptor(proto, 'value')?.set;
+    if (setter) setter.call(el, deger); else el.value = deger;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  if (enter) {
+    const opts = { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true, cancelable: true };
+    el.dispatchEvent(new KeyboardEvent('keydown', opts));
+    el.dispatchEvent(new KeyboardEvent('keypress', opts));
+    el.dispatchEvent(new KeyboardEvent('keyup', opts));
+    try { if (el.form) (el.form.requestSubmit ? el.form.requestSubmit() : el.form.submit()); } catch (_) {}
+  }
   return { ok: true };
 }
 function _domTikla(selector) {
@@ -68,11 +81,24 @@ function _domTikla(selector) {
   el.click();
   return { ok: true };
 }
+function _domTiklaMerkez() {
+  // Ekranın ortasındaki öğeye bir kez tıkla (selector gerekmez)
+  const x = Math.floor(window.innerWidth / 2);
+  const y = Math.floor(window.innerHeight / 2);
+  const el = document.elementFromPoint(x, y) || document.body;
+  const opts = { bubbles: true, cancelable: true, clientX: x, clientY: y, view: window };
+  el.dispatchEvent(new MouseEvent('mousedown', opts));
+  el.dispatchEvent(new MouseEvent('mouseup', opts));
+  el.dispatchEvent(new MouseEvent('click', opts));
+  try { el.focus && el.focus(); } catch (_) {}
+  return { ok: true };
+}
 function _domTus(selector, key) {
   const el = selector ? document.querySelector(selector) : document.activeElement;
-  const opts = { key, code: key, bubbles: true, cancelable: true };
+  const opts = { key, code: key, keyCode: key === 'Enter' ? 13 : 0, which: key === 'Enter' ? 13 : 0, bubbles: true, cancelable: true };
   const t = el || document.body;
   t.dispatchEvent(new KeyboardEvent('keydown', opts));
+  t.dispatchEvent(new KeyboardEvent('keypress', opts));
   t.dispatchEvent(new KeyboardEvent('keyup', opts));
   if (key === 'Enter' && el && el.form) {
     try { el.form.requestSubmit ? el.form.requestSubmit() : el.form.submit(); } catch (_) {}
@@ -93,12 +119,15 @@ async function runSteps(adimlar) {
       tabId = await ensureTab(adim.url);
     } else if (adim.tip === 'yaz') {
       if (tabId == null) tabId = await ensureTab(null);
-      const r = await execInTab(tabId, _domYaz, [adim.selector, String(adim.deger ?? '')]);
+      const r = await execInTab(tabId, _domYaz, [adim.selector || null, String(adim.deger ?? ''), !!adim.enter]);
       if (!r.ok) throw new Error(r.msg);
     } else if (adim.tip === 'tikla') {
       if (tabId == null) tabId = await ensureTab(null);
       const r = await execInTab(tabId, _domTikla, [adim.selector]);
       if (!r.ok) throw new Error(r.msg);
+    } else if (adim.tip === 'tiklaMerkez') {
+      if (tabId == null) tabId = await ensureTab(null);
+      await execInTab(tabId, _domTiklaMerkez, []);
     } else if (adim.tip === 'tus') {
       if (tabId == null) tabId = await ensureTab(null);
       await execInTab(tabId, _domTus, [adim.selector || null, adim.key || 'Enter']);

@@ -227,9 +227,9 @@ panel.post('/gorev', asyncHandler(async (req: Request, res: Response) => {
   // Adım doğrulama
   for (const a of adimlar) {
     if (!a || typeof a !== 'object') throw new ApiError(400, 'Geçersiz adım');
-    if (!['ac', 'yaz', 'tikla'].includes(a.tip)) throw new ApiError(400, `Geçersiz adım tipi: ${a.tip}`);
+    if (!['ac', 'yaz', 'tikla', 'tiklaMerkez', 'tus'].includes(a.tip)) throw new ApiError(400, `Geçersiz adım tipi: ${a.tip}`);
     if (a.tip === 'ac' && !a.url) throw new ApiError(400, 'Sayfa Aç adımında URL gerekli');
-    if (a.tip === 'yaz' && (!a.selector || a.deger == null)) throw new ApiError(400, 'Metin Yaz adımında selector ve değer gerekli');
+    if (a.tip === 'yaz' && a.deger == null) throw new ApiError(400, 'Metin Yaz adımında değer gerekli');
     if (a.tip === 'tikla' && !a.selector) throw new ApiError(400, 'Tıkla adımında selector gerekli');
   }
 
