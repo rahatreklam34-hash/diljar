@@ -587,6 +587,7 @@ router.patch('/products/:id', asyncHandler(async (req: Request, res: Response) =
   const updated = await prisma.$transaction(async (tx) => {
     const who3 = await actorName(req.auth?.userId);
     const p = await tx.product.update({ where: { id: req.params.id }, data: b });
+    let stokArtti = false;
     if (b.salesCode !== undefined && b.salesCode !== found.salesCode) {
       if (found.salesCode) await tx.salesCode.updateMany({ where: { tenantId: req.tenantId!, code: found.salesCode }, data: { used: false, productId: null } });
       if (b.salesCode) await tx.salesCode.updateMany({ where: { tenantId: req.tenantId!, code: b.salesCode }, data: { used: true, productId: p.id } });
@@ -602,6 +603,7 @@ router.patch('/products/:id', asyncHandler(async (req: Request, res: Response) =
         toplam += yeni;
         await tx.productVariation.create({ data: { tenantId: req.tenantId!, productId: p.id, ad: v.ad || 'Varyasyon', deger: v.deger, stok: yeni, ekFiyat: Number(v.ekFiyat) || 0 } });
         const fark = yeni - (oldMap.get(v.deger) ?? 0);
+        if (fark > 0) stokArtti = true;
         if (fark !== 0) await logStok(tx, req.tenantId!, { productId: p.id, varyasyon: v.deger, yon: fark > 0 ? 'giris' : 'cikis', tip: 'manuel', kanal: 'manuel', miktar: Math.abs(fark), stokSonra: yeni, kullanici: who3, aciklama: `${p.ad} manuel stok düzenleme` });
         oldMap.delete(v.deger);
       }
@@ -615,18 +617,23 @@ router.patch('/products/:id', asyncHandler(async (req: Request, res: Response) =
       }
     } else if (b.stokAdeti !== undefined && Number(b.stokAdeti) !== Number(found.stokAdeti)) {
       const fark = Number(b.stokAdeti) - Number(found.stokAdeti || 0);
+      if (fark > 0) stokArtti = true;
       await logStok(tx, req.tenantId!, { productId: p.id, yon: fark > 0 ? 'giris' : 'cikis', tip: 'manuel', kanal: 'manuel', miktar: Math.abs(fark), stokSonra: Number(b.stokAdeti), kullanici: who3, aciklama: `${p.ad} manuel stok düzenleme` });
     }
-    return p;
+    return { p, stokArtti };
   });
-  await promoteWaitingStock(req.tenantId!, { productId: req.params.id }).catch((e) => console.error('[promoteWaitingStock]', e));
+  // Bekleyen "stok_yok" siparişleri YALNIZCA stok GERÇEKTEN arttığında otomatik onayla.
+  // (Aksi halde isim/fiyat düzenleme veya stok azaltma anında da stok tükenirdi.)
+  if (updated.stokArtti) {
+    await promoteWaitingStock(req.tenantId!, { productId: req.params.id }).catch((e) => console.error('[promoteWaitingStock]', e));
+  }
   const degisen: Record<string, any> = {};
   for (const k of ['ad', 'satisFiyat', 'eskiFiyat', 'stokAdeti', 'salesCode', 'marka', 'kategoriId']) {
     if (b[k] !== undefined && (found as any)[k] !== b[k]) degisen[k] = { onceki: (found as any)[k] ?? null, yeni: b[k] };
   }
   const degisenAlanlar = Object.keys(degisen);
-  await logAudit(req, 'guncelle', 'urun', updated.id, degisenAlanlar.length ? `Güncellenen: ${degisenAlanlar.join(', ')}` : `Ürün güncellendi: ${updated.ad}`, { hedef: updated.ad, neden: degisenAlanlar.length ? `${degisenAlanlar.length} alan değişti` : null, meta: degisen });
-  res.json(updated);
+  await logAudit(req, 'guncelle', 'urun', updated.p.id, degisenAlanlar.length ? `Güncellenen: ${degisenAlanlar.join(', ')}` : `Ürün güncellendi: ${updated.p.ad}`, { hedef: updated.p.ad, neden: degisenAlanlar.length ? `${degisenAlanlar.length} alan değişti` : null, meta: degisen });
+  res.json(updated.p);
 }));
 router.delete('/products/:id', asyncHandler(async (req: Request, res: Response) => {
   const found = await prisma.product.findFirst({ where: { id: req.params.id, tenantId: req.tenantId! } });
