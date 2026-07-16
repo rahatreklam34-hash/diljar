@@ -761,6 +761,22 @@ export default function CanliYayinSatis() {
     } catch (e) { toast.error(apiErrorMessage(e)); }
   };
 
+  // Bir stok_yok siparişi ŞU AN onaylanabilir mi? (güncel stok var mı)
+  const stokVarMi = (o: any): boolean => {
+    if (o.freeProductId) {
+      const fp = freeProducts.find((x) => x.id === o.freeProductId);
+      if (!fp) return false;
+      const vars: any[] = fp.variations || [];
+      const target = o.variation || o.beden;
+      if (target) { const v = vars.find((x: any) => sizeKey(x.deger) === sizeKey(target)); return !!v && (Number(v.stok) || 0) >= 1; }
+      return vars.length === 0 ? true : (Number(fp.stokAdeti) || 0) >= 1;
+    }
+    const p = o.productId ? prodById.get(o.productId) : null;
+    if (!p) return false;
+    if (o.variation) { const v = (p.variations || []).find((x: any) => sizeKey(x.deger) === sizeKey(o.variation)); return !!v && (Number(v.stok) || 0) >= 1; }
+    return (Number(p.stokAdeti) || 0) >= 1;
+  };
+
   // "Kayıt Gerekli" sekmesi işlemleri
   const [kayitBusy, setKayitBusy] = useState(false);
   // Kaydı oluşturulmuş (sistemde müşteri handle'ı eşleşen) rezerve siparişleri işle:
@@ -1436,7 +1452,8 @@ export default function CanliYayinSatis() {
               <tbody>
                 {sayfaliFiltered.map((o) => {
                   const img = imgOf(o.productId, o.freeProductId) || o.gorsel;
-                  const rowBg = o.durum === 'onaylandi' ? 'bg-green-50' : o.durum === 'rezerve' ? 'bg-blue-50' : o.durum === 'stok_yok' ? 'bg-red-50' : o.durum === 'iptal' ? 'opacity-60' : '';
+                  const onaylanabilir = o.durum === 'stok_yok' && stokVarMi(o);
+                  const rowBg = o.durum === 'onaylandi' ? 'bg-green-50' : o.durum === 'rezerve' ? 'bg-blue-50' : onaylanabilir ? 'bg-green-50' : o.durum === 'stok_yok' ? 'bg-red-50' : o.durum === 'iptal' ? 'opacity-60' : '';
                   return (
                     <tr key={o.id} className={`border-t border-slate-100 ${rowBg}`}>
                       <td className="px-3 py-2 font-medium text-slate-700"><div className="flex items-center gap-1.5">{o.user}{!isRegistered(o.user) && <><span className="text-[9px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full" title="Müşterilerimde kayıtlı değil">Kayıt Yok</span><button onClick={() => { setKayitForm({ ad: '', instagram: o.user, telefon: '', anchor: o.user }); setKayitModal(true); }} title="Hızlı müşteri kaydı oluştur" className="text-emerald-600 hover:bg-emerald-50 rounded p-0.5"><UserPlus size={14} /></button></>}</div></td>
@@ -1455,7 +1472,11 @@ export default function CanliYayinSatis() {
                         {o.durum === 'iptal'
                           ? <span title={`İptal: ${o.user} · ${o.urun} ${o.beden || ''} · ${fmt(o.tutar)}`} className="text-rose-500 text-xs cursor-help">İptal Edildi ⓘ</span>
                           : <div className="flex items-center gap-1">
-                              {o.durum === 'stok_yok' && <button onClick={() => onaylaStokYok(o)} title="Stok varsa bu siparişi onayla" className="inline-flex items-center gap-1 text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded-lg text-xs font-medium"><CheckCircle2 size={13} /> Onayla</button>}
+                              {o.durum === 'stok_yok' && (
+                                onaylanabilir
+                                  ? <button onClick={() => onaylaStokYok(o)} title="Stok var — bu siparişi onayla" className="inline-flex items-center gap-1 text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded-lg text-xs font-medium"><CheckCircle2 size={13} /> Onayla</button>
+                                  : <button disabled title="Stok yok — önce stok girin" className="inline-flex items-center gap-1 text-slate-300 px-2 py-1 rounded-lg text-xs font-medium cursor-not-allowed"><CheckCircle2 size={13} /> Onayla</button>
+                              )}
                               <button onClick={() => iptalEt(o)} title="Siparişi İptal Et" className="inline-flex items-center gap-1 text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg text-xs"><Trash2 size={13} /> İptal</button>
                             </div>}
                       </td>
