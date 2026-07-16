@@ -390,7 +390,7 @@ export default function Sepet() {
 
           {/* Sepetim */}
           <div id="sepetim">
-            <div className="flex items-center justify-between mb-2"><h3 className="font-bold text-[#111]">Sepetim ({items.length})</h3>{!data?.wpIletildi && data?.durum !== 'hazirlaniyor' && data?.durum !== 'kargolandi' && data?.durum !== 'tamamlandi' && <button onClick={() => setEdit(!edit)} className="text-sm font-semibold flex items-center gap-1 hover:opacity-70 transition-opacity" style={{ color: '#C9A227' }}><Pencil size={13} /> {edit ? 'Bitti' : 'Düzenle'}</button>}</div>
+            <div className="flex items-center justify-between mb-2"><h3 className="font-bold text-[#111]">Sepetim ({items.length})</h3></div>
             <div className="bg-white rounded-2xl border border-slate-200 divide-y divide-slate-100">
               {items.length === 0 && (
                 <div className="text-center py-14 px-6">
