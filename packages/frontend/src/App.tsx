@@ -6,25 +6,32 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarEleme
 
 // Yeni sürüm deploy edildiğinde eski sayfa, artık var olmayan chunk dosyasını
 // yüklemeye çalışınca "Failed to fetch dynamically imported module" hatası verir.
-// Bu sarmalayıcı, ilk hatada (oturumda bir kez) sayfayı otomatik yeniler → güncel index.html + yeni chunk adları gelir.
+// Strateji: (1) geçici ağ hatalarında sayfayı yenilemeden birkaç kez tekrar dene,
+// (2) gerçekten chunk kaybolmuşsa (yeni deploy) oturumda bir kez sessizce yenile.
+const _isChunkErr = (err: any) => /dynamically imported module|Importing a module script failed|Failed to fetch|Loading chunk|error loading dynamically/i.test(String(err?.message || err));
+const _sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function lazy(factory: () => Promise<{ default: React.ComponentType<any> }>) {
   return reactLazy(async () => {
-    try {
-      return await factory();
-    } catch (err: any) {
-      const msg = String(err?.message || err);
-      const isChunkErr = /dynamically imported module|Importing a module script failed|Failed to fetch|Loading chunk|error loading dynamically/i.test(msg);
-      const key = 'chunk_reload_at';
-      const last = Number(sessionStorage.getItem(key) || '0');
-      // Sonsuz döngüyü engelle: son 10 sn içinde zaten yenilediyse hatayı göster.
-      if (isChunkErr && Date.now() - last > 10000) {
-        sessionStorage.setItem(key, String(Date.now()));
-        window.location.reload();
-        // reload tetiklendi; bileşen render edilmeden önce sayfa gidecek
-        return await new Promise<{ default: React.ComponentType<any> }>(() => {});
+    let lastErr: any;
+    // Geçici hata (ağ blip'i) için sessiz retry — flash/yeniden yükleme olmadan.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        return await factory();
+      } catch (err: any) {
+        lastErr = err;
+        if (!_isChunkErr(err)) throw err;
+        if (attempt < 2) { await _sleep(400 * (attempt + 1)); continue; }
       }
-      throw err;
     }
+    // Retry'ler de başarısız → muhtemelen yeni deploy (chunk adı değişti): oturumda 1 kez yenile.
+    const key = 'chunk_reload_at';
+    const last = Number(sessionStorage.getItem(key) || '0');
+    if (Date.now() - last > 10000) {
+      sessionStorage.setItem(key, String(Date.now()));
+      window.location.reload();
+      return await new Promise<{ default: React.ComponentType<any> }>(() => {});
+    }
+    throw lastErr;
   });
 }
 import api from './lib/api';

@@ -18,13 +18,13 @@ function tryAutoReload(): boolean {
   return false;
 }
 
-class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error?: string }> {
+class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError: boolean; error?: string; chunk?: boolean }> {
   constructor(props: { children: React.ReactNode }) {
     super(props);
     this.state = { hasError: false };
   }
   static getDerivedStateFromError(error: Error) {
-    return { hasError: true, error: error.stack || error.message };
+    return { hasError: true, error: error.stack || error.message, chunk: isChunkError(error) };
   }
   componentDidCatch(error: Error, info: React.ErrorInfo) {
     console.error(error, info);
@@ -32,6 +32,16 @@ class ErrorBoundary extends Component<{ children: React.ReactNode }, { hasError:
   }
   render() {
     if (this.state.hasError) {
+      // Chunk (yeni sürüm) hatası → kırmızı ekran YERİNE nazik yükleyici; reload zaten tetiklendi.
+      if (this.state.chunk) {
+        return (
+          <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 14, fontFamily: 'system-ui, sans-serif', color: '#334155' }}>
+            <span style={{ width: 34, height: 34, border: '3px solid #e2e8f0', borderTopColor: '#10b981', borderRadius: '50%', display: 'inline-block', animation: 'djspin 0.8s linear infinite' }} />
+            <div style={{ fontSize: 14 }}>Güncelleniyor…</div>
+            <style>{'@keyframes djspin{to{transform:rotate(360deg)}}'}</style>
+          </div>
+        );
+      }
       return (
         <div style={{ padding: 40, fontFamily: 'system-ui, sans-serif' }}>
           <h1 style={{ color: '#dc2626' }}>Bir hata olustu</h1>

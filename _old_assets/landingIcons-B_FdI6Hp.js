@@ -1,0 +1,6 @@
+import{au as r,S as o,e as t,al as c,t as i,ai as p,a9 as n,O as m,U as g,K as s,a4 as l,_ as d,a6 as h,ac as k,P as f,R as S}from"./App-BgNtEnKB.js";import{G as u}from"./globe-C7ZmOIFu.js";import{H as y}from"./headphones-DxqSVfiP.js";import{P as G}from"./percent-DOY_cUPF.js";import{V as I}from"./video-DixK8iRq.js";import{S as M}from"./share-2-VPdJQ5WV.js";import{H as N}from"./heart-D8FWTUU1.js";import{S as P}from"./star-BN9Ko4DC.js";import{G as b}from"./gift-tseRGG7S.js";import{P as L}from"./phone-DmXERX5s.js";/**
+ * @license lucide-react v1.17.0 - ISC
+ *
+ * This source code is licensed under the ISC license.
+ * See the LICENSE file in the root directory of this source tree.
+ */const _=[["circle",{cx:"6",cy:"15",r:"4",key:"vux9w4"}],["circle",{cx:"18",cy:"15",r:"4",key:"18o8ve"}],["path",{d:"M14 15a2 2 0 0 0-2-2 2 2 0 0 0-2 2",key:"1ag4bs"}],["path",{d:"M2.5 13 5 7c.7-1.3 1.4-2 3-2",key:"1hm1gs"}],["path",{d:"M21.5 13 19 7c-.7-1.3-1.5-2-3-2",key:"1r31ai"}]],C=r("glasses",_),e={phone:L,message:S,megaphone:f,tag:k,glasses:C,bag:h,radio:d,gift:b,star:P,heart:N,share:M,send:l,link:s,video:I,package:g,percent:G,headphones:y,pin:m,sparkles:n,truck:p,card:i,users:c,bell:t,globe:u,chat:o},V=Object.keys(e);function j(a){return a&&e[a]||s}export{V as L,j as l};
