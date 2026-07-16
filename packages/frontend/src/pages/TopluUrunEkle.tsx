@@ -1,5 +1,5 @@
 import { useState, useRef, DragEvent } from 'react';
-import { PackagePlus, Save, Trash2, X, ChevronLeft, ChevronRight, Star, Upload, Sparkles, ImagePlus } from 'lucide-react';
+import { PackagePlus, Save, Trash2, X, ChevronLeft, ChevronRight, Star, Upload, Sparkles, ImagePlus, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import api from '../lib/api';
 import { useStore } from '../context/StoreContext';
@@ -113,6 +113,30 @@ export default function TopluUrunEkle() {
     toast.success(`${atanan} ürüne havuzdan satış kodu atandı`);
   };
 
+  // Yeni kategori ekle (+ butonu) → oluştur, listeyi tazele, seçili yap
+  const yeniKategori = async () => {
+    const ad = (prompt('Yeni kategori adı') || '').trim();
+    if (!ad) return;
+    try {
+      const { data } = await api.post('/store/categories', { ad });
+      await reload();
+      if (data?.id) setKategoriId(data.id);
+      toast.success('Kategori eklendi');
+    } catch (e: any) { toast.error(e?.response?.data?.error || 'Kategori eklenemedi'); }
+  };
+
+  // Yeni marka ekle (+ butonu) → oluştur, listeyi tazele, ortak markayı seçili yap
+  const yeniMarka = async () => {
+    const ad = (prompt('Yeni marka adı') || '').trim();
+    if (!ad) return;
+    try {
+      await api.post('/store/brands', { ad });
+      await reload();
+      setC('marka', ad);
+      toast.success('Marka eklendi');
+    } catch (e: any) { toast.error(e?.response?.data?.error || 'Marka eklenemedi'); }
+  };
+
   const applyTemplateAll = () => {
     if (!common.templateId) { toast('Önce bir varyasyon şablonu seçin'); return; }
     if (items.length === 0) { toast('Önce görsel ekleyin'); return; }
@@ -205,9 +229,12 @@ export default function TopluUrunEkle() {
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><PackagePlus className="text-emerald-600" size={22} /></div>
         <div className="flex-1 min-w-[180px]"><h1 className="text-xl font-bold text-slate-800">Toplu Ürün Ekle</h1><p className="text-sm text-slate-400">Görselleri sürükle-bırak — her görsel bir ürün olur</p></div>
-        <select value={kategoriId} onChange={(e) => setKategoriId(e.target.value)} className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white">
-          <option value="">Ortak Kategori (ops.)</option>{categories.map((c: any) => <option key={c.id} value={c.id}>{c.ad}</option>)}
-        </select>
+        <div className="flex items-center gap-1">
+          <select value={kategoriId} onChange={(e) => setKategoriId(e.target.value)} className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white">
+            <option value="">Ortak Kategori (ops.)</option>{categories.map((c: any) => <option key={c.id} value={c.id}>{c.ad}</option>)}
+          </select>
+          <button onClick={yeniKategori} title="Yeni kategori ekle" className="w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-emerald-600 hover:bg-emerald-50"><Plus size={16} /></button>
+        </div>
         <button onClick={submit} disabled={busy || items.length === 0} className="inline-flex items-center gap-2 bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"><Save size={16} /> {busy ? 'Kaydediliyor…' : `Tümünü Kaydet${items.length ? ` (${items.length})` : ''}`}</button>
       </div>
 
@@ -216,7 +243,20 @@ export default function TopluUrunEkle() {
         <div className="flex items-center gap-2 mb-3"><Sparkles size={16} className="text-emerald-600" /><h3 className="font-semibold text-slate-700">Tümüne Uygula</h3><span className="text-xs text-slate-400">— ortak değerleri tek panelden doldur</span></div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 items-end">
           <div><label className="text-[11px] font-semibold text-slate-500">Cinsiyet</label><select value={common.cinsiyet} onChange={(e) => setC('cinsiyet', e.target.value)} className={`${inp} mt-1`}>{CINSIYET.map((c) => <option key={c}>{c}</option>)}</select></div>
-          <div><label className="text-[11px] font-semibold text-slate-500">Marka</label><input list="dj-markalar" value={common.marka} onChange={(e) => setC('marka', e.target.value)} placeholder="Marka" className={`${inp} mt-1`} /></div>
+          <div>
+            <label className="text-[11px] font-semibold text-slate-500">Kategori</label>
+            <div className="flex items-center gap-1 mt-1">
+              <select value={kategoriId} onChange={(e) => setKategoriId(e.target.value)} className={inp}><option value="">Seçiniz</option>{categories.map((c: any) => <option key={c.id} value={c.id}>{c.ad}</option>)}</select>
+              <button onClick={yeniKategori} title="Yeni kategori ekle" className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-emerald-600 hover:bg-emerald-50"><Plus size={15} /></button>
+            </div>
+          </div>
+          <div>
+            <label className="text-[11px] font-semibold text-slate-500">Marka</label>
+            <div className="flex items-center gap-1 mt-1">
+              <input list="dj-markalar" value={common.marka} onChange={(e) => setC('marka', e.target.value)} placeholder="Marka" className={inp} />
+              <button onClick={yeniMarka} title="Yeni marka ekle" className="shrink-0 w-9 h-9 flex items-center justify-center rounded-lg border border-slate-200 text-emerald-600 hover:bg-emerald-50"><Plus size={15} /></button>
+            </div>
+          </div>
           <div><label className="text-[11px] font-semibold text-slate-500">Lokasyon</label><input value={common.lokasyon} onChange={(e) => setC('lokasyon', e.target.value)} placeholder="Depo/raf" className={`${inp} mt-1`} /></div>
           <div><label className="text-[11px] font-semibold text-slate-500">Alış ₺</label><input type="number" value={common.alisFiyat} onChange={(e) => setC('alisFiyat', e.target.value)} className={`${inp} mt-1`} /></div>
           <div><label className="text-[11px] font-semibold text-slate-500">Satış ₺</label><input type="number" value={common.satisFiyat} onChange={(e) => setC('satisFiyat', e.target.value)} className={`${inp} mt-1`} /></div>
