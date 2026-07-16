@@ -1,1 +1,0 @@
-const l=[{value:"TRY",label:"Turk Lirasi",symbol:"₺"},{value:"USD",label:"ABD Dolari",symbol:"$"},{value:"EUR",label:"Euro",symbol:"€"},{value:"GBP",label:"Ingiliz Sterlini",symbol:"£"}];export{l as p};

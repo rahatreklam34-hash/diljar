@@ -38,3 +38,6 @@ packages/backend/prisma/*.db
 .DS_Store
 *.suo
 *.sw?
+
+# Runtime: eski chunk yedegi (stale-tab 404 onleme)
+_old_assets
