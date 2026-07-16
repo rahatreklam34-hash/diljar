@@ -37,10 +37,10 @@ function fileToDataUrl(file: File, maxSize = 900, quality = 0.72): Promise<strin
 const uid = () => 'p' + Math.random().toString(36).slice(2, 9);
 const cleanName = (n: string) => n.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b\w/g, (c) => c.toUpperCase());
 
-interface Item { id: string; ad: string; images: string[]; cinsiyet: string; lokasyon: string; alisFiyat: string; satisFiyat: string; stokAdeti: string; variations?: { ad: string; deger: string }[]; varStoklar?: Record<string, number> }
+interface Item { id: string; ad: string; images: string[]; cinsiyet: string; lokasyon: string; alisFiyat: string; satisFiyat: string; stokAdeti: string; salesKodu?: string; marka?: string; variations?: { ad: string; deger: string }[]; varStoklar?: Record<string, number>; hata?: string }
 
 export default function TopluUrunEkle() {
-  const { categories, variationTemplates, reload } = useStore();
+  const { categories, variationTemplates, brands, salesCodes, reload } = useStore() as any;
   const [items, setItems] = useState<Item[]>([]);
   const [kategoriId, setKategoriId] = useState('');
   const [busy, setBusy] = useState(false);
@@ -51,8 +51,12 @@ export default function TopluUrunEkle() {
   const [bedenDraft, setBedenDraft] = useState<Record<string, string>>({});
   const mainInput = useRef<HTMLInputElement>(null);
 
+  // Kullanılabilir (havuzda boşta) satış kodları
+  const havuzKodlar: string[] = ((salesCodes || []) as any[]).filter((c) => !c.used).map((c) => c.code);
+  const markaListe: string[] = ((brands || []) as any[]).map((b) => b.ad);
+
   // Ortak panel (Tümüne Uygula)
-  const [common, setCommon] = useState({ cinsiyet: 'unisex', lokasyon: '', alisFiyat: '', satisFiyat: '', stokAdeti: '', templateId: '' });
+  const [common, setCommon] = useState({ cinsiyet: 'unisex', lokasyon: '', alisFiyat: '', satisFiyat: '', stokAdeti: '', marka: '', templateId: '' });
   const setC = (k: string, v: string) => setCommon((c) => ({ ...c, [k]: v }));
   const tmplToVars = (t: any) => (t?.values || []).map((deger: string) => ({ ad: t.ad, deger }));
 
@@ -61,7 +65,7 @@ export default function TopluUrunEkle() {
     const t = common.templateId ? (variationTemplates || []).find((x: any) => x.id === common.templateId) : null;
     const vars = t ? tmplToVars(t) : [];
     const varStoklar = vars.length ? Object.fromEntries(vars.map((v: any) => [v.deger, 1])) : undefined;
-    return { cinsiyet: common.cinsiyet, lokasyon: common.lokasyon, alisFiyat: common.alisFiyat, satisFiyat: common.satisFiyat, stokAdeti: common.stokAdeti, ...(vars.length ? { variations: vars, varStoklar } : {}) };
+    return { cinsiyet: common.cinsiyet, lokasyon: common.lokasyon, alisFiyat: common.alisFiyat, satisFiyat: common.satisFiyat, stokAdeti: common.stokAdeti, marka: common.marka, ...(vars.length ? { variations: vars, varStoklar } : {}) };
   };
 
   // Ana alana bırakılan her görsel -> yeni ürün widget'ı
@@ -87,8 +91,26 @@ export default function TopluUrunEkle() {
 
   const applyAll = () => {
     if (items.length === 0) { toast('Önce görsel ekleyin'); return; }
-    setItems((prev) => prev.map((it) => ({ ...it, cinsiyet: common.cinsiyet, lokasyon: common.lokasyon || it.lokasyon, alisFiyat: common.alisFiyat || it.alisFiyat, satisFiyat: common.satisFiyat || it.satisFiyat, stokAdeti: common.stokAdeti || it.stokAdeti })));
+    setItems((prev) => prev.map((it) => ({ ...it, cinsiyet: common.cinsiyet, lokasyon: common.lokasyon || it.lokasyon, alisFiyat: common.alisFiyat || it.alisFiyat, satisFiyat: common.satisFiyat || it.satisFiyat, stokAdeti: common.stokAdeti || it.stokAdeti, marka: common.marka || it.marka })));
     toast.success(`${items.length} ürüne uygulandı`);
+  };
+
+  // Havuzdaki boşta satış kodlarını, kodu olmayan kartlara sırayla ata
+  const otoKodAta = () => {
+    if (items.length === 0) { toast('Önce görsel ekleyin'); return; }
+    const bosta = [...havuzKodlar];
+    // Zaten kartlarda seçili olanları havuzdan düş
+    const kullanilan = new Set(items.map((it) => it.salesKodu).filter(Boolean));
+    const uygun = bosta.filter((k) => !kullanilan.has(k));
+    if (uygun.length === 0) { toast.error('Havuzda boşta satış kodu yok (Satış Kodu Havuzu sayfasından ekleyin)'); return; }
+    let i = 0, atanan = 0;
+    setItems((prev) => prev.map((it) => {
+      if (it.salesKodu) return it;
+      if (i >= uygun.length) return it;
+      atanan++;
+      return { ...it, salesKodu: uygun[i++] };
+    }));
+    toast.success(`${atanan} ürüne havuzdan satış kodu atandı`);
   };
 
   const applyTemplateAll = () => {
@@ -129,19 +151,46 @@ export default function TopluUrunEkle() {
   };
 
   const submit = async () => {
-    const valid = items.filter((r) => r.ad && r.lokasyon && r.images.length > 0);
-    if (valid.length === 0) { toast.error('Geçerli ürün yok (ad, lokasyon ve en az 1 görsel gerekli)'); return; }
+    if (items.length === 0) { toast.error('Önce ürün ekleyin'); return; }
+    // Eksik alanları tespit et (ad + görsel zorunlu; lokasyon zorunlu)
+    const eksik = items.filter((r) => !r.ad || !r.lokasyon || r.images.length === 0);
+    if (eksik.length) {
+      // Eksik kartları işaretle ama kaydetme; kullanıcıya net bildir
+      setItems((prev) => prev.map((it) => (!it.ad || !it.lokasyon || it.images.length === 0) ? { ...it, hata: 'Ad, lokasyon ve en az 1 görsel zorunlu' } : { ...it, hata: undefined }));
+      toast.error(`${eksik.length} üründe eksik alan var (ad/lokasyon/görsel). Önce onları tamamlayın.`);
+      return;
+    }
     setBusy(true);
-    let ok = 0;
-    for (const r of valid) {
+    const basarili: string[] = [];
+    const basarisiz: { id: string; msg: string }[] = [];
+    for (const r of items) {
       try {
-        await api.post('/store/products', { ad: r.ad, cinsiyet: r.cinsiyet, lokasyon: r.lokasyon, kategoriId: kategoriId || null, alisFiyat: Number(r.alisFiyat) || 0, satisFiyat: Number(r.satisFiyat) || 0, stokAdeti: Number(r.stokAdeti) || 0, images: r.images, variations: (r.variations || []).map((v) => ({ ad: v.ad, deger: v.deger, stok: r.varStoklar?.[v.deger] ?? (Number(r.stokAdeti) || 0) })) });
-        ok++;
-      } catch { /* devam */ }
+        await api.post('/store/products', {
+          ad: r.ad, cinsiyet: r.cinsiyet, lokasyon: r.lokasyon,
+          kategoriId: kategoriId || null,
+          marka: r.marka || null,
+          salesCode: r.salesKodu || undefined,
+          alisFiyat: Number(r.alisFiyat) || 0, satisFiyat: Number(r.satisFiyat) || 0,
+          stokAdeti: Number(r.stokAdeti) || 0, images: r.images,
+          variations: (r.variations || []).map((v) => ({ ad: v.ad, deger: v.deger, stok: r.varStoklar?.[v.deger] ?? (Number(r.stokAdeti) || 0) })),
+        });
+        basarili.push(r.id);
+      } catch (e: any) {
+        const msg = e?.response?.data?.error || e?.message || 'Kayıt hatası';
+        basarisiz.push({ id: r.id, msg: String(msg) });
+      }
     }
     setBusy(false);
-    toast.success(`${ok} ürün eklendi`);
-    setItems([]); reload();
+    // Başarılı olanları listeden çıkar, başarısızları hata etiketiyle tut
+    if (basarisiz.length) {
+      const failMap = new Map(basarisiz.map((f) => [f.id, f.msg]));
+      setItems((prev) => prev.filter((it) => !basarili.includes(it.id)).map((it) => ({ ...it, hata: failMap.get(it.id) || it.hata })));
+      toast.error(`${basarili.length} kaydedildi, ${basarisiz.length} başarısız. Başarısızlar listede kaldı (sebep kartta yazıyor).`);
+    } else {
+      setItems([]);
+      toast.success(`${basarili.length} ürün eklendi`);
+    }
+    reload();
   };
 
   const onMainDrop = (e: DragEvent) => { e.preventDefault(); setDrag(false); if (e.dataTransfer.files?.length) addAsProducts(e.dataTransfer.files); };
@@ -151,11 +200,13 @@ export default function TopluUrunEkle() {
 
   return (
     <div onDragOver={(e) => e.preventDefault()} onDrop={(e) => e.preventDefault()}>
+      <datalist id="dj-markalar">{markaListe.map((m) => <option key={m} value={m} />)}</datalist>
+      <datalist id="dj-satiskodlar">{havuzKodlar.map((k) => <option key={k} value={k} />)}</datalist>
       <div className="flex items-center gap-3 mb-4 flex-wrap">
         <div className="w-10 h-10 rounded-xl bg-emerald-100 flex items-center justify-center"><PackagePlus className="text-emerald-600" size={22} /></div>
         <div className="flex-1 min-w-[180px]"><h1 className="text-xl font-bold text-slate-800">Toplu Ürün Ekle</h1><p className="text-sm text-slate-400">Görselleri sürükle-bırak — her görsel bir ürün olur</p></div>
         <select value={kategoriId} onChange={(e) => setKategoriId(e.target.value)} className="px-3 py-2 text-sm border border-slate-200 rounded-lg bg-white">
-          <option value="">Ortak Kategori (ops.)</option>{categories.map((c) => <option key={c.id} value={c.id}>{c.ad}</option>)}
+          <option value="">Ortak Kategori (ops.)</option>{categories.map((c: any) => <option key={c.id} value={c.id}>{c.ad}</option>)}
         </select>
         <button onClick={submit} disabled={busy || items.length === 0} className="inline-flex items-center gap-2 bg-emerald-600 text-white px-5 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50"><Save size={16} /> {busy ? 'Kaydediliyor…' : `Tümünü Kaydet${items.length ? ` (${items.length})` : ''}`}</button>
       </div>
@@ -165,11 +216,15 @@ export default function TopluUrunEkle() {
         <div className="flex items-center gap-2 mb-3"><Sparkles size={16} className="text-emerald-600" /><h3 className="font-semibold text-slate-700">Tümüne Uygula</h3><span className="text-xs text-slate-400">— ortak değerleri tek panelden doldur</span></div>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 items-end">
           <div><label className="text-[11px] font-semibold text-slate-500">Cinsiyet</label><select value={common.cinsiyet} onChange={(e) => setC('cinsiyet', e.target.value)} className={`${inp} mt-1`}>{CINSIYET.map((c) => <option key={c}>{c}</option>)}</select></div>
+          <div><label className="text-[11px] font-semibold text-slate-500">Marka</label><input list="dj-markalar" value={common.marka} onChange={(e) => setC('marka', e.target.value)} placeholder="Marka" className={`${inp} mt-1`} /></div>
           <div><label className="text-[11px] font-semibold text-slate-500">Lokasyon</label><input value={common.lokasyon} onChange={(e) => setC('lokasyon', e.target.value)} placeholder="Depo/raf" className={`${inp} mt-1`} /></div>
           <div><label className="text-[11px] font-semibold text-slate-500">Alış ₺</label><input type="number" value={common.alisFiyat} onChange={(e) => setC('alisFiyat', e.target.value)} className={`${inp} mt-1`} /></div>
           <div><label className="text-[11px] font-semibold text-slate-500">Satış ₺</label><input type="number" value={common.satisFiyat} onChange={(e) => setC('satisFiyat', e.target.value)} className={`${inp} mt-1`} /></div>
           <div><label className="text-[11px] font-semibold text-slate-500">Stok</label><input type="number" value={common.stokAdeti} onChange={(e) => setC('stokAdeti', e.target.value)} className={`${inp} mt-1`} /></div>
-          <button onClick={applyAll} className="inline-flex items-center justify-center gap-2 bg-slate-800 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-900 h-[38px]"><Sparkles size={15} /> Tümüne Uygula</button>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 mt-2">
+          <button onClick={applyAll} className="inline-flex items-center justify-center gap-2 bg-slate-800 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-slate-900"><Sparkles size={15} /> Tümüne Uygula</button>
+          <button onClick={otoKodAta} className="inline-flex items-center justify-center gap-2 bg-amber-500 text-white px-3 py-2 rounded-lg text-sm font-medium hover:bg-amber-600"><Sparkles size={15} /> Havuzdan Satış Kodu Ata ({havuzKodlar.length} boşta)</button>
         </div>
         <label className="inline-flex items-center gap-2 mt-3 text-xs text-slate-500 cursor-pointer"><input type="checkbox" checked={autoApply} onChange={(e) => setAutoApply(e.target.checked)} className="rounded" /> Yeni eklenen görsellere bu değerleri otomatik uygula</label>
 
@@ -236,6 +291,11 @@ export default function TopluUrunEkle() {
                     <input type="number" value={it.satisFiyat} onChange={(e) => setItem(it.id, { satisFiyat: e.target.value })} placeholder="Satış" className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg" />
                     <input type="number" value={it.stokAdeti} onChange={(e) => setItem(it.id, { stokAdeti: e.target.value })} placeholder="Stok" className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg" />
                   </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <input list="dj-satiskodlar" value={it.salesKodu || ''} onChange={(e) => setItem(it.id, { salesKodu: e.target.value })} placeholder="Satış kodu (havuz/manuel)" className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg" />
+                    <input list="dj-markalar" value={it.marka || ''} onChange={(e) => setItem(it.id, { marka: e.target.value })} placeholder="Marka" className="px-2 py-1.5 text-xs border border-slate-200 rounded-lg" />
+                  </div>
+                  {it.hata && <div className="text-[10px] text-red-500 bg-red-50 border border-red-100 rounded px-1.5 py-1">{it.hata}</div>}
                 </div>
               </div>
               {/* Galeri küçük görseller */}
