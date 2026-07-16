@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
-import { Clock, TrendingUp, Wallet, ShoppingBag, Users, BarChart3, Radio, Square, Send, X, Filter, Trash2, History, UserCircle, Plus, Search, UserPlus, Tag, Brain, AlertTriangle, Lightbulb, Sparkles, Package, Target, Share2, Video, Play, Download, Eye, EyeOff, Move, Pin } from 'lucide-react';
+import { Clock, TrendingUp, Wallet, ShoppingBag, Users, BarChart3, Radio, Square, Send, X, Filter, Trash2, History, UserCircle, Plus, Search, UserPlus, Tag, Brain, AlertTriangle, Lightbulb, Sparkles, Package, Target, Share2, Video, Play, Download, Eye, EyeOff, Move, Pin, CheckCircle2 } from 'lucide-react';
 import { Doughnut, Line } from 'react-chartjs-2';
 import { Chart as ChartJS, ArcElement, LineElement, PointElement, CategoryScale, LinearScale, Tooltip, Legend, Filler } from 'chart.js';
 import toast from 'react-hot-toast';
@@ -751,6 +751,16 @@ export default function CanliYayinSatis() {
     try { const r = await api.post(`/store/live/order/${o.id}/iptal`); setOrders(r.data.orders || []); loadFree(); reload(); toast.success('Sipariş iptal edildi'); } catch (e) { toast.error(apiErrorMessage(e)); }
   };
 
+  // Stok yetersiz siparişi manuel onayla (stok varsa onaylanır, yoksa hata)
+  const onaylaStokYok = async (o: any) => {
+    try {
+      const r = await api.post(`/store/live/order/${o.id}/onayla`);
+      setOrders(r.data.orders || []);
+      loadFree(); reload();
+      toast.success('Sipariş onaylandı');
+    } catch (e) { toast.error(apiErrorMessage(e)); }
+  };
+
   // "Kayıt Gerekli" sekmesi işlemleri
   const [kayitBusy, setKayitBusy] = useState(false);
   // Kaydı oluşturulmuş (sistemde müşteri handle'ı eşleşen) rezerve siparişleri işle:
@@ -1444,7 +1454,10 @@ export default function CanliYayinSatis() {
                       <td className="px-3 py-2">
                         {o.durum === 'iptal'
                           ? <span title={`İptal: ${o.user} · ${o.urun} ${o.beden || ''} · ${fmt(o.tutar)}`} className="text-rose-500 text-xs cursor-help">İptal Edildi ⓘ</span>
-                          : <button onClick={() => iptalEt(o)} title="Siparişi İptal Et" className="inline-flex items-center gap-1 text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg text-xs"><Trash2 size={13} /> İptal</button>}
+                          : <div className="flex items-center gap-1">
+                              {o.durum === 'stok_yok' && <button onClick={() => onaylaStokYok(o)} title="Stok varsa bu siparişi onayla" className="inline-flex items-center gap-1 text-emerald-600 hover:bg-emerald-50 px-2 py-1 rounded-lg text-xs font-medium"><CheckCircle2 size={13} /> Onayla</button>}
+                              <button onClick={() => iptalEt(o)} title="Siparişi İptal Et" className="inline-flex items-center gap-1 text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg text-xs"><Trash2 size={13} /> İptal</button>
+                            </div>}
                       </td>
                     </tr>
                   );

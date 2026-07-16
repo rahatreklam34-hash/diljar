@@ -622,11 +622,9 @@ router.patch('/products/:id', asyncHandler(async (req: Request, res: Response) =
     }
     return { p, stokArtti };
   });
-  // Bekleyen "stok_yok" siparişleri YALNIZCA stok GERÇEKTEN arttığında otomatik onayla.
-  // (Aksi halde isim/fiyat düzenleme veya stok azaltma anında da stok tükenirdi.)
-  if (updated.stokArtti) {
-    await promoteWaitingStock(req.tenantId!, { productId: req.params.id }).catch((e) => console.error('[promoteWaitingStock]', e));
-  }
+  // NOT: Stok girişinde bekleyen "stok_yok" siparişler ARTIK otomatik onaylanmaz.
+  // Kullanıcı Canlı Yayın ekranından her siparişi tek tek "Onayla" ile onaylar (stok varsa).
+  void updated.stokArtti;
   const degisen: Record<string, any> = {};
   for (const k of ['ad', 'satisFiyat', 'eskiFiyat', 'stokAdeti', 'salesCode', 'marka', 'kategoriId']) {
     if (b[k] !== undefined && (found as any)[k] !== b[k]) degisen[k] = { onceki: (found as any)[k] ?? null, yeni: b[k] };

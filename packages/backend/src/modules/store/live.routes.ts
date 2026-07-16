@@ -439,75 +439,86 @@ export async function placeLiveOrder(t: string, payload: any) {
   return lo;
 }
 
-// Stok geldiğinde (admin stok girişi / ürün güncelleme) bekleyen "stok_yok" canlı yayın
-// siparişlerini eskiden yeniye doğru, stok yettiği sürece otomatik onayla/rezerve et.
+// Tek bir "stok_yok" siparişi, STOK VARSA onaylar (manuel Onayla butonu + kuyruk devri kullanır).
+// Stok yetersizse {ok:false, reason:'stok'} döner; sipariş stok_yok kalır.
+export async function approveWaitingOrder(t: string, orderId: string): Promise<{ ok: boolean; reason?: string }> {
+  const w = await prisma.liveOrder.findFirst({ where: { id: orderId, tenantId: t } });
+  if (!w) return { ok: false, reason: 'yok' };
+  if (w.durum !== 'stok_yok') return { ok: false, reason: 'durum' };
+  const logAd = w.urun + (w.beden ? ` (${w.beden})` : '');
+  type PromoteResult = { logCartId: string; approved: { cartToken: string | null; no: string; tutar: number; urun: string; beden: string; kod: string; phone: string; ad: string; instagram: string } | null } | null;
+  let result: PromoteResult = null;
+  try {
+    result = await prisma.$transaction(async (tx): Promise<PromoteResult> => {
+      const cur = await tx.liveOrder.findFirst({ where: { id: w.id, tenantId: t } });
+      if (!cur || cur.durum !== 'stok_yok') return null;
+      let okStock = false;
+      if (w.productId) {
+        const p = await tx.product.findFirst({ where: { id: w.productId, tenantId: t } });
+        if (!p) return null;
+        if (w.variation) {
+          const vlist = await tx.productVariation.findMany({ where: { productId: w.productId, tenantId: t } });
+          const want = normVar(w.variation);
+          const v = vlist.find((x: any) => x.deger === w.variation) || vlist.find((x: any) => normVar(x.deger) === want);
+          if (v && v.stok >= 1) { await tx.productVariation.update({ where: { id: v.id }, data: { stok: { decrement: 1 } } }); okStock = true; }
+        } else if ((p.stokAdeti || 0) >= 1) okStock = true;
+        if (okStock) {
+          const pr = await tx.product.update({ where: { id: p.id }, data: { stokAdeti: { decrement: 1 } }, select: { stokAdeti: true } });
+          await logStok(tx, t, { productId: w.productId, varyasyon: w.variation || null, yon: 'cikis', tip: 'satis', kanal: 'canli', miktar: 1, stokSonra: pr.stokAdeti, customerAd: w.user || null, kullanici: w.saticiAd || null, aciklama: `${logAd} (manuel onay)` });
+        }
+      } else if (w.freeProductId) {
+        const fp = await tx.freeProduct.findFirst({ where: { id: w.freeProductId, tenantId: t } });
+        if (!fp) return null;
+        const vars: any[] = Array.isArray(fp.variations) ? (fp.variations as any[]) : [];
+        const target = w.variation || w.beden || null;
+        if (target) {
+          const want = normVar(target);
+          let idx = vars.findIndex((v) => v.deger === target);
+          if (idx < 0) idx = vars.findIndex((v) => normVar(v.deger) === want);
+          if (idx >= 0 && (Number(vars[idx].stok) || 0) >= 1) { vars[idx].stok = (Number(vars[idx].stok) || 0) - 1; okStock = true; await tx.freeProduct.update({ where: { id: fp.id }, data: { variations: vars } }); }
+        } else if (vars.length === 0) okStock = true;
+      }
+      if (!okStock) return null;
+      const customer = await findCustomerByHandle(t, w.user || '');
+      const durum = customer ? 'onaylandi' : 'rezerve';
+      const cart = await getOrCreateCart(tx, t, customer?.id || null, norm(w.user || ''));
+      const items: any[] = Array.isArray(cart.items) ? (cart.items as any) : [];
+      items.push({ liveOrderId: w.id, productId: w.productId || null, freeProductId: w.freeProductId || null, drop: !!w.freeProductId, gorsel: w.gorsel || null, ad: logAd, varyasyon: w.variation || w.beden || null, kod: w.kod || null, adet: 1, fiyat: w.tutar, stokDusuldu: true, durum });
+      const tot = await campaignAdjust(tx, t, items, { lockedIds: lockedCampaignIds(cart) });
+      await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...tot } });
+      await tx.liveOrder.update({ where: { id: w.id }, data: { durum, storeOrderId: cart.id } });
+      const cno = (cart.orderNo != null) ? `${cart.orderYil}-${String(cart.orderNo).padStart(3, '0')}` : String(cart.id).slice(-5);
+      const approved = (durum === 'onaylandi' && customer?.telefon)
+        ? { cartToken: cart.token, no: cno, tutar: w.tutar, urun: w.urun, beden: w.beden || w.variation || '', kod: w.kod || '', phone: customer.telefon, ad: customer.ad || '', instagram: customer.instagram || '' }
+        : null;
+      return { logCartId: cart.id, approved };
+    });
+  } catch (e: any) { console.error('[approveWaitingOrder]', String(e?.message || e)); return { ok: false, reason: 'hata' }; }
+  if (!result) return { ok: false, reason: 'stok' };
+  await logEvent(t, result.logCartId, w.user || 'Canlı Yayın', 'Stok onayı (manuel)', logAd).catch(() => {});
+  const ap = result.approved;
+  if (ap) {
+    try {
+      const tnt = await prisma.tenant.findUnique({ where: { id: t }, select: { name: true } });
+      const link = ap.cartToken ? `${env.APP_DOMAIN}/sepet/${ap.cartToken}` : undefined;
+      void notifyOrderSms(t, 'approved', { phone: ap.phone, ad: ap.ad, no: ap.no, tutar: ap.tutar, firma: tnt?.name || '', kullaniciadi: ap.instagram, instagram: ap.instagram, durum: 'Onaylandı', urun: ap.urun, beden: ap.beden, kod: ap.kod, sepetLink: link });
+    } catch (e: any) { console.error('[approveWaitingOrder SMS]', String(e?.message || e)); }
+    void enqueueOrderApprovalForCart(t, result.logCartId, { ad: ap.ad, telefon: ap.phone });
+  }
+  return { ok: true };
+}
+
+// Stok geldiğinde bekleyen "stok_yok" siparişleri onaylar. ARTIK yalnızca sipariş iptali/drop iadesi
+// gibi kuyruk devri senaryolarında çağrılır; manuel stok girişinde OTOMATİK çağrılmaz (kullanıcı isteği).
 export async function promoteWaitingStock(t: string, opts: { productId?: string | null; freeProductId?: string | null }) {
   const where: any = { tenantId: t, durum: 'stok_yok' };
   if (opts.productId) where.productId = opts.productId;
   else if (opts.freeProductId) where.freeProductId = opts.freeProductId;
   else return;
   const waiting = await prisma.liveOrder.findMany({ where, orderBy: { createdAt: 'asc' } });
-  type PromoteResult = { logCartId: string; approved: { cartToken: string | null; no: string; tutar: number; urun: string; beden: string; kod: string; phone: string; ad: string; instagram: string } | null } | null;
   for (const w of waiting) {
-    const logAd = w.urun + (w.beden ? ` (${w.beden})` : '');
-    let result: PromoteResult = null;
-    try {
-      result = await prisma.$transaction(async (tx): Promise<PromoteResult> => {
-        const cur = await tx.liveOrder.findFirst({ where: { id: w.id, tenantId: t } });
-        if (!cur || cur.durum !== 'stok_yok') return null;
-        let okStock = false;
-        if (w.productId) {
-          const p = await tx.product.findFirst({ where: { id: w.productId, tenantId: t } });
-          if (!p) return null;
-          if (w.variation) {
-            const vlist = await tx.productVariation.findMany({ where: { productId: w.productId, tenantId: t } });
-            const want = normVar(w.variation);
-            const v = vlist.find((x: any) => x.deger === w.variation) || vlist.find((x: any) => normVar(x.deger) === want);
-            if (v && v.stok >= 1) { await tx.productVariation.update({ where: { id: v.id }, data: { stok: { decrement: 1 } } }); okStock = true; }
-          } else if ((p.stokAdeti || 0) >= 1) okStock = true;
-          if (okStock) {
-            const pr = await tx.product.update({ where: { id: p.id }, data: { stokAdeti: { decrement: 1 } }, select: { stokAdeti: true } });
-            await logStok(tx, t, { productId: w.productId, varyasyon: w.variation || null, yon: 'cikis', tip: 'satis', kanal: 'canli', miktar: 1, stokSonra: pr.stokAdeti, customerAd: w.user || null, kullanici: w.saticiAd || null, aciklama: `${logAd} (stok gelince onay)` });
-          }
-        } else if (w.freeProductId) {
-          const fp = await tx.freeProduct.findFirst({ where: { id: w.freeProductId, tenantId: t } });
-          if (!fp) return null;
-          const vars: any[] = Array.isArray(fp.variations) ? (fp.variations as any[]) : [];
-          const target = w.variation || w.beden || null;
-          if (target) {
-            const want = normVar(target);
-            let idx = vars.findIndex((v) => v.deger === target);
-            if (idx < 0) idx = vars.findIndex((v) => normVar(v.deger) === want);
-            if (idx >= 0 && (Number(vars[idx].stok) || 0) >= 1) { vars[idx].stok = (Number(vars[idx].stok) || 0) - 1; okStock = true; await tx.freeProduct.update({ where: { id: fp.id }, data: { variations: vars } }); }
-          } else if (vars.length === 0) okStock = true;
-        }
-        if (!okStock) return null;
-        const customer = await findCustomerByHandle(t, w.user || '');
-        const durum = customer ? 'onaylandi' : 'rezerve';
-        const cart = await getOrCreateCart(tx, t, customer?.id || null, norm(w.user || ''));
-        const items: any[] = Array.isArray(cart.items) ? (cart.items as any) : [];
-        items.push({ liveOrderId: w.id, productId: w.productId || null, freeProductId: w.freeProductId || null, drop: !!w.freeProductId, gorsel: w.gorsel || null, ad: logAd, varyasyon: w.variation || w.beden || null, kod: w.kod || null, adet: 1, fiyat: w.tutar, stokDusuldu: true, durum });
-        const tot = await campaignAdjust(tx, t, items, { lockedIds: lockedCampaignIds(cart) });
-        await tx.storeOrder.update({ where: { id: cart.id }, data: { items, ...tot } });
-        await tx.liveOrder.update({ where: { id: w.id }, data: { durum, storeOrderId: cart.id } });
-        const cno = (cart.orderNo != null) ? `${cart.orderYil}-${String(cart.orderNo).padStart(3, '0')}` : String(cart.id).slice(-5);
-        const approved = (durum === 'onaylandi' && customer?.telefon)
-          ? { cartToken: cart.token, no: cno, tutar: w.tutar, urun: w.urun, beden: w.beden || w.variation || '', kod: w.kod || '', phone: customer.telefon, ad: customer.ad || '', instagram: customer.instagram || '' }
-          : null;
-        return { logCartId: cart.id, approved };
-      });
-    } catch (e: any) { console.error('[promoteWaitingStock]', String(e?.message || e)); continue; }
-    if (!result) continue;
-    await logEvent(t, result.logCartId, w.user || 'Canlı Yayın', 'Stok geldi - otomatik onay', logAd).catch(() => {});
-    const ap = result.approved;
-    if (ap) {
-      try {
-        const tnt = await prisma.tenant.findUnique({ where: { id: t }, select: { name: true } });
-        const link = ap.cartToken ? `${env.APP_DOMAIN}/sepet/${ap.cartToken}` : undefined;
-        void notifyOrderSms(t, 'approved', { phone: ap.phone, ad: ap.ad, no: ap.no, tutar: ap.tutar, firma: tnt?.name || '', kullaniciadi: ap.instagram, instagram: ap.instagram, durum: 'Onaylandı', urun: ap.urun, beden: ap.beden, kod: ap.kod, sepetLink: link });
-      } catch (e: any) { console.error('[promoteWaitingStock SMS]', String(e?.message || e)); }
-      void enqueueOrderApprovalForCart(t, result.logCartId, { ad: ap.ad, telefon: ap.phone });
-    }
+    const r = await approveWaitingOrder(t, w.id);
+    if (!r.ok && r.reason === 'stok') break; // stok bitti, kuyruğu durdur
   }
 }
 
@@ -1106,6 +1117,20 @@ router.post('/cancel-reserved', asyncHandler(async (req: Request, res: Response)
   const stream = await prisma.liveStream.findFirst({ where: { tenantId: t, status: 'active' }, orderBy: { startedAt: 'desc' } });
   const orders = stream ? await prisma.liveOrder.findMany({ where: { tenantId: t, streamId: stream.id }, orderBy: { createdAt: 'desc' } }) : [];
   res.json({ ok: true, iptalEdilen, orders });
+}));
+
+// Manuel: tek bir "stok_yok" siparişini stok varsa onayla (Onayla butonu).
+router.post('/order/:id/onayla', asyncHandler(async (req: Request, res: Response) => {
+  const t = req.tenantId!;
+  const r = await approveWaitingOrder(t, req.params.id);
+  if (!r.ok) {
+    if (r.reason === 'stok') throw new ApiError(400, 'Yeterli stok yok — önce stok girin');
+    if (r.reason === 'durum') throw new ApiError(400, 'Bu sipariş stok bekleyen durumda değil');
+    throw new ApiError(400, 'Sipariş onaylanamadı');
+  }
+  const stream = await prisma.liveStream.findFirst({ where: { tenantId: t, status: 'active' }, orderBy: { startedAt: 'desc' } });
+  const orders = stream ? await prisma.liveOrder.findMany({ where: { tenantId: t, streamId: stream.id }, orderBy: { createdAt: 'desc' } }) : [];
+  res.json({ ok: true, orders });
 }));
 
 export default router;
