@@ -97,6 +97,9 @@ export default function OnlineMagaza() {
   const [paytr, setPaytr] = useState<any>({ merchant_id: '', merchant_key: '', merchant_salt: '', mode: 'TEST', enabled: false });
   useEffect(() => { api.get('/store/paytr').then((r) => setPaytr((p: any) => ({ ...p, ...r.data }))).catch(() => {}); }, []);
   const savePaytr = () => { api.put('/store/paytr', paytr).then(() => toast.success('PayTR ayarları kaydedildi')).catch(() => toast.error('Kaydedilemedi')); };
+  const [tami, setTami] = useState<any>({ merchant_number: '', terminal_number: '', secret_key: '', mode: 'test', enabled: false });
+  useEffect(() => { api.get('/store/tami').then((r) => setTami((p: any) => ({ ...p, ...r.data }))).catch(() => {}); }, []);
+  const saveTami = () => { api.put('/store/tami', tami).then(() => toast.success('Tami ayarları kaydedildi')).catch(() => toast.error('Kaydedilemedi')); };
   const [disc, setDisc] = useState({ code: '', tip: 'yuzde', deger: '' });
   const [dragId, setDragId] = useState<string | null>(null);
   const [urunQ, setUrunQ] = useState('');
@@ -571,6 +574,24 @@ export default function OnlineMagaza() {
                 <button onClick={savePaytr} className="self-end inline-flex items-center gap-1.5 bg-violet-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-violet-700"><Save size={15} /> PayTR Ayarlarını Kaydet</button>
               </div>
               <p className="text-[10px] text-slate-400 mt-2">Not: PayTR panelinizde "Bildirim/Callback URL" alanına mağaza alan adınız + <b>/api/v1/public/paytr/callback</b> yazılmalıdır.</p>
+            </div>
+
+            <div className="mt-4 pt-4 border-t border-slate-100">
+              <div className="flex items-center justify-between gap-2 flex-wrap mb-2">
+                <h4 className="font-semibold text-slate-800 text-sm flex items-center gap-2"><CreditCard size={15} className="text-rose-600" /> Tami Sanal POS (3D Secure)</h4>
+                <label className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer text-xs ${tami.enabled ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'border-slate-200 text-slate-500'}`}><input type="checkbox" checked={!!tami.enabled} onChange={(e) => setTami({ ...tami, enabled: e.target.checked })} /> {tami.enabled ? 'Aktif' : 'Pasif'}</label>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-3">Tami Üye İşyeri panelinden alınan bilgileri girin. "Aktif" yapıldığında müşteri ödeme adımında Tami 3D Secure kart ekranına yönlendirilir. (Öncelikli ödeme ayarı yukarıdaki POS anahtarı ile ortaktır.)</p>
+              <div className="grid sm:grid-cols-3 gap-3">
+                <div><label className="block text-xs text-slate-500 mb-1">Üye İşyeri No (merchant_number)</label><input value={tami.merchant_number} onChange={(e) => setTami({ ...tami, merchant_number: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Terminal No (terminal_number)</label><input value={tami.terminal_number} onChange={(e) => setTami({ ...tami, terminal_number: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Gizli Anahtar (secret_key)</label><input value={tami.secret_key} onChange={(e) => setTami({ ...tami, secret_key: e.target.value })} className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg" /></div>
+              </div>
+              <div className="flex items-center gap-3 mt-3 flex-wrap">
+                <div><label className="block text-xs text-slate-500 mb-1">Ortam</label><select value={tami.mode} onChange={(e) => setTami({ ...tami, mode: e.target.value })} className="px-3 py-2 text-sm border border-slate-200 rounded-lg"><option value="test">Test (sandbox)</option><option value="prod">Canlı (prod)</option></select></div>
+                <button onClick={saveTami} className="self-end inline-flex items-center gap-1.5 bg-rose-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-rose-700"><Save size={15} /> Tami Ayarlarını Kaydet</button>
+              </div>
+              <p className="text-[10px] text-slate-400 mt-2">Not: Tami panelinizde 3D dönüş (callback) adresi olarak mağaza alan adınız + <b>/api/v1/public/tami/callback</b> tanımlanmalıdır.</p>
             </div>
           </div>
           )}

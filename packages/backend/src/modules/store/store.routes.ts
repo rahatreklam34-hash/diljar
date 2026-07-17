@@ -1323,7 +1323,23 @@ router.put('/paytr', asyncHandler(async (req: Request, res: Response) => {
   res.json({ ok: true });
 }));
 
-// Ürün görselini profesyonel stüdyo çekimine dönüştür (Seedream 4.5 / fal.ai)
+// ───────── Tami (Sanal POS / 3D) yapılandırması ─────────
+router.get('/tami', asyncHandler(async (req: Request, res: Response) => {
+  const s = await prisma.integrationSetting.findFirst({ where: { tenantId: req.tenantId!, provider: 'tami' } });
+  const c: any = s?.config || {};
+  res.json({ merchant_number: c.merchant_number || '', terminal_number: c.terminal_number || '', secret_key: c.secret_key || '', mode: (c.mode || 'test'), enabled: s?.enabled ?? false });
+}));
+router.put('/tami', asyncHandler(async (req: Request, res: Response) => {
+  const { merchant_number, terminal_number, secret_key, mode, enabled } = req.body || {};
+  const m = String(mode || 'test').toLowerCase() === 'prod' ? 'prod' : 'test';
+  const config = { merchant_number: String(merchant_number || '').trim(), terminal_number: String(terminal_number || '').trim(), secret_key: String(secret_key || '').trim(), mode: m };
+  await prisma.integrationSetting.upsert({
+    where: { scope_tenantId_provider: { scope: 'TENANT', tenantId: req.tenantId!, provider: 'tami' } },
+    update: { config, mode: m === 'prod' ? 'LIVE' : 'TEST', enabled: !!enabled, category: 'PAYMENT' },
+    create: { scope: 'TENANT', tenantId: req.tenantId!, provider: 'tami', category: 'PAYMENT', config, mode: m === 'prod' ? 'LIVE' : 'TEST', enabled: !!enabled },
+  });
+  res.json({ ok: true });
+}));
 router.post('/enhance-image', asyncHandler(async (req: Request, res: Response) => {
   const { image, prompt } = req.body || {};
   if (!image || typeof image !== 'string') throw new ApiError(422, 'Görsel gerekli');
