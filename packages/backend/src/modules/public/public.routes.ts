@@ -143,6 +143,13 @@ router.get('/store/:slug', asyncHandler(async (req: Request, res: Response) => {
   const data = await loadStore(req.params.slug);
   if (!data) throw new ApiError(404, 'Magaza bulunamadi veya yayinda degil');
   const cfg: any = data.store.config || {};
+  // POS (kart) durumu: hangi sağlayıcı aktif + öncelikli mi
+  let posProvider: string | null = null;
+  try {
+    const tamiOn = await getTami(data.store.tenantId).then((t) => !!t).catch(() => false);
+    if (tamiOn) posProvider = 'tami';
+    else { const pt = await getPaytr(data.store.tenantId).catch(() => null); if (pt) posProvider = 'paytr'; }
+  } catch { /* pos yok */ }
   res.json({
     name: data.tenant?.name || 'Magaza',
     logoText: data.store.logoText || data.tenant?.name,
@@ -158,6 +165,7 @@ router.get('/store/:slug', asyncHandler(async (req: Request, res: Response) => {
     widgets: Array.isArray(data.store.widgets) ? data.store.widgets : [],
     topMenu: Array.isArray(data.store.topMenu) ? data.store.topMenu : [],
     config: data.store.config || {},
+    pos: { provider: posProvider, oncelikli: !!cfg.posOncelikli },
     freeShipThreshold: data.store.freeShipThreshold || 0,
     puanOrani: data.store.puanOrani || 0,
     products: data.products,
@@ -665,7 +673,93 @@ router.post('/store/:slug/order', asyncHandler(async (req: Request, res: Respons
   });
 }));
 
-// PayTR bildirim (callback) — PayTR sunucusu buraya POST eder
+// ── POS (kart) ödemesi için GERÇEK sipariş oluştur → orderId döner ──
+// Yalnız POS (tami/paytr) aktifse kullanılır. Stok bu anda düşülür; ödeme 3D sonrası
+// callback ile 'hazirlaniyor'a geçer. Ödeme yapılmazsa sipariş 'yeni' kalır (panelden iptal edilebilir).
+router.post('/store/:slug/pos-order', asyncHandler(async (req: Request, res: Response) => {
+  const data = await loadStore(req.params.slug);
+  if (!data) throw new ApiError(404, 'Magaza bulunamadi');
+  const tenantId = data.store.tenantId;
+  const tamiOn = await getTami(tenantId).then((t) => !!t).catch(() => false);
+  const paytrOn = await getPaytr(tenantId).then((p) => !!p).catch(() => false);
+  if (!tamiOn && !paytrOn) throw new ApiError(400, 'Kart ödeme (POS) yapılandırılmamış');
+
+  const { customer, items, discountCode } = req.body || {};
+  const cAd = String(customer?.ad || '').trim();
+  const cTel = String(customer?.telefon || '').trim();
+  const cAdres = String(customer?.adres || '').trim();
+  const cInsta = String(customer?.instagram || '').trim();
+  if (!cAd) throw new ApiError(422, 'Ad soyad zorunludur');
+  if (cTel.replace(/\D/g, '').length < 10) throw new ApiError(422, 'Geçerli bir telefon girin');
+  if (!cAdres) throw new ApiError(422, 'Teslimat adresi zorunludur');
+  if (!Array.isArray(items) || items.length === 0) throw new ApiError(422, 'Sepet boş');
+
+  const prodMap = new Map(data.products.map((p) => [p.id, p]));
+  const orderItems: any[] = [];
+  let araToplam = 0;
+  for (const it of items) {
+    const p: any = prodMap.get(it.productId);
+    if (!p) continue;
+    const adet = Math.max(1, Number(it.adet) || 1);
+    const v = it.varyasyon ? (p.variations || []).find((x: any) => x.deger === it.varyasyon) : null;
+    // Stok kontrolü
+    const mevcut = v ? (Number(v.stok) || 0) : (Number(p.stokAdeti) || 0);
+    if (mevcut < adet) throw new ApiError(409, `Yetersiz stok: ${p.ad}${it.varyasyon ? ' (' + it.varyasyon + ')' : ''}`);
+    const birim = (p.satisFiyat || 0) + (v?.ekFiyat || 0);
+    araToplam += birim * adet;
+    orderItems.push({ productId: p.id, ad: it.varyasyon ? `${p.ad} (${it.varyasyon})` : p.ad, varyasyon: it.varyasyon || null, adet, fiyat: birim, stokDusuldu: true });
+  }
+  if (orderItems.length === 0) throw new ApiError(422, 'Geçerli ürün yok');
+
+  let indirim = 0; let kuponKodu: string | null = null;
+  if (discountCode) {
+    const d = await prisma.discountCode.findFirst({ where: { tenantId, code: String(discountCode).toUpperCase(), aktif: true } });
+    if (d) { indirim = d.tip === 'yuzde' ? (araToplam * d.deger) / 100 : d.deger; kuponKodu = String(discountCode).toUpperCase(); }
+  }
+  indirim = Math.min(araToplam, indirim);
+  const toplam = Math.max(0, araToplam - indirim);
+
+  // Müşteri upsert
+  const telKeyN = tk10(cTel); const igKeyN = igk(cInsta);
+  let custId: string | null = null;
+  try {
+    const mevcutlar = await prisma.customer.findMany({ where: { tenantId } });
+    let cust = (telKeyN ? mevcutlar.find((c) => tk10(c.telefon) === telKeyN) : null) || (igKeyN ? mevcutlar.find((c) => igk(c.instagram) === igKeyN) : null) || null;
+    if (!cust) cust = await prisma.customer.create({ data: { tenantId, musteriNo: 1000 + mevcutlar.length + 1, ad: cAd, telefon: cTel, telKey: telKeyN, instagram: cInsta || null, igKey: igKeyN, email: customer?.email || null, adres: cAdres, not: 'Online mağaza (POS)' } });
+    else { const upd: any = {}; if (!cust.adres && cAdres) upd.adres = cAdres; if (!cust.instagram && cInsta) { upd.instagram = cInsta; upd.igKey = igKeyN; } if (Object.keys(upd).length) await prisma.customer.update({ where: { id: cust.id }, data: upd }); }
+    custId = cust.id;
+  } catch { /* sessiz */ }
+
+  // orderNo + sipNo
+  const yil = new Date().getFullYear();
+  const t = await prisma.tenant.findUnique({ where: { id: tenantId } });
+  let seqNo = (t?.seqNo || 0); if ((t?.seqYil || 0) !== yil) seqNo = 0; seqNo += 1;
+  await prisma.tenant.update({ where: { id: tenantId }, data: { seqNo, seqYil: yil } });
+  const SIPC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let sipNo = 'L'; for (let i = 0; i < 6; i++) sipNo += SIPC[Math.floor(Math.random() * SIPC.length)];
+  const token = Date.now().toString(36) + Math.random().toString(36).slice(2, 12);
+
+  const order = await prisma.$transaction(async (tx) => {
+    for (const it of orderItems) {
+      if (it.varyasyon) {
+        const vlist = await tx.productVariation.findMany({ where: { productId: it.productId, tenantId } });
+        const v = vlist.find((x: any) => x.deger === it.varyasyon);
+        if (v) await tx.productVariation.update({ where: { id: v.id }, data: { stok: { decrement: it.adet } } });
+      }
+      await tx.product.update({ where: { id: it.productId }, data: { stokAdeti: { decrement: it.adet } } });
+    }
+    return tx.storeOrder.create({
+      data: {
+        tenantId, orderNo: seqNo, orderYil: yil, sipNo, token, kanal: 'online', durum: 'yeni',
+        customerId: custId, musteriHandle: cAd,
+        items: orderItems, araToplam, indirim, indirimKodu: kuponKodu, toplam,
+        adres: cAdres, not: 'Online mağaza (kart ödeme bekleniyor)',
+      },
+    });
+  });
+
+  res.status(201).json({ ok: true, orderId: order.id, toplam, token: order.token, provider: tamiOn ? 'tami' : 'paytr' });
+}));
 router.post('/paytr/callback', express.urlencoded({ extended: false }), asyncHandler(async (req: Request, res: Response) => {
   const body: any = req.body || {};
   const oid: string = body.merchant_oid || '';

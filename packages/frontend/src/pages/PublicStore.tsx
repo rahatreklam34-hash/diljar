@@ -5,7 +5,7 @@ import {
   ShoppingBag, Plus, Minus, X, Check, Search, User, Heart, Menu, Send,
   ChevronLeft, ChevronRight, Zap, PackageSearch,
   Truck, ShieldCheck, Headphones, RefreshCcw, Clock,
-  Trash2, ArrowRight, Lock, MapPin, Phone, Mail, SlidersHorizontal,
+  Trash2, ArrowRight, Lock, MapPin, Phone, Mail, SlidersHorizontal, CreditCard,
   Star, Loader,
 } from 'lucide-react';
 import api, { apiErrorMessage } from '../lib/api';
@@ -225,6 +225,10 @@ export default function PublicStore({ slug: slugProp }: { slug?: string } = {}) 
   const [varSel, setVarSel] = useState<Record<string, string>>({});
   const [menuOpen, setMenuOpen] = useState(false);
   const [paytrUrl, setPaytrUrl] = useState('');
+  const [posCard, setPosCard] = useState<any>(null); // {orderId, toplam}
+  const [tcard, setTcard] = useState({ number: '', holderName: '', expireMonth: '', expireYear: '', cvv: '' });
+  const [payErr, setPayErr] = useState('');
+  const [payBusy, setPayBusy] = useState(false);
   const [cust, setCust] = useState({ ad: '', telefon: '', email: '', adres: '', instagram: '', not: '' });
   const [discount, setDiscount] = useState('');
   const [busy, setBusy] = useState(false);
@@ -656,6 +660,58 @@ export default function PublicStore({ slug: slugProp }: { slug?: string } = {}) 
       const msg = apiErrorMessage(e);
       toast.error(msg || 'Şu an talebiniz hazırlanamadı, lütfen tekrar deneyin.');
     } finally { setBusy(false); }
+  };
+
+  // POS (kart) aktif mi?
+  const posActive = !!(data?.pos?.oncelikli && data?.pos?.provider);
+
+  // POS: gerçek sipariş oluştur → Tami kart formu / PayTR iframe aç
+  const startPos = async () => {
+    const ad = cust.ad.trim(); const telefon = cust.telefon.trim(); const adres = cust.adres.trim(); const instagram = cust.instagram.trim();
+    const errs: any = {};
+    if (!ad) errs.ad = 'Ad soyad zorunlu';
+    if (!telefon || telefon.replace(/\D/g, '').length < 10) errs.telefon = 'Geçerli telefon girin';
+    if (!adres) errs.adres = 'Teslimat adresi zorunlu';
+    if (!instagram) errs.instagram = 'Instagram kullanıcı adı zorunlu';
+    if (Object.keys(errs).length) { setFormErr(errs); toast.error('Lütfen zorunlu alanları doldurun'); return; }
+    setFormErr({}); setBusy(true);
+    try {
+      const customer = { ...cust, ad, telefon, adres, instagram };
+      const items = Object.entries(cart).map(([productId, adet]) => ({ productId, adet, varyasyon: varSel[productId] || undefined }));
+      const r = await api.post(`/public/store/${slug}/pos-order`, { customer, items, discountCode: discount || undefined });
+      const { orderId, toplam, token, provider } = r.data || {};
+      if (provider === 'paytr' && token) {
+        const pr = await api.post(`/public/sepet/${token}/paytr`);
+        if (pr.data?.iframeUrl) { setCheckout(false); setPaytrUrl(pr.data.iframeUrl); }
+        else toast.error('PayTR ödeme başlatılamadı');
+      } else {
+        // Tami: kart formu aç
+        setTcard({ number: '', holderName: cust.ad, expireMonth: '', expireYear: '', cvv: '' });
+        setPayErr('');
+        setCheckout(false);
+        setPosCard({ orderId, toplam });
+      }
+    } catch (e: any) {
+      toast.error(apiErrorMessage(e) || 'Sipariş oluşturulamadı');
+    } finally { setBusy(false); }
+  };
+
+  // Tami 3D ödeme: kart bilgileri → /tami/pay → 3DS HTML tam sayfada aç
+  const tamiPay = async (e?: React.FormEvent) => {
+    e?.preventDefault();
+    const num = tcard.number.replace(/\s/g, '');
+    if (num.length < 15 || !tcard.cvv || !tcard.expireMonth || !tcard.expireYear) { setPayErr('Kart bilgilerini eksiksiz girin.'); return; }
+    setPayBusy(true); setPayErr('');
+    try {
+      const yil = tcard.expireYear.length === 2 ? '20' + tcard.expireYear : tcard.expireYear;
+      const r = await api.post(`/public/store/${slug}/tami/pay`, {
+        orderId: posCard.orderId,
+        card: { number: num, cvv: tcard.cvv, expireMonth: Number(tcard.expireMonth), expireYear: Number(yil), holderName: tcard.holderName || cust.ad },
+        buyer: { ad: cust.ad, telefon: cust.telefon, email: cust.email, adres: cust.adres },
+      });
+      if (r.data?.ok && r.data?.html) { document.open(); document.write(r.data.html); document.close(); return; }
+      setPayErr(r.data?.message || 'Ödeme başlatılamadı.');
+    } catch (er: any) { setPayErr(er?.response?.data?.message || apiErrorMessage(er)); } finally { setPayBusy(false); }
   };
 
   if (err) return <div className="min-h-screen flex items-center justify-center text-slate-500 p-6 text-center">{err}</div>;
@@ -1376,7 +1432,7 @@ export default function PublicStore({ slug: slugProp }: { slug?: string } = {}) 
       {/* Checkout */}
       {checkout && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setCheckout(false)}>
-          <form onClick={(e) => e.stopPropagation()} onSubmit={placeOrder} className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto border border-slate-200">
+          <form onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); posActive ? startPos() : placeOrder(e); }} className="w-full max-w-3xl bg-white rounded-2xl shadow-2xl max-h-[92vh] overflow-y-auto border border-slate-200">
             {/* Baslik */}
             <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
               <h3 className="text-lg font-bold text-[#0a0a0a] flex items-center gap-2"><MapPin size={20} style={{ color: GOLD }} /> Sipariş Bilgileri</h3>
@@ -1455,7 +1511,7 @@ export default function PublicStore({ slug: slugProp }: { slug?: string } = {}) 
                     </div>
                   </div>
                   <button type="submit" disabled={busy} className="w-full mt-4 bg-[#0a0a0a] hover:bg-[#C9A227] text-white py-3 rounded-xl font-bold inline-flex items-center justify-center gap-2 shadow-lg disabled:opacity-60 transition-colors">
-                    {busy ? 'Gönderiliyor...' : <>Talebi Gönder <ArrowRight size={18} /></>}
+                    {busy ? (posActive ? 'Hazırlanıyor...' : 'Gönderiliyor...') : posActive ? <>Kart ile Öde <ArrowRight size={18} /></> : <>Talebi Gönder <ArrowRight size={18} /></>}
                   </button>
                   <p className="text-[11px] text-slate-400 text-center mt-2.5 flex items-center justify-center gap-1"><Lock size={11} /> Güvenli ödeme (256-bit SSL & 3D Secure)</p>
                 </div>
@@ -1723,6 +1779,37 @@ export default function PublicStore({ slug: slugProp }: { slug?: string } = {}) 
             </div>
             <iframe src={paytrUrl} className="flex-1 w-full bg-slate-50" frameBorder={0} title="PayTR" />
           </div>
+        </div>
+      )}
+
+      {/* Tami — Kredi Kartı Ödeme (3D Secure) */}
+      {posCard && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 bg-black/70 backdrop-blur-sm" onClick={() => !payBusy && setPosCard(null)}>
+          <form onClick={(e) => e.stopPropagation()} onSubmit={tamiPay} className="w-full max-w-md bg-white rounded-2xl shadow-2xl overflow-hidden border border-slate-200">
+            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-200 bg-[#0a0a0a]">
+              <div className="flex items-center gap-2">
+                <div className="w-9 h-9 rounded-full flex items-center justify-center" style={{ background: 'rgba(201,162,39,0.15)' }}><CreditCard size={18} style={{ color: GOLD }} /></div>
+                <div className="leading-tight"><span className="block font-bold text-white text-sm">Kart ile Öde</span><span className="block text-[11px] text-white/50">Tami · 256-bit SSL & 3D Secure</span></div>
+              </div>
+              <button type="button" onClick={() => !payBusy && setPosCard(null)} aria-label="Kapat" className="w-9 h-9 rounded-full flex items-center justify-center text-white/60 hover:text-white hover:bg-white/10 transition"><X size={20} /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <div className="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-xl px-4 py-3">
+                <span className="text-sm text-slate-500">Ödenecek Tutar</span>
+                <span className="text-lg font-extrabold" style={{ color: GOLD }}>{fmt(posCard.toplam || araToplam)}</span>
+              </div>
+              <div><label className="block text-xs text-slate-500 mb-1">Kart Numarası</label><input inputMode="numeric" value={tcard.number} onChange={(e) => setTcard({ ...tcard, number: e.target.value.replace(/[^0-9 ]/g, '').slice(0, 19) })} placeholder="0000 0000 0000 0000" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm" /></div>
+              <div><label className="block text-xs text-slate-500 mb-1">Kart Üzerindeki İsim</label><input value={tcard.holderName} onChange={(e) => setTcard({ ...tcard, holderName: e.target.value })} placeholder="Ad Soyad" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm" /></div>
+              <div className="grid grid-cols-3 gap-2">
+                <div><label className="block text-xs text-slate-500 mb-1">Ay</label><input inputMode="numeric" value={tcard.expireMonth} onChange={(e) => setTcard({ ...tcard, expireMonth: e.target.value.replace(/\D/g, '').slice(0, 2) })} placeholder="AA" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">Yıl</label><input inputMode="numeric" value={tcard.expireYear} onChange={(e) => setTcard({ ...tcard, expireYear: e.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="YY" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm" /></div>
+                <div><label className="block text-xs text-slate-500 mb-1">CVV</label><input inputMode="numeric" value={tcard.cvv} onChange={(e) => setTcard({ ...tcard, cvv: e.target.value.replace(/\D/g, '').slice(0, 4) })} placeholder="000" className="w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm" /></div>
+              </div>
+              {payErr && <div className="text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">{payErr}</div>}
+              <button type="submit" disabled={payBusy} className="w-full bg-[#0a0a0a] hover:bg-[#C9A227] text-white py-3 rounded-xl font-bold inline-flex items-center justify-center gap-2 disabled:opacity-60 transition-colors"><Lock size={16} /> {payBusy ? 'İşleniyor...' : `${fmt(posCard.toplam || araToplam)} Öde`}</button>
+              <p className="text-[11px] text-slate-400 text-center flex items-center justify-center gap-1"><Lock size={11} /> Kart bilgileriniz 3D Secure ile bankanızda doğrulanır.</p>
+            </div>
+          </form>
         </div>
       )}
     </div>
